@@ -1,4 +1,4 @@
-import { VanillaDatabase } from '@elaina2026/vanilladb';
+import { VanillaDatabase } from '@nullex/vanilladb';
 
 export const db = new VanillaDatabase({
   url: process.env.VANILLA_DB_URL || 'http://localhost:3000/v1/databases/db_nextjs_demo',

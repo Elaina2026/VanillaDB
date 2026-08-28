@@ -1917,11 +1917,11 @@ export const DatabaseDetailPage: React.FC<{
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-foreground">1. TypeScript / Node.js Client</span>
                   <span className="text-[11px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                    npm i @elaina2026/vanilladb
+                    npm i @nullex/vanilladb
                   </span>
                 </div>
                 <pre className="p-4 bg-muted/60 border border-border rounded text-xs font-mono overflow-x-auto text-foreground">
-{`import { VanillaDatabase } from '@elaina2026/vanilladb';
+{`import { VanillaDatabase } from '@nullex/vanilladb';
 
 const db = new VanillaDatabase({
   url: '${window.location.origin}/v1/databases/${databaseId}',

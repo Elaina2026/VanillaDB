@@ -7,7 +7,7 @@
     "start": "tsx index.ts"
   },
   "dependencies": {
-    "@elaina2026/vanilladb": "^1.0.0",
+    "@nullex/vanilladb": "^1.0.0",
     "discord.js": "^14.17.3",
     "dotenv": "^16.4.7"
   },

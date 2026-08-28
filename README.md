@@ -104,14 +104,16 @@ npm start
 
 ### 1. TypeScript / Node.js Client
 
+> ⚠️ **Lưu ý về tài khoản**: Gói npm chính thức được phát hành dưới scope `@nullex/vanilladb` (tài khoản npm của **Elaina2026**). Người dùng có username `nullex` trên GitHub không liên quan đến tác giả dự án này.
+
 Cài đặt:
 ```bash
-npm install @elaina2026/vanilladb
+npm install @nullex/vanilladb
 ```
 
 Sử dụng:
 ```typescript
-import { VanillaDatabase } from '@elaina2026/vanilladb';
+import { VanillaDatabase } from '@nullex/vanilladb';
 
 const db = new VanillaDatabase({
   url: 'http://localhost:3000/v1/databases/db_your_database_id',
@@ -201,7 +203,7 @@ SELECT * FROM documents_fts WHERE documents_fts MATCH 'VanillaDB';
 Mã nguồn mẫu ứng dụng thực tế có sẵn tại thư mục `examples/`:
 - [`examples/discord-bot-nodejs`](examples/discord-bot-nodejs/): Bot Discord lưu exp/level, daily rewards và realtime event sync.
 - [`examples/telegram-bot-python`](examples/telegram-bot-python/): Bot Telegram lưu dữ liệu và upload ảnh media vào VanillaDB.
-- [`examples/nextjs-crud-app`](examples/nextjs-crud-app/): Fullstack Next.js app CRUD dữ liệu qua `@elaina2026/vanilladb`.
+- [`examples/nextjs-crud-app`](examples/nextjs-crud-app/): Fullstack Next.js app CRUD dữ liệu qua `@nullex/vanilladb`.
 
 ---
 

@@ -135,8 +135,8 @@ SELECT * FROM articles_fts WHERE articles_fts MATCH 'VanillaDatabase';
 
 ### 3.1. Installation & Environment Configuration
 ```bash
-# Node.js / TypeScript
-npm install @elaina2026/vanilladb
+# Node.js / TypeScript (npm scope @nullex is owned by Elaina2026)
+npm install @nullex/vanilladb
 
 # Python
 pip install vanilladb
@@ -153,7 +153,7 @@ VANILLA_DB_TOKEN=vdb_live_your_api_token_here
 ### 3.2. TypeScript / Node.js SDK Complete API
 
 ```typescript
-import { VanillaDatabase } from '@elaina2026/vanilladb';
+import { VanillaDatabase } from '@nullex/vanilladb';
 
 // 1. Initialization
 const db = new VanillaDatabase({
@@ -256,7 +256,7 @@ When configuring an AI Coding Agent (e.g. Claude, GPT-4, Cursor, AutoGPT) to int
 ```markdown
 You have access to a VanillaDatabase SQLite Cloud instance.
 Connect using the official client:
-- Node.js: `import { VanillaDatabase } from '@elaina2026/vanilladb'`
+- Node.js: `import { VanillaDatabase } from '@nullex/vanilladb'`
 - Python: `from vanilladb import VanillaDatabase`
 Rules:
 1. Always use parameterized queries (`?`) to avoid SQL injection.
@@ -295,7 +295,7 @@ Rules:
 - `react-hook-form` (^7.54.2): Form state validation.
 
 ### 4.3. Official Client Packages
-- **Node.js / TypeScript**: `@elaina2026/vanilladb` (or `shared/client.ts`)
+- **Node.js / TypeScript**: `@nullex/vanilladb` (or `shared/client.ts`)
 - **Python**: `vanilladb` (`requests>=2.28.0`)
 
 ---
