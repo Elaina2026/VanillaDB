@@ -3,6 +3,9 @@ name: Publish Packages to NPM and PyPI
 on:
   release:
     types: [published]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 env:
