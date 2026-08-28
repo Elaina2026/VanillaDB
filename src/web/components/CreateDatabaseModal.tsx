@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Database } from 'lucide-react';
+import { X, Database, UploadCloud } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import type { DatabaseRecord } from '@shared/index.js';
 
@@ -11,19 +11,39 @@ export const CreateDatabaseModal: React.FC<{
 }> = ({ isOpen, onClose, onSuccess }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const createMutation = useMutation({
-    mutationFn: (payload: { name: string; description?: string }) =>
-      apiRequest('/api/admin/databases', {
+    mutationFn: async (payload: { name: string; description?: string; file?: File | null }) => {
+      if (payload.file) {
+        const formData = new FormData();
+        formData.append('file', payload.file);
+        if (payload.name) formData.append('name', payload.name);
+        if (payload.description) formData.append('description', payload.description);
+
+        const res = await fetch('/api/admin/databases/import-new', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error?.message || 'Failed to create database from file');
+        }
+        return data.data;
+      }
+
+      return apiRequest('/api/admin/databases', {
         method: 'POST',
-        body: JSON.stringify(payload),
-      }),
+        body: JSON.stringify({ name: payload.name, description: payload.description }),
+      });
+    },
     onSuccess: (db: DatabaseRecord) => {
       queryClient.invalidateQueries({ queryKey: ['databases'] });
       setName('');
       setDescription('');
+      setImportFile(null);
       onSuccess(db);
       onClose();
     },
@@ -36,9 +56,13 @@ export const CreateDatabaseModal: React.FC<{
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() && !importFile) return;
     setError(null);
-    createMutation.mutate({ name: name.trim(), description: description.trim() || undefined });
+    createMutation.mutate({
+      name: name.trim() || (importFile ? importFile.name.replace(/\.[^/.]+$/, '') : ''),
+      description: description.trim() || undefined,
+      file: importFile,
+    });
   };
 
   return (
@@ -65,8 +89,8 @@ export const CreateDatabaseModal: React.FC<{
             <label className="block text-xs font-medium text-muted-foreground mb-1">Database Name</label>
             <input
               type="text"
-              required
-              placeholder="e.g. Discord Bot Production"
+              required={!importFile}
+              placeholder={importFile ? "Auto-derived from file or enter custom name..." : "e.g. Discord Bot Production"}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500"
@@ -76,12 +100,36 @@ export const CreateDatabaseModal: React.FC<{
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">Description (Optional)</label>
             <textarea
-              rows={3}
+              rows={2}
               placeholder="Brief description for team context..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500"
             />
+          </div>
+
+          <div className="pt-1">
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
+              Initialize with Dump / File (Optional)
+            </label>
+            <div className="border border-dashed border-border rounded-lg p-3 bg-muted/20 hover:bg-muted/40 transition-colors">
+              <input
+                type="file"
+                accept=".sql,.sqlite,.db,.csv,.json,.ndjson,.dump"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] || null;
+                  setImportFile(f);
+                  if (f && !name) {
+                    setName(f.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_'));
+                  }
+                }}
+                className="w-full text-xs text-muted-foreground file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1">
+                <UploadCloud className="w-3 h-3 text-blue-500 shrink-0" />
+                Supports MySQL dumps, PostgreSQL dumps, SQLite (.db), JSON, and CSV.
+              </p>
+            </div>
           </div>
 
           <div className="pt-2 flex items-center justify-end gap-2">
@@ -94,10 +142,10 @@ export const CreateDatabaseModal: React.FC<{
             </button>
             <button
               type="submit"
-              disabled={createMutation.isPending || !name.trim()}
+              disabled={createMutation.isPending || (!name.trim() && !importFile)}
               className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md font-semibold transition-colors"
             >
-              {createMutation.isPending ? 'Creating...' : 'Create Database'}
+              {createMutation.isPending ? 'Creating...' : (importFile ? 'Import & Create' : 'Create Database')}
             </button>
           </div>
         </form>

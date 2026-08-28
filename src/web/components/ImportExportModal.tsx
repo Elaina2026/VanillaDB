@@ -28,6 +28,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   // Import states
   const [importFile, setImportFile] = useState<File | null>(null);
   const [targetImportTable, setTargetImportTable] = useState<string>('');
+  const [importDialect, setImportDialect] = useState<string>('auto');
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -59,6 +60,9 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
     if (targetImportTable) {
       formData.append('tableName', targetImportTable);
     }
+    if (importDialect && importDialect !== 'auto') {
+      formData.append('dialect', importDialect);
+    }
 
     try {
       const res = await fetch(`/api/admin/databases/${databaseId}/import`, {
@@ -72,7 +76,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
 
       setImportResult({
         success: true,
-        message: data.message || `Successfully imported ${data.imported ?? ''} rows`,
+        message: data.message || `Successfully imported data`,
       });
       onSuccess();
     } catch (err: any) {
@@ -86,6 +90,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   };
 
   const isCsvFile = importFile?.name.endsWith('.csv');
+  const isJsonFile = importFile?.name.endsWith('.json') || importFile?.name.endsWith('.ndjson') || importFile?.name.endsWith('.jsonl');
+  const isSqlFile = importFile?.name.endsWith('.sql') || importFile?.name.endsWith('.dump');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -194,7 +200,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
               <label className="block text-xs font-medium text-muted-foreground mb-1">Select File to Import</label>
               <input
                 type="file"
-                accept=".sql,.sqlite,.db,.csv"
+                accept=".sql,.sqlite,.db,.csv,.json,.ndjson,.jsonl,.dump"
                 onChange={(e) => {
                   const f = e.target.files?.[0] || null;
                   setImportFile(f);
@@ -206,27 +212,38 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                 className="w-full text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
               />
               <p className="text-[10px] text-muted-foreground mt-1">
-                Supported: <strong>.sql</strong> scripts, <strong>.sqlite / .db</strong> binaries, and <strong>.csv</strong> tables.
+                Supported: <strong>.sql</strong> (MySQL/Postgres/SQLite), <strong>.sqlite / .db</strong>, <strong>.json / .ndjson</strong> (MongoDB), and <strong>.csv</strong>.
               </p>
             </div>
 
-            {isCsvFile && (
+            {isSqlFile && (
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Target Table for CSV rows</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">SQL Dialect / Engine</label>
                 <select
-                  value={targetImportTable}
-                  onChange={(e) => setTargetImportTable(e.target.value)}
+                  value={importDialect}
+                  onChange={(e) => setImportDialect(e.target.value)}
                   className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground"
                 >
-                  <option value="">-- Select Target Table --</option>
-                  {schema
-                    .filter((s) => s.type === 'table')
-                    .map((t) => (
-                      <option key={t.name} value={t.name}>
-                        {t.name}
-                      </option>
-                    ))}
+                  <option value="auto">Auto-Detect Dialect (Recommended)</option>
+                  <option value="mysql">MySQL Dump (Converts backticks, ENGINE, AUTO_INCREMENT)</option>
+                  <option value="postgres">PostgreSQL Dump (Converts SERIAL, COPY stdin, UUID)</option>
+                  <option value="sqlite">Standard SQLite SQL</option>
                 </select>
+              </div>
+            )}
+
+            {(isCsvFile || isJsonFile) && (
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Target Table Name {isJsonFile ? '(Optional - will auto-create if empty)' : ''}
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. users or imported_data"
+                  value={targetImportTable}
+                  onChange={(e) => setTargetImportTable(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground mb-1 font-mono"
+                />
               </div>
             )}
 
@@ -253,7 +270,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
               </button>
               <button
                 onClick={handleImport}
-                disabled={!importFile || isImporting || (isCsvFile && !targetImportTable)}
+                disabled={!importFile || isImporting}
                 className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
               >
                 {isImporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}

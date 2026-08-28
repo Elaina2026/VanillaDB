@@ -231,7 +231,19 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     sql += ` LIMIT ? OFFSET ?`;
 
     try {
+      const startTime = performance.now();
       const result = dbManager.executeSql(databaseId, sql, [limit, offset]);
+      const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
+
+      activityService.recordActivity({
+        databaseId,
+        tokenId: req.apiToken?.id || `admin:${req.adminUser?.username || 'user'}`,
+        operation: `REST_SELECT:${table}`,
+        durationMs,
+        status: 'success',
+        rowCount: (result as any).rowCount || ((result as any).rows || []).length,
+      });
+
       return reply.send({ success: true, data: result });
     } catch (err: any) {
       return reply.status(err.statusCode || 400).send({
@@ -271,7 +283,19 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     const sql = `INSERT INTO "${table}" (${cols}) VALUES (${placeholders})`;
 
     try {
+      const startTime = performance.now();
       const result = dbManager.executeSql(databaseId, sql, values);
+      const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
+
+      activityService.recordActivity({
+        databaseId,
+        tokenId: req.apiToken?.id || `admin:${req.adminUser?.username || 'user'}`,
+        operation: `REST_INSERT:${table}`,
+        durationMs,
+        status: 'success',
+        rowCount: 1,
+      });
+
       realtimeService.emitEvent({
         databaseId,
         table,
@@ -311,7 +335,19 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
     const sql = `DELETE FROM "${table}" WHERE "${pkCol}" = ?`;
     try {
+      const startTime = performance.now();
       const result = dbManager.executeSql(databaseId, sql, [pkVal]);
+      const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
+
+      activityService.recordActivity({
+        databaseId,
+        tokenId: req.apiToken?.id || `admin:${req.adminUser?.username || 'user'}`,
+        operation: `REST_DELETE:${table}`,
+        durationMs,
+        status: 'success',
+        rowCount: (result as any).changes || 1,
+      });
+
       realtimeService.emitEvent({
         databaseId,
         table,

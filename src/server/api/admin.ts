@@ -10,6 +10,7 @@ import { webhookService } from '../services/webhook.js';
 import { realtimeService } from '../services/realtime.js';
 import { activityService } from '../services/activity.js';
 import { requireAdminAuth } from '../middleware/auth.js';
+import { SqlTranslator } from '../utils/sqlTranslator.js';
 import { TokenPermissionSchema } from '../../../shared/index.js';
 
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
@@ -189,6 +190,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         rowCount: 1,
       });
 
+      realtimeService.emitEvent({
+        databaseId: id,
+        table,
+        type: 'insert',
+        data: { row, result },
+        timestamp: Date.now(),
+      });
+
       return reply.status(201).send({ success: true, data: result });
     } catch (err: any) {
       return reply.status(err.statusCode || 400).send({
@@ -235,6 +244,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         rowCount: (result as any).changes || 1,
       });
 
+      realtimeService.emitEvent({
+        databaseId: id,
+        table,
+        type: 'update',
+        data: { pkCol, pkVal, values, result },
+        timestamp: Date.now(),
+      });
+
       return reply.send({ success: true, data: result });
     } catch (err: any) {
       return reply.status(err.statusCode || 400).send({
@@ -274,6 +291,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         rowCount: (result as any).changes || pkValues.length,
       });
 
+      realtimeService.emitEvent({
+        databaseId: id,
+        table,
+        type: 'delete',
+        data: { pkCol, pkValues, count: (result as any).changes || pkValues.length },
+        timestamp: Date.now(),
+      });
+
       return reply.send({ success: true, data: result });
     } catch (err: any) {
       return reply.status(err.statusCode || 400).send({
@@ -304,6 +329,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         result: 'success',
         requestId: req.id,
         details: JSON.stringify({ oldName: table, newName }),
+      });
+
+      realtimeService.emitEvent({
+        databaseId: id,
+        type: 'schema',
+        table: newName,
+        data: { action: 'rename', oldName: table, newName },
+        timestamp: Date.now(),
       });
 
       return reply.send({ success: true, data: { name: newName } });
@@ -341,6 +374,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         details: JSON.stringify({ table }),
       });
 
+      realtimeService.emitEvent({
+        databaseId: id,
+        table,
+        type: 'delete',
+        data: { action: 'truncate', table },
+        timestamp: Date.now(),
+      });
+
       return reply.send({ success: true, data: result });
     } catch (err: any) {
       return reply.status(err.statusCode || 400).send({
@@ -364,6 +405,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         result: 'success',
         requestId: req.id,
         details: JSON.stringify({ table }),
+      });
+
+      realtimeService.emitEvent({
+        databaseId: id,
+        type: 'schema',
+        table,
+        data: { action: 'drop', table },
+        timestamp: Date.now(),
       });
 
       return reply.send({ success: true });
@@ -685,7 +734,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       limit: query.limit ? parseInt(query.limit, 10) : 50,
       offset: query.offset ? parseInt(query.offset, 10) : 0,
     });
-    return reply.send({ success: true, data: res.items, total: res.total });
+    return reply.send({ success: true, data: { items: res.items, total: res.total } });
   });
 
   fastify.get('/audit', async (req, reply) => {
@@ -694,7 +743,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       query.limit ? parseInt(query.limit, 10) : 50,
       query.offset ? parseInt(query.offset, 10) : 0
     );
-    return reply.send({ success: true, data: res.items, total: res.total });
+    return reply.send({ success: true, data: { items: res.items, total: res.total } });
   });
 
   // Admin Files API
@@ -902,7 +951,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(400).send({ success: false, error: { code: 'INVALID_FORMAT', message: 'Format must be sql, csv, or json' } });
   });
 
-  // Import Data (.sql, .sqlite/.db, .csv)
+  // Import Data (.sql, .sqlite/.db, .csv, .json, .ndjson, .dump) with Multi-Dialect Auto Translation
   fastify.post('/databases/:id/import', async (req, reply) => {
     const { id } = req.params as { id: string };
     const data = await req.file();
@@ -911,34 +960,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const buffer = await data.toBuffer();
-    const ext = data.filename.split('.').pop()?.toLowerCase();
+    const filename = data.filename || 'import_file';
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
     const targetTable = (data.fields?.tableName as any)?.value;
+    const explicitDialect = (data.fields?.dialect as any)?.value;
 
-    if (ext === 'sql') {
-      const sqlContent = buffer.toString('utf-8');
-      const db = dbManager.get(id);
-      db.exec(sqlContent);
-
-      realtimeService.emitEvent({
-        databaseId: id,
-        type: 'schema',
-        timestamp: Date.now(),
-      });
-
-      activityService.recordAudit({
-        user: req.adminUser!.username,
-        action: 'database.import_sql',
-        resource: id,
-        result: 'success',
-        requestId: req.id,
-        details: JSON.stringify({ filename: data.filename }),
-      });
-
-      return reply.send({ success: true, message: 'SQL script executed and imported successfully' });
-    }
-
+    // 1. SQLite Binary Replacement (.sqlite, .db)
     if (ext === 'sqlite' || ext === 'db') {
-      // Validate SQLite Header (first 16 bytes: "SQLite format 3\0")
       const header = buffer.subarray(0, 16).toString('utf-8');
       if (!header.startsWith('SQLite format 3')) {
         return reply.status(400).send({ success: false, error: { code: 'INVALID_SQLITE_FILE', message: 'File is not a valid SQLite database binary' } });
@@ -961,30 +989,98 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         resource: id,
         result: 'success',
         requestId: req.id,
-        details: JSON.stringify({ filename: data.filename, size: buffer.length }),
+        details: JSON.stringify({ filename, size: buffer.length }),
       });
 
       return reply.send({ success: true, message: 'SQLite database file imported and replaced successfully' });
     }
 
-    if (ext === 'csv') {
-      if (!targetTable) {
-        return reply.status(400).send({ success: false, error: { code: 'MISSING_TABLE', message: 'targetTable field required for CSV import' } });
+    // 2. JSON or NDJSON (Mongo / JSON Export)
+    if (ext === 'json' || ext === 'ndjson' || ext === 'jsonl') {
+      const content = buffer.toString('utf-8');
+      let records: any[] = [];
+
+      try {
+        if (ext === 'ndjson' || ext === 'jsonl' || content.includes('\n{')) {
+          records = SqlTranslator.parseNdjson(content);
+        } else {
+          const parsed = JSON.parse(content);
+          records = Array.isArray(parsed) ? parsed : [parsed];
+        }
+      } catch (err: any) {
+        return reply.status(400).send({ success: false, error: { code: 'INVALID_JSON', message: `JSON parsing error: ${err.message}` } });
       }
 
+      if (records.length === 0) {
+        return reply.send({ success: true, imported: 0, message: 'JSON file is empty' });
+      }
+
+      const inferredTableName = targetTable || filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+      const { ddl, dml, rowCount } = SqlTranslator.inferSchemaFromJson(records, inferredTableName);
+
+      const db = dbManager.get(id);
+      db.exec(ddl);
+
+      if (dml.length > 0) {
+        db.exec('BEGIN TRANSACTION;');
+        try {
+          for (const insertSql of dml) {
+            db.exec(insertSql);
+          }
+          db.exec('COMMIT;');
+        } catch (err: any) {
+          db.exec('ROLLBACK;');
+          return reply.status(400).send({ success: false, error: { code: 'JSON_IMPORT_ERROR', message: err.message } });
+        }
+      }
+
+      realtimeService.emitEvent({
+        databaseId: id,
+        table: inferredTableName,
+        type: 'insert',
+        data: { importedRows: rowCount },
+        timestamp: Date.now(),
+      });
+
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'database.import_json',
+        resource: id,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ filename, table: inferredTableName, rows: rowCount }),
+      });
+
+      return reply.send({
+        success: true,
+        imported: rowCount,
+        table: inferredTableName,
+        message: `Successfully imported ${rowCount} rows into table "${inferredTableName}"`,
+      });
+    }
+
+    // 3. CSV Table Import
+    if (ext === 'csv') {
       const csvContent = buffer.toString('utf-8');
       const lines = csvContent.split(/\r?\n/).filter(l => l.trim());
       if (lines.length < 2) {
-        return reply.send({ success: true, imported: 0 });
+        return reply.send({ success: true, imported: 0, message: 'CSV file is empty' });
       }
 
       const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
       const rows = lines.slice(1).map(l => l.split(',').map(v => v.trim().replace(/^"|"$/g, '')));
-
       const db = dbManager.get(id);
+
+      let effectiveTable = targetTable;
+      if (!effectiveTable) {
+        effectiveTable = filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+        const colsDef = headers.map(h => `"${h.replace(/"/g, '""')}" TEXT`).join(', ');
+        db.exec(`CREATE TABLE IF NOT EXISTS "${effectiveTable.replace(/"/g, '""')}" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, ${colsDef});`);
+      }
+
       const placeholders = headers.map(() => '?').join(', ');
       const cols = headers.map(h => `"${h.replace(/"/g, '""')}"`).join(', ');
-      const stmt = db.prepare(`INSERT INTO "${targetTable.replace(/"/g, '""')}" (${cols}) VALUES (${placeholders})`);
+      const stmt = db.prepare(`INSERT INTO "${effectiveTable.replace(/"/g, '""')}" (${cols}) VALUES (${placeholders})`);
 
       db.exec('BEGIN TRANSACTION;');
       try {
@@ -999,19 +1095,148 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
         realtimeService.emitEvent({
           databaseId: id,
-          table: targetTable,
+          table: effectiveTable,
           type: 'insert',
           data: { importedRows: count },
           timestamp: Date.now(),
         });
 
-        return reply.send({ success: true, imported: count });
+        activityService.recordAudit({
+          user: req.adminUser!.username,
+          action: 'database.import_csv',
+          resource: id,
+          result: 'success',
+          requestId: req.id,
+          details: JSON.stringify({ filename, table: effectiveTable, rows: count }),
+        });
+
+        return reply.send({ success: true, imported: count, message: `Imported ${count} rows into table "${effectiveTable}"` });
       } catch (err: any) {
         db.exec('ROLLBACK;');
         return reply.status(400).send({ success: false, error: { code: 'CSV_IMPORT_ERROR', message: err.message } });
       }
     }
 
-    return reply.status(400).send({ success: false, error: { code: 'UNSUPPORTED_FORMAT', message: 'Supported formats: .sql, .sqlite, .db, .csv' } });
+    // 4. SQL / Database Dumps (.sql, .dump, text) with Multi-Dialect Translation
+    const rawSql = buffer.toString('utf-8');
+    const detectedDialect = explicitDialect || SqlTranslator.detectDialect(rawSql);
+    let executableSql = rawSql;
+
+    if (detectedDialect === 'mysql') {
+      executableSql = SqlTranslator.translateMySql(rawSql);
+    } else if (detectedDialect === 'postgres') {
+      executableSql = SqlTranslator.translatePostgres(rawSql);
+    }
+
+    try {
+      const db = dbManager.get(id);
+      db.exec(executableSql);
+
+      realtimeService.emitEvent({
+        databaseId: id,
+        type: 'schema',
+        timestamp: Date.now(),
+      });
+
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: `database.import_${detectedDialect}`,
+        resource: id,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ filename, dialect: detectedDialect }),
+      });
+
+      return reply.send({
+        success: true,
+        dialect: detectedDialect,
+        message: `Database script (${detectedDialect.toUpperCase()}) translated and imported successfully`,
+      });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'IMPORT_EXECUTION_ERROR', message: `Execution failed: ${err.message}` },
+      });
+    }
+  });
+
+  // Create Database Directly from Uploaded Dump File
+  fastify.post('/databases/import-new', async (req, reply) => {
+    const data = await req.file();
+    if (!data) {
+      return reply.status(400).send({ success: false, error: { code: 'NO_FILE', message: 'File is required' } });
+    }
+
+    const buffer = await data.toBuffer();
+    const filename = data.filename || 'import_db';
+    const explicitName = (data.fields?.name as any)?.value;
+    const description = (data.fields?.description as any)?.value;
+    const dbName = (explicitName || filename.replace(/\.[^/.]+$/, '')).trim();
+
+    const record = databaseService.createDatabase(dbName, description || `Imported from ${filename}`);
+    const id = record.id;
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+
+    try {
+      if (ext === 'sqlite' || ext === 'db') {
+        const header = buffer.subarray(0, 16).toString('utf-8');
+        if (header.startsWith('SQLite format 3')) {
+          dbManager.close(id);
+          const dbPath = dbManager.resolveDatabasePath(id);
+          fs.writeFileSync(dbPath, buffer);
+          dbManager.get(id);
+        }
+      } else if (ext === 'json' || ext === 'ndjson' || ext === 'jsonl') {
+        const content = buffer.toString('utf-8');
+        const records = ext === 'ndjson' || ext === 'jsonl' ? SqlTranslator.parseNdjson(content) : JSON.parse(content);
+        const { ddl, dml } = SqlTranslator.inferSchemaFromJson(Array.isArray(records) ? records : [records], 'main_data');
+        const db = dbManager.get(id);
+        db.exec(ddl);
+        if (dml.length > 0) {
+          db.exec('BEGIN TRANSACTION;');
+          for (const s of dml) db.exec(s);
+          db.exec('COMMIT;');
+        }
+      } else if (ext === 'csv') {
+        const csvContent = buffer.toString('utf-8');
+        const lines = csvContent.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length >= 2) {
+          const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+          const rows = lines.slice(1).map(l => l.split(',').map(v => v.trim().replace(/^"|"$/g, '')));
+          const db = dbManager.get(id);
+          const colsDef = headers.map(h => `"${h.replace(/"/g, '""')}" TEXT`).join(', ');
+          db.exec(`CREATE TABLE IF NOT EXISTS "main_data" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, ${colsDef});`);
+          const placeholders = headers.map(() => '?').join(', ');
+          const cols = headers.map(h => `"${h.replace(/"/g, '""')}"`).join(', ');
+          const stmt = db.prepare(`INSERT INTO "main_data" (${cols}) VALUES (${placeholders})`);
+          db.exec('BEGIN TRANSACTION;');
+          for (const r of rows) {
+            if (r.length === headers.length) stmt.run(...r);
+          }
+          db.exec('COMMIT;');
+        }
+      } else {
+        const rawSql = buffer.toString('utf-8');
+        const dialect = SqlTranslator.detectDialect(rawSql);
+        let execSql = rawSql;
+        if (dialect === 'mysql') execSql = SqlTranslator.translateMySql(rawSql);
+        if (dialect === 'postgres') execSql = SqlTranslator.translatePostgres(rawSql);
+        const db = dbManager.get(id);
+        db.exec(execSql);
+      }
+
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'database.create_from_import',
+        resource: id,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ filename, dbName }),
+      });
+
+      return reply.status(201).send({ success: true, data: record, message: 'Database created and initialized from file successfully' });
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: { code: 'IMPORT_INIT_FAILED', message: `Database created but initialization failed: ${err.message}` } });
+    }
   });
 };

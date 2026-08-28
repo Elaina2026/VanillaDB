@@ -51,8 +51,8 @@ if (process.env.NODE_ENV === 'production' && insecureSecrets.includes(sessionSec
 export const config = {
   env: process.env.NODE_ENV || 'development',
   isProduction: process.env.NODE_ENV === 'production',
-  host: process.env.VDB_HOST || '0.0.0.0',
-  port: getEnvInt('VDB_PORT', 3000),
+  host: process.env.VDB_HOST || process.env.HOST || '0.0.0.0',
+  port: getEnvInt('VDB_PORT', getEnvInt('PORT', 3000)),
   dataDir,
   systemDir,
   databasesDir,
