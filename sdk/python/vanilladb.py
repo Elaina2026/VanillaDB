@@ -56,7 +56,7 @@ class VanillaDatabase:
         self.headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
-            "User-Agent": "VanillaDatabase-PythonSDK/1.1.0"
+            "User-Agent": "VanillaDatabase-PythonSDK/1.2.0"
         }
 
     def get_base_url(self) -> str:
