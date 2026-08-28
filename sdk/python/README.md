@@ -1,6 +1,6 @@
 # VanillaDatabase Python SDK
 
-Official Python client for **VanillaDatabase (VanillaDB)** — Multi-Tenant SQLite Cloud Engine with Realtime Event Subscriptions, Database-Scoped Media Storage, and Batch Transactions.
+Official Python client for VanillaDatabase (VanillaDB) - Multi-Tenant SQLite Cloud Engine with Realtime Event Subscriptions, Database-Scoped Media Storage, and Batch Transactions.
 
 ## Installation
 
