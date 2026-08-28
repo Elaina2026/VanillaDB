@@ -1,6 +1,6 @@
 # LLMS.txt - VanillaDatabase AI & Agent Reference Guide
 
-> VanillaDatabase (VanillaDB) is a multi-tenant, zero-configuration SQLite cloud database engine featuring real-time event streaming (SSE), database-scoped media storage with HTTP 206 range streaming, AI Vector Cosine Similarity Search, granular API token permissions, HMAC-SHA256 webhooks, and automated scheduled backups.
+> VanillaDatabase (VanillaDB) is a multi-tenant, zero-configuration SQLite cloud database engine featuring real-time event streaming (SSE), database-scoped media storage with HTTP 206 range streaming, multi-database DDL/DML converter (MySQL, PostgreSQL, MongoDB, CSV), AI Vector Cosine Similarity Search, granular API token permissions, HMAC-SHA256 webhooks, and automated scheduled backups.
 
 ---
 
@@ -32,6 +32,13 @@ All Data Plane operations branch from the single database Base URL:
 | **Realtime Event Stream** | `GET /realtime?table=<table_name>` | `database:read` (Accepts Bearer header, `?token=`, or session cookie) |
 | **Media File Storage** | `GET /files`<br>`POST /files`<br>`DELETE /files/:fileId` | `database:read`<br>`database:write`<br>`database:write` |
 | **Media Stream (Range 206)** | `GET /files/:fileId/view` | `database:read` (Supports `Range: bytes=start-end`) |
+
+Control Plane Endpoints (Admin Session Auth):
+| Feature / Action | HTTP Method & Sub-path | Description |
+| :--- | :--- | :--- |
+| **Multi-DB Import** | `POST /api/admin/databases/:id/import` | Auto-translates and ingests MySQL, Postgres, Mongo (JSON/NDJSON), CSV |
+| **1-Click Create from Dump**| `POST /api/admin/databases/import-new` | Creates new database directly initialized from uploaded dump file |
+| **System & Security Logs** | `GET /api/admin/activity`<br>`GET /api/admin/audit` | Live API query metrics, execution duration, and admin audit trail |
 
 ---
 
@@ -121,7 +128,15 @@ LIMIT 5;
 
 ---
 
-### 3.4. Full-Text Search (FTS5)
+### 3.4. Multi-Database Converter & Ingestion
+VanillaDatabase automatically transforms external formats into SQLite:
+- **MySQL**: Translates backticks, converts `AUTO_INCREMENT` -> `AUTOINCREMENT`, strips `ENGINE=InnoDB` and comments, converts inline `KEY` -> `CREATE INDEX`.
+- **PostgreSQL**: Converts `SERIAL` -> `INTEGER PRIMARY KEY AUTOINCREMENT`, strips `public.` prefixes, converts `COPY FROM stdin` blocks into `INSERT INTO` statements.
+- **MongoDB / JSON / NDJSON**: Infers column types (`INTEGER`, `REAL`, `TEXT`) and creates structured relational tables with atomic batch inserts.
+
+---
+
+### 3.5. Full-Text Search (FTS5)
 Create and query virtual FTS5 tables directly:
 ```sql
 CREATE VIRTUAL TABLE articles_fts USING fts5(title, content, tokenize='unicode61');
@@ -131,7 +146,7 @@ SELECT * FROM articles_fts WHERE articles_fts MATCH 'VanillaDatabase';
 
 ---
 
-## 4. Official Client SDK Reference (v1.1.0)
+## 4. Official Client SDK Reference (v1.2.0)
 
 ### 4.1. Installation
 ```bash
@@ -187,8 +202,13 @@ const matches = await db.vectorSearch({
 });
 console.log('RAG Matches:', matches);
 
-// 4. Parameterized Raw SQL Query
-const queryRes = await db.query(
+// 4. Parameterized Raw SQL Query with TypeScript Generics
+interface UserRecord {
+  id: number;
+  username: string;
+  score: number;
+}
+const queryRes = await db.query<UserRecord>(
   'SELECT id, username, score FROM users WHERE score >= ? ORDER BY score DESC LIMIT ?',
   [50, 10]
 );

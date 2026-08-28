@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: vanilladatabase
-Version: 1.1.0
+Version: 1.2.0
 Summary: Official Python SDK for VanillaDatabase - Multi-tenant SQLite Engine with Realtime & Media Storage
 Author-email: Elaina2026 <ariaasamane@gmail.com>
 License: MIT
