@@ -1,7 +1,9 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import fs from 'fs';
+import { config } from '../config/index.js';
 import { dbManager } from '../db/manager.js';
+import { authService } from '../services/auth.js';
 import { activityService } from '../services/activity.js';
 import { storageService } from '../services/storage.js';
 import { realtimeService } from '../services/realtime.js';
@@ -333,6 +335,17 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       if (queryToken && typeof queryToken === 'string' && !req.headers.authorization) {
         req.headers.authorization = `Bearer ${queryToken}`;
       }
+
+      // Allow admin session cookie authentication for SSE
+      if (!req.headers.authorization && req.cookies?.vdb_session) {
+        const user = authService.verifySessionCookie(req.cookies.vdb_session, config.sessionSecret);
+        if (user) {
+          req.adminUser = user;
+          req.databaseId = (req.params as any).databaseId;
+          return;
+        }
+      }
+
       return requireTokenPermission('database:read')(req, reply);
     },
   }, async (req, reply) => {
