@@ -22,8 +22,9 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
 
     - name: Build TypeScript SDK
-      working-directory: sdk/typescript
       run: |
+        npm install
+        cd sdk/typescript
         npm install
         npm run build
 
@@ -53,7 +54,7 @@ jobs:
 
     - name: Publish to PyPI
       working-directory: sdk/python
-      run: twine upload --skip-existing dist/*
+      run: twine upload --verbose --skip-existing dist/*
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
