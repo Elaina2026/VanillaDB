@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Database, Lock, User, KeyRound, AlertCircle } from 'lucide-react';
+import { Lock, User, KeyRound, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import { apiRequest } from '../api/client.js';
+import { LogoIcon } from '../components/LogoIcon.js';
 
 export const AuthPage: React.FC = () => {
   const { initialized, refetchStatus } = useAuth();
@@ -46,8 +47,8 @@ export const AuthPage: React.FC = () => {
       <div className="w-full max-w-sm bg-card border border-border rounded-xl shadow-lg p-6 space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-1.5">
-          <div className="inline-flex w-14 h-14 rounded-xl bg-slate-900 border border-slate-700/60 items-center justify-center mb-2 shadow-md">
-            <img src="/src/web/assets/logo.svg" alt="VanillaDatabase Logo" className="w-10 h-10 object-contain" />
+          <div className="inline-flex w-16 h-16 rounded-2xl items-center justify-center mb-2 shadow-lg">
+            <LogoIcon className="w-16 h-16" />
           </div>
           <h1 className="text-lg font-bold tracking-tight">
             {!initialized ? 'Welcome to VanillaDatabase' : 'Sign in to VanillaDatabase'}

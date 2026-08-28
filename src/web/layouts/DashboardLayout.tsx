@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Database, Plus, Search, Layers, Server, Activity, Shield, Terminal, HardDrive, Settings, LogOut, Sun, Moon, Laptop, ChevronRight } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import { useTheme } from '../hooks/useTheme.js';
+import { LogoIcon } from '../components/LogoIcon.js';
 import { cn } from '../lib/utils.js';
 
 interface DashboardLayoutProps {
@@ -38,8 +39,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 setCurrentTab('databases');
               }}
             >
-              <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-900 border border-slate-700/50 flex items-center justify-center shrink-0">
-                <img src="/src/web/assets/logo.svg" alt="VanillaDatabase" className="w-6 h-6 object-contain" />
+              <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+                <LogoIcon className="w-8 h-8" />
               </div>
               <div>
                 <span className="font-semibold text-sm tracking-tight block">VanillaDatabase</span>
