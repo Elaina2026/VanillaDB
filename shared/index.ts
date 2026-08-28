@@ -113,9 +113,9 @@ export interface AuditRecord {
   details?: string | null;
 }
 
-export interface SqlQueryResult {
+export interface SqlQueryResult<T = Record<string, any>> {
   columns: string[];
-  rows: Record<string, any>[];
+  rows: T[];
   rowCount: number;
   durationMs: number;
 }

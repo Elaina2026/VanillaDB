@@ -1,4 +1,4 @@
-import type { SqlExecutionResult, BatchResult, SqlStatement, RealtimeEventPayload, FileRecord } from './index.js';
+import type { SqlQueryResult, SqlExecutionResult, BatchResult, SqlStatement, RealtimeEventPayload, FileRecord } from './index.js';
 
 export interface VanillaDbClientOptions {
   url: string;
@@ -136,7 +136,7 @@ export class VanillaDatabase {
   }
 
   // 3. Raw SQL Query
-  async query<T = Record<string, any>>(sql: string, params: any[] | Record<string, any> = []): Promise<SqlExecutionResult> {
+  async query<T = Record<string, any>>(sql: string, params: any[] | Record<string, any> = []): Promise<SqlQueryResult<T>> {
     const endpoint = this.url.endsWith('/query') ? this.url : `${this.url}/query`;
     const res = await fetch(endpoint, {
       method: 'POST',
