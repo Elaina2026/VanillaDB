@@ -3,10 +3,10 @@ Name: vanilladb
 Version: 1.0.0
 Summary: Official Python SDK for VanillaDatabase - Multi-tenant SQLite Engine with Realtime & Media Storage
 Author-email: Elaina2026 <admin@vanilladb.local>
+License: MIT
 Project-URL: Homepage, https://github.com/Elaina2026/VanillaDB
 Project-URL: Bug Tracker, https://github.com/Elaina2026/VanillaDB/issues
 Classifier: Programming Language :: Python :: 3
-Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
