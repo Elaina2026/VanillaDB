@@ -55,7 +55,24 @@ export function requireTokenPermission(permission: TokenPermission) {
       return;
     }
 
-    const authHeader = request.headers.authorization;
+    // 1. Support Admin Session Cookie (For Web UI viewing images/videos/media)
+    const sessionCookie = request.cookies?.vdb_session;
+    if (sessionCookie) {
+      const user = authService.verifySessionCookie(sessionCookie, config.sessionSecret);
+      if (user) {
+        request.adminUser = user;
+        request.databaseId = databaseId;
+        return;
+      }
+    }
+
+    // 2. Support Token in Query Param (?token=vdb_live_...) for <img>, <video>, <a> links
+    let authHeader = request.headers.authorization;
+    const queryToken = (request.query as any)?.token;
+    if (!authHeader && queryToken && typeof queryToken === 'string') {
+      authHeader = `Bearer ${queryToken}`;
+    }
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       reply.status(401).send({
         success: false,
