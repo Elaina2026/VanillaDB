@@ -72,7 +72,8 @@ export const App: React.FC = () => {
       currentTab={route.tab}
       setCurrentTab={(tab) => navigateTo(tab)}
       selectedDatabaseId={route.databaseId}
-      setSelectedDatabaseId={(id) => (id ? navigateTo('databases', id) : navigateTo('databases'))}
+      selectedDatabaseTab={route.dbTab}
+      setSelectedDatabaseId={(id, tab = 'overview') => (id ? navigateTo('databases', id, tab) : navigateTo('databases'))}
       onOpenCreateDb={() => setIsCreateDbOpen(true)}
     >
       {route.databaseId ? (

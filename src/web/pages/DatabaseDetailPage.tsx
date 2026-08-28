@@ -468,12 +468,12 @@ export const DatabaseDetailPage: React.FC<{
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
-      {/* Top Breadcrumb & Actions Bar */}
+      {/* Top Header Information */}
       <div className="h-14 border-b border-border bg-card px-6 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="p-1.5 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1.5 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground transition-colors md:hidden"
             title="Back to databases"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -491,36 +491,13 @@ export const DatabaseDetailPage: React.FC<{
           </div>
         </div>
 
-        {/* Action Tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto bg-muted p-0.5 rounded-lg border border-border text-xs font-medium">
-          {[
-            { id: 'overview', label: 'Overview & Stats', icon: BarChart3 },
-            { id: 'tables', label: 'Tables', icon: TableIcon },
-            { id: 'editor', label: 'SQL Editor', icon: Terminal },
-            { id: 'schema', label: 'Schema', icon: FileCode },
-            { id: 'storage', label: 'Storage', icon: Folder },
-            { id: 'realtime', label: 'Realtime', icon: Radio },
-            { id: 'webhooks', label: 'Webhooks', icon: WebhookIcon },
-            { id: 'api', label: 'API Docs', icon: Key },
-            { id: 'tokens', label: 'Tokens', icon: Shield },
-            { id: 'backups', label: 'Backups', icon: Archive },
-            { id: 'settings', label: 'Settings', icon: Sliders },
-          ].map((t) => {
-            const Icon = t.icon;
-            const active = activeTab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => handleTabChange(t.id as any)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
-                  active ? 'bg-card text-foreground shadow-sm font-semibold' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {t.label}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-medium">
+            WAL Active
+          </span>
+          <span className="text-[10px] text-muted-foreground font-mono">
+            {formatBytes(totalDbStorage)}
+          </span>
         </div>
       </div>
 
