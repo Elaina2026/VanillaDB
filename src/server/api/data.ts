@@ -416,6 +416,28 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(201).send({ success: true, data: fileRecord });
   });
 
+  // Token Delete File API
+  fastify.delete('/databases/:databaseId/files/:fileId', {
+    preHandler: [requireTokenPermission('database:write')],
+  }, async (req, reply) => {
+    const databaseId = req.databaseId!;
+    const { fileId } = req.params as { fileId: string };
+    const file = storageService.getFile(fileId);
+    if (!file || file.database_id !== databaseId) {
+      return reply.status(404).send({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'File not found in this database' } });
+    }
+
+    storageService.deleteFile(fileId);
+    realtimeService.emitEvent({
+      databaseId,
+      type: 'delete',
+      data: { fileId },
+      timestamp: Date.now(),
+    });
+
+    return reply.send({ success: true });
+  });
+
   // Streaming File View endpoints
   fastify.get('/files/:fileId/view', {
     preHandler: [requireTokenPermission('database:read')],

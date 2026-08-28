@@ -1,11 +1,11 @@
 # VanillaDatabase Python SDK
 
-Official Python client for VanillaDatabase (VanillaDB) - Multi-Tenant SQLite Cloud Engine with Realtime Event Subscriptions, Database-Scoped Media Storage, and Batch Transactions.
+Official Python client for VanillaDatabase (VanillaDB) - Multi-Tenant SQLite Cloud Engine with Realtime Event Subscriptions, Database-Scoped Media Storage, AI Vector Search, and Batch Transactions.
 
 ## Installation
 
 ```bash
-pip install vanilladb
+pip install vanilladatabase
 ```
 
 ## Quickstart
@@ -20,17 +20,47 @@ db = VanillaDatabase(
     token=os.getenv("VANILLA_DB_TOKEN", "vdb_live_your_api_token_here")
 )
 
-# 2. Parameterized Query
-result = db.query("SELECT * FROM users WHERE active = ?", [1])
+# 2. Table CRUD Builder (No SQL needed)
+# Insert row
+db.table("users").insert({"username": "elaina", "score": 250})
+
+# Select rows
+users = db.table("users").select(limit=10, order_by="score", order="DESC")
+print("Top Users:", users["rows"])
+
+# Delete row
+db.table("users").delete({"id": 1})
+
+# 3. AI Vector Cosine Similarity Search
+matches = db.vector_search(
+    table="documents",
+    vector_column="embedding",
+    vector=[0.12, 0.45, -0.23, 0.89],
+    limit=5,
+    threshold=0.75
+)
+print("Vector Matches:", matches)
+
+# 4. Parameterized Raw SQL Query
+result = db.query("SELECT * FROM users WHERE score >= ?", [100])
 print("Users:", result["rows"])
 
-# 3. Atomic Batch Transaction
+# 5. Atomic Batch Transaction
 db.batch([
-    {"sql": "INSERT INTO users (username, score) VALUES (?, ?)", "params": ["bob", 100]},
-    {"sql": "INSERT INTO logs (event) VALUES (?)", "params": ["user_registered"]}
+    {"sql": "UPDATE users SET score = score - ? WHERE id = ?", "params": [50, 1]},
+    {"sql": "INSERT INTO logs (event) VALUES (?)", "params": ["score_deducted"]}
 ], transaction=True)
 
-# 4. Media Storage (Upload & Range 206 Streaming)
-file_info = db.upload_file("photo.png", filename="user_avatar.png", content_type="image/png")
-print("Stream URL:", db.get_file_url(file_info["id"]))
+# 6. Media Storage (Upload, Stream & Delete)
+file_info = db.upload_file("avatar.png", filename="avatar.png", content_type="image/png")
+print("Stream URL (Range 206):", db.get_file_url(file_info["id"]))
+db.delete_file(file_info["id"])
+
+# 7. Realtime SSE Event Stream
+def on_event(event):
+    print("Live Event:", event)
+
+# Blocking subscription:
+# db.subscribe(on_event, table="users")
+```
 ```

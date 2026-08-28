@@ -1,6 +1,6 @@
 {
   "name": "@nullex/vanilladb",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Official TypeScript & Node.js SDK for VanillaDatabase",
   "main": "./dist/client.js",
   "types": "./dist/client.d.ts",
