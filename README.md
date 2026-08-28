@@ -106,12 +106,12 @@ npm start
 
 Cài đặt:
 ```bash
-npm install vanilladb
+npm install @elaina2026/vanilladb
 ```
 
 Sử dụng:
 ```typescript
-import { VanillaDatabase } from 'vanilladb';
+import { VanillaDatabase } from '@elaina2026/vanilladb';
 
 const db = new VanillaDatabase({
   url: 'http://localhost:3000/v1/databases/db_your_database_id',
@@ -170,6 +170,38 @@ db.batch([
 file_info = db.upload_file("clip.mp4", filename="intro.mp4", content_type="video/mp4")
 print("Stream URL:", db.get_file_url(file_info["id"]))
 ```
+
+---
+
+## 🤖 AI / RAG & Full-Text Search Support
+
+### 1. Vector Cosine Similarity (Native Embeddings Search)
+VanillaDatabase hỗ trợ các hàm vector trực tiếp trong SQL:
+- `vec_cosine_similarity(vec1, vec2)`: Độ tương đồng cosine giữa 2 vector JSON (0.0 đến 1.0).
+- `vec_cosine_distance(vec1, vec2)`: Khoảng cách vector cosine.
+
+```sql
+SELECT id, title, vec_cosine_similarity(embedding, '[0.12, 0.45, -0.23]') as score
+FROM articles
+ORDER BY score DESC
+LIMIT 5;
+```
+
+### 2. Full-Text Search (FTS5)
+```sql
+CREATE VIRTUAL TABLE documents_fts USING fts5(title, content);
+INSERT INTO documents_fts (title, content) VALUES ('Hướng dẫn VanillaDB', 'SQLite Cloud Engine siêu tốc');
+SELECT * FROM documents_fts WHERE documents_fts MATCH 'VanillaDB';
+```
+
+---
+
+## 💡 Code Examples
+
+Mã nguồn mẫu ứng dụng thực tế có sẵn tại thư mục `examples/`:
+- [`examples/discord-bot-nodejs`](examples/discord-bot-nodejs/): Bot Discord lưu exp/level, daily rewards và realtime event sync.
+- [`examples/telegram-bot-python`](examples/telegram-bot-python/): Bot Telegram lưu dữ liệu và upload ảnh media vào VanillaDB.
+- [`examples/nextjs-crud-app`](examples/nextjs-crud-app/): Fullstack Next.js app CRUD dữ liệu qua `@elaina2026/vanilladb`.
 
 ---
 

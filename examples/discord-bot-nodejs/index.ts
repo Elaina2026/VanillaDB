@@ -1,5 +1,5 @@
 import { Client, GatewayIntentBits } from 'discord.js';
-import { VanillaDatabase } from '@nullex/vanilladb';
+import { VanillaDatabase } from '@elaina2026/vanilladb';
 
 // 1. Initialize VanillaDB Client
 const db = new VanillaDatabase({

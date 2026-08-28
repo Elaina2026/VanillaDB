@@ -1,5 +1,5 @@
 {
-  "name": "@nullex/vanilladb",
+  "name": "@elaina2026/vanilladb",
   "version": "1.0.0",
   "description": "Official TypeScript & Node.js SDK for VanillaDatabase",
   "main": "./dist/client.js",
