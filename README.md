@@ -249,11 +249,11 @@ const files = await db.listFiles();
 
 ---
 
-### 2. Python SDK (`vanilladb`)
+### 2. Python SDK (`vanilladatabase`)
 
 **Cài đặt:**
 ```bash
-pip install vanilladb
+pip install vanilladatabase
 ```
 
 Hoặc cài trực tiếp từ repo GitHub:
