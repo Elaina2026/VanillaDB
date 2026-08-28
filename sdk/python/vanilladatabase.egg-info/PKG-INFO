@@ -1,8 +1,8 @@
 Metadata-Version: 2.4
-Name: vanilladb
+Name: vanilladatabase
 Version: 1.0.0
 Summary: Official Python SDK for VanillaDatabase - Multi-tenant SQLite Engine with Realtime & Media Storage
-Author-email: Elaina2026 <admin@vanilladb.local>
+Author-email: Elaina2026 <ariaasamane@gmail.com>
 License: MIT
 Project-URL: Homepage, https://github.com/Elaina2026/VanillaDB
 Project-URL: Bug Tracker, https://github.com/Elaina2026/VanillaDB/issues
@@ -14,7 +14,7 @@ Requires-Dist: requests>=2.28.0
 
 # VanillaDatabase Python SDK
 
-Official Python client for **VanillaDatabase (VanillaDB)** — Multi-Tenant SQLite Cloud Engine with Realtime Event Subscriptions, Database-Scoped Media Storage, and Batch Transactions.
+Official Python client for VanillaDatabase (VanillaDB) - Multi-Tenant SQLite Cloud Engine with Realtime Event Subscriptions, Database-Scoped Media Storage, and Batch Transactions.
 
 ## Installation
 
