@@ -347,6 +347,15 @@ export const DatabaseDetailPage: React.FC<{
   // SQL Editor state
   const [sqlText, setSqlText] = useState('CREATE TABLE IF NOT EXISTS users (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  username TEXT NOT NULL UNIQUE,\n  created_at INTEGER NOT NULL\n);');
   const [queryResult, setQueryResult] = useState<SqlQueryResult | SqlWriteResult | null>(null);
+  const [explainResult, setExplainResult] = useState<{
+    plan: Array<{ id: number; parent: number; notused: number; detail: string }>;
+    analysis: {
+      hasFullTableScan: boolean;
+      scannedTables: string[];
+      usesIndex: boolean;
+      recommendation?: string;
+    };
+  } | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
 
@@ -354,6 +363,7 @@ export const DatabaseDetailPage: React.FC<{
     if (!sqlText.trim()) return;
     setIsExecuting(true);
     setQueryError(null);
+    setExplainResult(null);
     try {
       const res = await apiRequest(`/api/admin/databases/${databaseId}/query`, {
         method: 'POST',
@@ -374,15 +384,16 @@ export const DatabaseDetailPage: React.FC<{
     if (!sqlText.trim()) return;
     setIsExecuting(true);
     setQueryError(null);
+    setQueryResult(null);
     try {
-      const res = await apiRequest(`/api/admin/databases/${databaseId}/query`, {
+      const res = await apiRequest(`/api/admin/databases/${databaseId}/explain`, {
         method: 'POST',
-        body: JSON.stringify({ sql: `EXPLAIN QUERY PLAN ${sqlText}` }),
+        body: JSON.stringify({ sql: sqlText }),
       });
-      setQueryResult(res);
+      setExplainResult(res);
     } catch (err: any) {
       setQueryError(err.message || 'Explain error');
-      setQueryResult(null);
+      setExplainResult(null);
     } finally {
       setIsExecuting(false);
     }
@@ -434,8 +445,24 @@ export const DatabaseDetailPage: React.FC<{
       }),
     onSuccess: (data, action) => {
       refetchStats();
-      setMaintenanceMessage(`Operation "${action}" finished successfully.`);
+      setMaintenanceMessage(`Maintenance "${action}" finished successfully.`);
       setTimeout(() => setMaintenanceMessage(null), 4000);
+    },
+  });
+
+  // Clone database
+  const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
+  const [cloneNewName, setCloneNewName] = useState('');
+  const cloneDbMutation = useMutation({
+    mutationFn: (name: string) =>
+      apiRequest(`/api/admin/databases/${databaseId}/clone`, {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      }),
+    onSuccess: (newDb) => {
+      setIsCloneModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['databases'] });
+      alert(`Database successfully cloned to "${newDb.name}" (${newDb.id})`);
     },
   });
 
@@ -1121,6 +1148,59 @@ export const DatabaseDetailPage: React.FC<{
                     <div>
                       <div className="font-bold text-red-200">SQLite Execution Error</div>
                       <div className="mt-0.5">{queryError}</div>
+                    </div>
+                  </div>
+                ) : explainResult ? (
+                  <div className="p-4 space-y-4 font-mono text-xs">
+                    {/* Profiler Analysis Header */}
+                    <div
+                      className={`p-3 rounded-lg border ${
+                        explainResult.analysis.hasFullTableScan
+                          ? 'bg-amber-950/40 border-amber-800/50 text-amber-300'
+                          : 'bg-emerald-950/40 border-emerald-800/50 text-emerald-300'
+                      }`}
+                    >
+                      <div className="font-bold flex items-center gap-2 text-sm mb-1">
+                        {explainResult.analysis.hasFullTableScan ? (
+                          <>
+                            <AlertTriangle className="w-4 h-4 text-amber-400" />
+                            <span>Slow Query Warning: Full Table Scan Detected</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            <span>Optimized Execution Plan</span>
+                          </>
+                        )}
+                      </div>
+                      <p className="text-[11px] opacity-90">{explainResult.analysis.recommendation}</p>
+                    </div>
+
+                    {/* Step-by-step query execution tree */}
+                    <div className="border border-[#27272a] rounded-lg overflow-hidden">
+                      <div className="bg-[#18181b] px-3 py-1.5 border-b border-[#27272a] text-[#a1a1aa] font-semibold text-[11px]">
+                        EXPLAIN QUERY PLAN Details
+                      </div>
+                      <div className="divide-y divide-[#27272a] bg-[#09090b]">
+                        {explainResult.plan.map((step, idx) => (
+                          <div key={idx} className="p-2.5 flex items-center gap-3 text-xs">
+                            <span className="px-1.5 py-0.5 bg-[#27272a] text-[#a1a1aa] rounded text-[10px]">
+                              Step {step.id}
+                            </span>
+                            <span
+                              className={`font-mono ${
+                                step.detail.includes('SCAN')
+                                  ? 'text-amber-400 font-semibold'
+                                  : step.detail.includes('INDEX')
+                                  ? 'text-emerald-400'
+                                  : 'text-zinc-200'
+                              }`}
+                            >
+                              {step.detail}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ) : !queryResult ? (
@@ -2125,10 +2205,138 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
           </div>
         )}
 
-        {/* SETTINGS / DANGER ZONE TAB */}
+        {/* SETTINGS, MAINTENANCE & DANGER ZONE TAB */}
         {activeTab === 'settings' && (
           <div className="max-w-4xl mx-auto space-y-6">
-            <div className="bg-card border border-red-500/30 rounded-lg p-5 space-y-4 shadow-sm">
+            {/* 1. Database Maintenance & Optimization Card */}
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-blue-500" />
+                    Database Maintenance & Performance Tuning
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Defragment pages, reclaim free space, flush WAL buffers, and check database file integrity.
+                  </p>
+                </div>
+              </div>
+
+              {maintenanceMessage && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs rounded-lg flex items-center gap-2 font-medium animate-in fade-in duration-200">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{maintenanceMessage}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* VACUUM */}
+                <div className="p-3.5 border border-border rounded-lg bg-muted/20 flex flex-col justify-between space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <strong className="text-xs text-foreground">VACUUM (Reclaim Free Space)</strong>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 bg-muted rounded text-muted-foreground">
+                        {freePages} Free Pages
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Repacks the database file to discard empty pages and reduce disk size.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => maintenanceMutation.mutate('vacuum')}
+                    disabled={maintenanceMutation.isPending}
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
+                  >
+                    Run VACUUM
+                  </button>
+                </div>
+
+                {/* Integrity Check */}
+                <div className="p-3.5 border border-border rounded-lg bg-muted/20 flex flex-col justify-between space-y-3">
+                  <div>
+                    <strong className="text-xs text-foreground">PRAGMA integrity_check</strong>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Deep scans B-Tree structures and data pages for zero corruption.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => maintenanceMutation.mutate('integrity_check')}
+                    disabled={maintenanceMutation.isPending}
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
+                  >
+                    Run Integrity Check
+                  </button>
+                </div>
+
+                {/* WAL Checkpoint */}
+                <div className="p-3.5 border border-border rounded-lg bg-muted/20 flex flex-col justify-between space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <strong className="text-xs text-foreground">Flush WAL Buffer</strong>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 bg-muted rounded text-muted-foreground">
+                        {formatBytes(stats?.walSizeBytes || 0)} WAL
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Forces writes from the Write-Ahead Log into the main DB file and truncates it.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => maintenanceMutation.mutate('wal_checkpoint')}
+                    disabled={maintenanceMutation.isPending}
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
+                  >
+                    Flush & Truncate WAL
+                  </button>
+                </div>
+
+                {/* REINDEX */}
+                <div className="p-3.5 border border-border rounded-lg bg-muted/20 flex flex-col justify-between space-y-3">
+                  <div>
+                    <strong className="text-xs text-foreground">REINDEX (Rebuild Indexes)</strong>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Rebuilds all indexes across all tables to optimize search speed.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => maintenanceMutation.mutate('reindex')}
+                    disabled={maintenanceMutation.isPending}
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
+                  >
+                    Run REINDEX
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Clone / Branch Database Card */}
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-purple-500" />
+                    Database Cloning & Branching
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Duplicate this database instance to create development or staging branches.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setCloneNewName(`${currentDbName} (Dev Branch)`);
+                    setIsCloneModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Clone Database
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Danger Zone */}
+            <div className="bg-card border border-red-500/30 rounded-xl p-5 space-y-4 shadow-sm">
               <div className="flex items-center gap-2 text-red-500 font-semibold text-sm">
                 <AlertTriangle className="w-4 h-4" />
                 Danger Zone
@@ -2162,6 +2370,54 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
           </div>
         )}
       </div>
+
+      {/* Clone Database Modal */}
+      {isCloneModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <Layers className="w-4 h-4 text-purple-500" />
+                Clone / Branch Database
+              </h3>
+              <button onClick={() => setIsCloneModalOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground">
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">New Database Name</label>
+              <input
+                type="text"
+                required
+                value={cloneNewName}
+                onChange={(e) => setCloneNewName(e.target.value)}
+                placeholder="e.g. Production Replica"
+                className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Creates an identical SQLite copy with all tables, indexes, and data.
+              </p>
+            </div>
+
+            <div className="pt-3 border-t border-border flex justify-end gap-2">
+              <button
+                onClick={() => setIsCloneModalOpen(false)}
+                className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={!cloneNewName.trim() || cloneDbMutation.isPending}
+                onClick={() => cloneDbMutation.mutate(cloneNewName.trim())}
+                className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
+              >
+                {cloneDbMutation.isPending ? 'Cloning...' : 'Start Clone'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Insert / Edit Row Modal */}
       <RowModal

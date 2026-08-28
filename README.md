@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://github.com/Elaina2026/VanillaDB/actions"><img src="https://img.shields.io/github/actions/workflow/status/Elaina2026/VanillaDB/ci.yml?branch=main&label=CI%2FCD&logo=github" alt="CI Status" /></a>
   <a href="https://www.npmjs.com/package/@nullex/vanilladb"><img src="https://img.shields.io/npm/v/@nullex/vanilladb?color=blue&logo=npm" alt="npm version" /></a>
-  <a href="https://pypi.org/project/vanilladb/"><img src="https://img.shields.io/pypi/v/vanilladb?color=emerald&logo=pypi" alt="pypi version" /></a>
+  <a href="https://pypi.org/project/vanilladatabase/"><img src="https://img.shields.io/pypi/v/vanilladb?color=emerald&logo=pypi" alt="pypi version" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-20%2B-green.svg?logo=node.js" alt="Node Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-purple.svg" alt="License" /></a>
 </p>
@@ -63,13 +63,16 @@ Nhận thấy mình có sẵn một máy chủ (VPS/Host) đang dư dả tài ng
 - 🚀 **Multi-Tenant SQLite Engine**: Mỗi database là một file SQLite độc lập (`WAL Mode` + `Busy Timeout 5000ms` + `PRAGMA foreign_keys = ON`), cô lập hoàn toàn giữa các ứng dụng.
 - ⚡ **Realtime Event Stream (SSE)**: Lắng nghe sự kiện live `insert`, `update`, `delete`, `schema` qua Server-Sent Events chuẩn HTTP (`/v1/databases/:id/realtime`).
 - 📁 **Database-Scoped Media Storage**: Lưu trữ hình ảnh, video, âm thanh, tài liệu thuộc quyền quản lý của database; hỗ trợ **HTTP 206 Partial Content Range Streaming** xem video mượt mà không load toàn bộ file vào RAM.
+- 🛠️ **Database Maintenance & Tuning**: Chạy trực tiếp từ Web UI: `VACUUM` (thu hồi phân mảnh), `PRAGMA integrity_check` (kiểm tra toàn vẹn b-tree), `PRAGMA wal_checkpoint(TRUNCATE)` (dọn dẹp WAL), `REINDEX` (tái tạo chỉ mục).
+- 🔀 **1-Click Database Cloning / Branching**: Nhân bản tức thì database thành bản sao độc lập (`db_dev`, `db_staging`) kiểm thử schema trước khi đưa vào production.
+- 📊 **Visual Query Profiler & Slow Query Inspector**: Tự động phân tích `EXPLAIN QUERY PLAN`, phát hiện cảnh báo **Full Table Scan** và gợi ý tạo Index tối ưu hiệu năng.
 - 🔔 **Webhooks Subsystem**: Tự động gửi HTTP POST payload kèm chữ ký bảo mật **HMAC-SHA256** (`X-Vanilla-Signature`) tới Discord Bot, Telegram webhook hoặc Backend Server khi dữ liệu thay đổi.
 - 🛡️ **Granular API Tokens & Rate Limiting**: Cấp API Token phân quyền linh hoạt (`read`, `write`, `ddl`, `admin`), giới hạn danh sách bảng truy cập (`allowedTables`, `deniedTables`), và giới hạn tốc độ truy vấn (Rate Limit chống spam/DDoS).
 - 🧠 **AI Vector Search & Embeddings**: Tích hợp sẵn hàm toán học vector `vec_cosine_similarity` và `vec_cosine_distance` trong SQL phục vụ RAG / AI Chatbot.
 - 🔍 **Full-Text Search (FTS5)**: Hỗ trợ tạo bảng ảo SQLite FTS5 tìm kiếm toàn văn siêu tốc.
 - 📦 **Import & Export Đa Định Dạng**: Xuất/nhập dữ liệu trực tiếp dạng **SQL dump**, **CSV**, **JSON**, hoặc nạp trực tiếp file nhị phân **SQLite (.db / .sqlite)** từ Web UI.
 - ⏰ **Automated Scheduled Backups**: Worker tự động tạo snapshot định kỳ (`hourly`, `daily`, `weekly`) và dọn dẹp theo thời hạn (`backup_retention`).
-- 💻 **Modern Web UI Dashboard**: Bảng điều khiển quản trị trực quan với Schema Designer, Table Data Grid Browser (CRUD trực tiếp), SQL Editor Monaco, Storage Explorer, và Live Event Monitor.
+- 💻 **Modern Web UI Dashboard & Telemetry**: Bảng điều khiển quản trị trực quan với Schema Designer, Table Data Grid Browser (CRUD trực tiếp), SQL Editor Monaco, Storage Explorer, Live Event Monitor, và System Telemetry (CPU Cores, RAM, Query Throughput).
 
 ---
 

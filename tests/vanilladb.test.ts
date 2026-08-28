@@ -492,5 +492,46 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     expect(req2.statusCode).toBe(429);
     expect(req2.json().error.code).toBe('RATE_LIMIT_EXCEEDED');
   });
+
+  // 11. Maintenance, Database Cloning & Query Profiler Test
+  it('should support maintenance operations, 1-click clone, and EXPLAIN query plan', async () => {
+    // 1. Maintenance: Integrity check & Vacuum
+    const maintRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/maintenance`,
+      headers: { cookie: adminCookie },
+      payload: { action: 'integrity_check' },
+    });
+    expect(maintRes.statusCode).toBe(200);
+    expect(maintRes.json().success).toBe(true);
+
+    // 2. Query Profiler (Explain Query Plan)
+    const explainRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/explain`,
+      headers: { cookie: adminCookie },
+      payload: { sql: "SELECT * FROM users WHERE username = 'alice'" },
+    });
+    expect(explainRes.statusCode).toBe(200);
+    const explainData = explainRes.json().data;
+    expect(explainData.plan).toBeDefined();
+    expect(explainData.analysis).toBeDefined();
+
+    // 3. Database Cloning / Branching
+    const cloneRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/clone`,
+      headers: { cookie: adminCookie },
+      payload: { name: `Cloned Staging DB ${Date.now()}` },
+    });
+    expect(cloneRes.statusCode).toBe(201);
+    const clonedDb = cloneRes.json().data;
+    expect(clonedDb.id).toMatch(/^db_/);
+
+    // Cleanup cloned DB
+    try {
+      databaseService.deleteDatabase(clonedDb.id);
+    } catch {}
+  });
 });
 

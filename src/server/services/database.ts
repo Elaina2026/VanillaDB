@@ -216,6 +216,114 @@ export class DatabaseService {
       lastBackupAt: lastBackupRow?.created_at || null,
     };
   }
+
+  public maintainDatabase(databaseId: string, action: 'vacuum' | 'integrity_check' | 'wal_checkpoint' | 'reindex'): {
+    action: string;
+    success: boolean;
+    result?: any;
+    details?: string;
+  } {
+    const dbRecord = this.getDatabase(databaseId);
+    if (!dbRecord) throw new Error(`Database not found: ${databaseId}`);
+
+    const db = dbManager.get(databaseId);
+
+    switch (action) {
+      case 'vacuum': {
+        db.exec('VACUUM;');
+        return {
+          action: 'vacuum',
+          success: true,
+          details: 'Database defragmented and free pages reclaimed.',
+        };
+      }
+      case 'integrity_check': {
+        const rows = db.prepare('PRAGMA integrity_check;').all() as any[];
+        const isOk = rows.length === 1 && rows[0].integrity_check === 'ok';
+        return {
+          action: 'integrity_check',
+          success: isOk,
+          result: rows,
+          details: isOk ? 'Database file is fully healthy. No corruption detected.' : 'Issues found during integrity check.',
+        };
+      }
+      case 'wal_checkpoint': {
+        const res = db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').get();
+        return {
+          action: 'wal_checkpoint',
+          success: true,
+          result: res,
+          details: 'WAL file flushed into main database file and truncated to zero bytes.',
+        };
+      }
+      case 'reindex': {
+        db.exec('REINDEX;');
+        return {
+          action: 'reindex',
+          success: true,
+          details: 'All indexes rebuilt successfully.',
+        };
+      }
+      default:
+        throw new Error(`Unknown maintenance action: ${action}`);
+    }
+  }
+
+  public explainQuery(databaseId: string, sql: string): {
+    plan: Array<{ id: number; parent: number; notused: number; detail: string }>;
+    analysis: {
+      hasFullTableScan: boolean;
+      scannedTables: string[];
+      usesIndex: boolean;
+      recommendation?: string;
+    };
+  } {
+    const dbRecord = this.getDatabase(databaseId);
+    if (!dbRecord) throw new Error(`Database not found: ${databaseId}`);
+
+    const db = dbManager.get(databaseId);
+    const planRows = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{
+      id: number;
+      parent: number;
+      notused: number;
+      detail: string;
+    }>;
+
+    let hasFullTableScan = false;
+    const scannedTables: string[] = [];
+    let usesIndex = false;
+
+    for (const step of planRows) {
+      const detail = step.detail || '';
+      if (detail.includes('SCAN TABLE') || detail.includes('SCAN ')) {
+        hasFullTableScan = true;
+        const match = detail.match(/SCAN (?:TABLE )?([a-zA-Z0-9_]+)/i);
+        if (match && match[1] && !match[1].startsWith('sqlite_')) {
+          scannedTables.push(match[1]);
+        }
+      }
+      if (detail.includes('SEARCH TABLE') || detail.includes('USING INDEX') || detail.includes('USING COVERING INDEX')) {
+        usesIndex = true;
+      }
+    }
+
+    let recommendation: string | undefined;
+    if (hasFullTableScan) {
+      recommendation = `Warning: Query performs a Full Table Scan on [${scannedTables.join(', ')}]. Consider adding an INDEX on filtered/sorted columns for 10x-100x speedup.`;
+    } else if (usesIndex) {
+      recommendation = 'Optimal: Query efficiently utilizes indexes (Index Search).';
+    }
+
+    return {
+      plan: planRows,
+      analysis: {
+        hasFullTableScan,
+        scannedTables: Array.from(new Set(scannedTables)),
+        usesIndex,
+        recommendation,
+      },
+    };
+  }
 }
 
 export const databaseService = new DatabaseService();

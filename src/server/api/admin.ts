@@ -483,7 +483,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/databases/:id/maintenance', async (req, reply) => {
     const { id } = req.params as { id: string };
     const Schema = z.object({
-      action: z.enum(['quick_check', 'integrity_check', 'optimize', 'wal_checkpoint', 'vacuum', 'analyze']),
+      action: z.enum(['quick_check', 'integrity_check', 'optimize', 'wal_checkpoint', 'vacuum', 'analyze', 'reindex']),
     });
 
     const parsed = Schema.safeParse(req.body);
@@ -510,11 +510,42 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       } else if (action === 'analyze') {
         db.exec('ANALYZE;');
         result = { analyze: 'completed' };
+      } else if (action === 'reindex') {
+        db.exec('REINDEX;');
+        result = { reindex: 'completed' };
       }
+
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: `database.maintenance.${action}`,
+        resource: id,
+        result: 'success',
+        requestId: req.id,
+      });
 
       return reply.send({ success: true, data: result });
     } catch (err: any) {
       return reply.status(500).send({ success: false, error: { code: 'MAINTENANCE_ERROR', message: err.message } });
+    }
+  });
+
+  // Query Profiler & EXPLAIN QUERY PLAN
+  fastify.post('/databases/:id/explain', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const Schema = z.object({
+      sql: z.string().min(1),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_QUERY', message: 'SQL query string required' } });
+    }
+
+    try {
+      const res = databaseService.explainQuery(id, parsed.data.sql);
+      return reply.send({ success: true, data: res });
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: { code: 'EXPLAIN_ERROR', message: err.message } });
     }
   });
 
