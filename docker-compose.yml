@@ -1,0 +1,19 @@
+services:
+  vanilladb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vanilladb
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - VDB_DATA_DIR=/app/data
+      - VDB_SESSION_SECRET=super_secret_session_key_change_me_in_prod
+      - VDB_ADMIN_USERNAME=VanillaDatabase
+      - VDB_ADMIN_PASSWORD=change_this_password_123!
+    volumes:
+      - ./data:/app/data

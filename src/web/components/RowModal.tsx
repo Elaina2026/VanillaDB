@@ -1,0 +1,103 @@
+import React, { useState, useEffect } from 'react';
+import { X, Plus, Edit2 } from 'lucide-react';
+import type { TableSchemaDetail } from '@shared/index.js';
+
+export const RowModal: React.FC<{
+  isOpen: boolean;
+  tableSchema?: TableSchemaDetail;
+  initialRow?: Record<string, any> | null;
+  onClose: () => void;
+  onSave: (row: Record<string, any>) => void;
+  isSaving: boolean;
+}> = ({ isOpen, tableSchema, initialRow, onClose, onSave, isSaving }) => {
+  const [formData, setFormData] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    if (initialRow) {
+      setFormData({ ...initialRow });
+    } else if (tableSchema) {
+      const initial: Record<string, any> = {};
+      for (const col of tableSchema.columns) {
+        if (col.pk && col.type.toUpperCase() === 'INTEGER') continue; // auto-increment
+        initial[col.name] = '';
+      }
+      setFormData(initial);
+    }
+  }, [initialRow, tableSchema, isOpen]);
+
+  if (!isOpen || !tableSchema) return null;
+
+  const isEditing = !!initialRow;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="w-full max-w-lg bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            {isEditing ? <Edit2 className="w-4 h-4 text-blue-500" /> : <Plus className="w-4 h-4 text-blue-500" />}
+            <h2 className="text-sm font-bold">
+              {isEditing ? `Edit Row in "${tableSchema.name}"` : `Insert Row into "${tableSchema.name}"`}
+            </h2>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-accent rounded text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-3">
+          {tableSchema.columns.map((col) => {
+            const isAutoPk = col.pk && col.type.toUpperCase() === 'INTEGER';
+            const disabled = isEditing && col.pk === 1;
+
+            return (
+              <div key={col.name}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-mono font-medium">
+                    {col.name}{' '}
+                    <span className="text-[10px] font-sans text-muted-foreground">
+                      ({col.type || 'TEXT'}) {col.pk ? '• Primary Key' : ''} {col.notnull ? '• Not Null' : ''}
+                    </span>
+                  </label>
+                  {isAutoPk && !isEditing && (
+                    <span className="text-[10px] text-muted-foreground italic">Auto-generated</span>
+                  )}
+                </div>
+
+                <input
+                  type="text"
+                  disabled={disabled}
+                  placeholder={isAutoPk && !isEditing ? 'Auto-increment' : `Enter ${col.name}...`}
+                  value={formData[col.name] !== undefined ? String(formData[col.name]) : ''}
+                  onChange={(e) => setFormData({ ...formData, [col.name]: e.target.value })}
+                  className="w-full px-3 py-1.5 text-xs font-mono bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                />
+              </div>
+            );
+          })}
+
+          <div className="pt-3 flex items-center justify-end gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md font-medium text-muted-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md font-semibold transition-colors"
+            >
+              {isSaving ? 'Saving...' : isEditing ? 'Update Row' : 'Insert Row'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};

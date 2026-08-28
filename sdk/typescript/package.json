@@ -1,0 +1,32 @@
+{
+  "name": "vanilladb",
+  "version": "1.0.0",
+  "description": "Official TypeScript & Node.js SDK for VanillaDatabase",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup client.ts --format cjs,esm --dts --out-dir dist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Elaina2026/VanillaDB.git"
+  },
+  "keywords": [
+    "vanilladb",
+    "sqlite",
+    "database",
+    "realtime",
+    "storage",
+    "sdk"
+  ],
+  "author": "Elaina2026",
+  "license": "MIT"
+}

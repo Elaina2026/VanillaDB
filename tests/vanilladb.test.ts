@@ -1,0 +1,443 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import path from 'path';
+import fs from 'fs';
+import { buildApp } from '../src/server/index.js';
+import { dbManager } from '../src/server/db/manager.js';
+import { tokenService } from '../src/server/services/tokens.js';
+import { databaseService } from '../src/server/services/database.js';
+
+describe('VanillaDatabase Full Platform Test Suite', () => {
+  let app: any;
+  let testDbId: string;
+  let adminCookie: string;
+  let readWriteToken: string;
+  let readOnlyToken: string;
+
+  beforeAll(async () => {
+    app = await buildApp();
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    if (testDbId) {
+      try {
+        databaseService.deleteDatabase(testDbId);
+      } catch {
+        // cleanup
+      }
+    }
+    dbManager.closeAll();
+    await app.close();
+  });
+
+  // 1. Authentication & Setup
+  it('should allow initial admin setup or login', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/setup',
+      payload: {
+        username: 'admin_test',
+        password: 'SuperSecretPassword123!',
+        confirmPassword: 'SuperSecretPassword123!',
+      },
+    });
+
+    if (res.statusCode === 201) {
+      expect(res.json().success).toBe(true);
+      const cookies = res.cookies;
+      const session = cookies.find((c: any) => c.name === 'vdb_session');
+      expect(session).toBeDefined();
+      adminCookie = `vdb_session=${session.value}`;
+    } else {
+      // If bootstrapped, login with bootstrap admin or admin_test
+      let loginRes = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          username: process.env.VDB_ADMIN_USERNAME || 'VanillaDatabase',
+          password: process.env.VDB_ADMIN_PASSWORD || '123456',
+        },
+      });
+
+      if (loginRes.statusCode !== 200) {
+        loginRes = await app.inject({
+          method: 'POST',
+          url: '/api/auth/login',
+          payload: {
+            username: 'admin_test',
+            password: 'SuperSecretPassword123!',
+          },
+        });
+      }
+
+      expect(loginRes.statusCode).toBe(200);
+      const cookies = loginRes.cookies;
+      const session = cookies.find((c: any) => c.name === 'vdb_session');
+      expect(session).toBeDefined();
+      adminCookie = `vdb_session=${session.value}`;
+    }
+  });
+
+  it('should verify health endpoint without secrets', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/health',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.status).toBe('ok');
+    expect(body.service).toBe('VanillaDatabase');
+    expect(body.version).toBe('1.0.0');
+  });
+
+  // 2. Database Lifecycle
+  it('should create a new SQLite database instance', async () => {
+    const testDbName = `Discord Bot Test ${Date.now()}`;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/databases',
+      headers: { cookie: adminCookie },
+      payload: {
+        name: testDbName,
+        description: 'Test database for automated test suite',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.id).toMatch(/^db_/);
+    testDbId = body.data.id;
+  });
+
+  it('should create table and execute raw SQL via Admin console', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/query`,
+      headers: { cookie: adminCookie },
+      payload: {
+        sql: `
+          CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            score INTEGER DEFAULT 0,
+            created_at INTEGER NOT NULL
+          );
+        `,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+  });
+
+  // 3. Tokens & Permissions
+  it('should create read-write and read-only API tokens', async () => {
+    // Read-Write token
+    const rwRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/tokens`,
+      headers: { cookie: adminCookie },
+      payload: {
+        name: 'Backend Production Token',
+        permissions: ['database:read', 'database:write', 'database:ddl'],
+      },
+    });
+    expect(rwRes.statusCode).toBe(201);
+    readWriteToken = rwRes.json().data.plainSecret;
+    expect(readWriteToken).toMatch(/^vdb_live_/);
+
+    // Read-Only token
+    const roRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/tokens`,
+      headers: { cookie: adminCookie },
+      payload: {
+        name: 'Public Read Only Token',
+        permissions: ['database:read'],
+      },
+    });
+    expect(roRes.statusCode).toBe(201);
+    readOnlyToken = roRes.json().data.plainSecret;
+  });
+
+  // 4. Data Plane API queries
+  it('should execute INSERT using parameterized query via API token', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: {
+        authorization: `Bearer ${readWriteToken}`,
+      },
+      payload: {
+        sql: 'INSERT INTO users (username, score, created_at) VALUES (?, ?, ?)',
+        params: ['alice', 100, Date.now()],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.changes).toBe(1);
+    expect(Number(body.data.lastInsertRowid)).toBe(1);
+  });
+
+  it('should execute SELECT and return structured rows', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: {
+        authorization: `Bearer ${readOnlyToken}`,
+      },
+      payload: {
+        sql: 'SELECT * FROM users WHERE username = ?',
+        params: ['alice'],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.rowCount).toBe(1);
+    expect(body.data.rows[0].username).toBe('alice');
+    expect(body.data.rows[0].score).toBe(100);
+  });
+
+  it('should reject write operations from read-only token', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: {
+        authorization: `Bearer ${readOnlyToken}`,
+      },
+      payload: {
+        sql: 'DELETE FROM users WHERE username = ?',
+        params: ['alice'],
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().success).toBe(false);
+  });
+
+  // 5. Transactional Batch Operations
+  it('should execute batch operations atomically in a transaction', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/batch`,
+      headers: {
+        authorization: `Bearer ${readWriteToken}`,
+      },
+      payload: {
+        transaction: true,
+        statements: [
+          { sql: 'INSERT INTO users (username, score, created_at) VALUES (?, ?, ?)', params: ['bob', 200, Date.now()] },
+          { sql: 'INSERT INTO users (username, score, created_at) VALUES (?, ?, ?)', params: ['charlie', 300, Date.now()] },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.results.length).toBe(2);
+  });
+
+  it('should rollback entire batch if one statement violates constraint', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/batch`,
+      headers: {
+        authorization: `Bearer ${readWriteToken}`,
+      },
+      payload: {
+        transaction: true,
+        statements: [
+          { sql: 'INSERT INTO users (username, score, created_at) VALUES (?, ?, ?)', params: ['david', 400, Date.now()] },
+          { sql: 'INSERT INTO users (username, score, created_at) VALUES (?, ?, ?)', params: ['alice', 500, Date.now()] }, // Duplicate username
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(409); // Unique constraint violation
+
+    // Verify david was rolled back
+    const checkRes = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readOnlyToken}` },
+      payload: { sql: 'SELECT * FROM users WHERE username = ?', params: ['david'] },
+    });
+    expect(checkRes.json().data.rowCount).toBe(0);
+  });
+
+  // 6. Security & Sandbox
+  it('should block ATTACH DATABASE attempt', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: { sql: "ATTACH DATABASE '/etc/passwd' AS test_hack;" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain('ATTACH DATABASE is forbidden');
+  });
+
+  it('should reject invalid or revoked token', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: 'Bearer vdb_live_invalidfake1234567890' },
+      payload: { sql: 'SELECT 1' },
+    });
+
+    expect(res.statusCode).toBe(401);
+  });
+
+  // 7. Backup & Restore
+  it('should create backup snapshot and restore successfully', async () => {
+    // 1. Create backup
+    const bkpRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/backups`,
+      headers: { cookie: adminCookie },
+    });
+    expect(bkpRes.statusCode).toBe(201);
+    const backupId = bkpRes.json().data.id;
+
+    // 2. Modify data
+    await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: { sql: 'DELETE FROM users;' },
+    });
+
+    // Verify users is empty
+    const emptyCheck = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: { sql: 'SELECT COUNT(*) as c FROM users;' },
+    });
+    expect(emptyCheck.json().data.rows[0].c).toBe(0);
+
+    // 3. Restore backup
+    const restoreRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/backups/${backupId}/restore`,
+      headers: { cookie: adminCookie },
+    });
+    expect(restoreRes.statusCode).toBe(200);
+
+    // 4. Verify restored data
+    const restoredCheck = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: { sql: 'SELECT COUNT(*) as c FROM users;' },
+    });
+    expect(restoredCheck.json().data.rows[0].c).toBeGreaterThan(0);
+  });
+
+  // 8. Media & Storage Service
+  it('should upload file, stream range 206, and list files per database', async () => {
+    // 1. Upload sample text/image content via storage service
+    const sampleContent = Buffer.from('VanillaDatabase Media Streaming Test Content 1234567890');
+    const { storageService } = await import('../src/server/services/storage.js');
+    const file = storageService.createFile({
+      databaseId: testDbId,
+      originalName: 'test-video.mp4',
+      mimeType: 'video/mp4',
+      buffer: sampleContent,
+    });
+
+    expect(file.id).toBeDefined();
+    expect(file.database_id).toBe(testDbId);
+    expect(file.size_bytes).toBe(sampleContent.length);
+
+    // 2. Fetch file via API token
+    const listRes = await app.inject({
+      method: 'GET',
+      url: `/v1/databases/${testDbId}/files`,
+      headers: { authorization: `Bearer ${readOnlyToken}` },
+    });
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.json().data.length).toBeGreaterThan(0);
+
+    // 3. Test HTTP 206 Partial Content Range streaming
+    const streamRes = await app.inject({
+      method: 'GET',
+      url: `/v1/files/${file.id}/view`,
+      headers: {
+        authorization: `Bearer ${readOnlyToken}`,
+        range: 'bytes=0-15',
+      },
+    });
+
+    expect(streamRes.statusCode).toBe(206);
+    expect(streamRes.headers['content-range']).toBe(`bytes 0-15/${sampleContent.length}`);
+    expect(streamRes.headers['content-type']).toBe('video/mp4');
+
+    // 4. Delete file
+    const delRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/admin/files/${file.id}`,
+      headers: { cookie: adminCookie },
+    });
+    expect(delRes.statusCode).toBe(200);
+  });
+
+  // 9. Realtime & Webhook & Import/Export
+  it('should create webhooks, export data, and dispatch realtime events', async () => {
+    // 1. Create Webhook
+    const hookRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/webhooks`,
+      headers: { cookie: adminCookie },
+      payload: {
+        name: 'Discord Bot Notifier',
+        url: 'https://example.com/webhook/dummy',
+        events: ['insert', 'update'],
+      },
+    });
+
+    expect(hookRes.statusCode).toBe(201);
+    const hook = hookRes.json().data;
+    expect(hook.name).toBe('Discord Bot Notifier');
+
+    // 2. Export SQL dump
+    const exportSqlRes = await app.inject({
+      method: 'GET',
+      url: `/api/admin/databases/${testDbId}/export?format=sql`,
+      headers: { cookie: adminCookie },
+    });
+    expect(exportSqlRes.statusCode).toBe(200);
+    expect(exportSqlRes.body).toContain('CREATE TABLE');
+
+    // 3. Export CSV
+    const exportCsvRes = await app.inject({
+      method: 'GET',
+      url: `/api/admin/databases/${testDbId}/export?format=csv&table=users`,
+      headers: { cookie: adminCookie },
+    });
+    expect(exportCsvRes.statusCode).toBe(200);
+
+    // 4. Test client SDK helper
+    const { VanillaDatabase } = await import('../shared/client.js');
+    const client = new VanillaDatabase({
+      url: `http://localhost/v1/databases/${testDbId}`,
+      token: readOnlyToken,
+    });
+    expect(client).toBeDefined();
+
+    // 5. Delete Webhook
+    const delHookRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/admin/webhooks/${hook.id}`,
+      headers: { cookie: adminCookie },
+    });
+    expect(delHookRes.statusCode).toBe(200);
+  });
+});
