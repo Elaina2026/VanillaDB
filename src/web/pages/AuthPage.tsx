@@ -46,8 +46,8 @@ export const AuthPage: React.FC = () => {
       <div className="w-full max-w-sm bg-card border border-border rounded-xl shadow-lg p-6 space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-1.5">
-          <div className="inline-flex p-2.5 rounded-lg bg-blue-600 text-white mb-2 shadow-sm">
-            <Database className="w-6 h-6" />
+          <div className="inline-flex w-14 h-14 rounded-xl bg-slate-900 border border-slate-700/60 items-center justify-center mb-2 shadow-md">
+            <img src="/src/web/assets/logo.svg" alt="VanillaDatabase Logo" className="w-10 h-10 object-contain" />
           </div>
           <h1 className="text-lg font-bold tracking-tight">
             {!initialized ? 'Welcome to VanillaDatabase' : 'Sign in to VanillaDatabase'}

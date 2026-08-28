@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+
+    <!-- Cylinder Primary Gradient (Blue to Cyan) -->
+    <linearGradient id="cylinderGradPrimary" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+
+    <!-- Cylinder Accent Gradient (Top disk highlight) -->
+    <linearGradient id="topDiskGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+
+    <!-- Glow Effect -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Bolt Gradient -->
+    <linearGradient id="boltGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#93c5fd" />
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded App Icon Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" stroke="#1e293b" stroke-width="6"/>
+
+  <!-- Ambient Glow Behind Database Stack -->
+  <ellipse cx="256" cy="260" rx="140" ry="140" fill="#3b82f6" opacity="0.18" filter="url(#glow)"/>
+
+  <!-- DATABASE CYLINDER STACK -->
+
+  <!-- Layer 3 (Bottom Disc) -->
+  <g transform="translate(0, 110)">
+    <path d="M 146 220 A 110 38 0 0 0 366 220 V 265 A 110 38 0 0 1 146 265 Z" fill="url(#cylinderGradPrimary)" stroke="#1e40af" stroke-width="3"/>
+    <ellipse cx="256" cy="220" rx="110" ry="38" fill="#1e3a8a" stroke="#3b82f6" stroke-width="2"/>
+  </g>
+
+  <!-- Layer 2 (Middle Disc) -->
+  <g transform="translate(0, 55)">
+    <path d="M 146 220 A 110 38 0 0 0 366 220 V 265 A 110 38 0 0 1 146 265 Z" fill="url(#cylinderGradPrimary)" stroke="#1e40af" stroke-width="3"/>
+    <ellipse cx="256" cy="220" rx="110" ry="38" fill="#1e3a8a" stroke="#3b82f6" stroke-width="2"/>
+  </g>
+
+  <!-- Layer 1 (Top Disc) -->
+  <g transform="translate(0, 0)">
+    <path d="M 146 220 A 110 38 0 0 0 366 220 V 265 A 110 38 0 0 1 146 265 Z" fill="url(#cylinderGradPrimary)" stroke="#1e40af" stroke-width="3"/>
+    <ellipse cx="256" cy="220" rx="110" ry="38" fill="url(#topDiskGrad)" stroke="#93c5fd" stroke-width="4"/>
+  </g>
+
+  <!-- Central Realtime & Speed Accent (Stylized V & Spark) -->
+  <path d="M 230 160 L 270 215 L 245 225 L 285 295 L 245 235 L 270 225 Z"
+        fill="url(#boltGrad)"
+        stroke="#ffffff"
+        stroke-width="3"
+        stroke-linejoin="round"
+        filter="url(#glow)"/>
+
+  <!-- Orbital Data Particles -->
+  <circle cx="160" cy="180" r="6" fill="#38bdf8" filter="url(#glow)"/>
+  <circle cx="355" cy="205" r="5" fill="#60a5fa" filter="url(#glow)"/>
+  <circle cx="330" cy="380" r="7" fill="#38bdf8" filter="url(#glow)"/>
+  <circle cx="170" cy="360" r="5.5" fill="#818cf8" filter="url(#glow)"/>
+</svg>

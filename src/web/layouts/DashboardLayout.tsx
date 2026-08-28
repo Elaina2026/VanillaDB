@@ -38,8 +38,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 setCurrentTab('databases');
               }}
             >
-              <div className="p-1.5 rounded-md bg-blue-600 text-white">
-                <Database className="w-4 h-4" />
+              <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-900 border border-slate-700/50 flex items-center justify-center shrink-0">
+                <img src="/src/web/assets/logo.svg" alt="VanillaDatabase" className="w-6 h-6 object-contain" />
               </div>
               <div>
                 <span className="font-semibold text-sm tracking-tight block">VanillaDatabase</span>
