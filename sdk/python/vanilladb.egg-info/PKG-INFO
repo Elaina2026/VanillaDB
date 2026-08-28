@@ -1,0 +1,50 @@
+Metadata-Version: 2.4
+Name: vanilladb
+Version: 1.0.0
+Summary: Official Python SDK for VanillaDatabase - Multi-tenant SQLite Engine with Realtime & Media Storage
+Author-email: Elaina2026 <admin@vanilladb.local>
+Project-URL: Homepage, https://github.com/Elaina2026/VanillaDB
+Project-URL: Bug Tracker, https://github.com/Elaina2026/VanillaDB/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: requests>=2.28.0
+
+# VanillaDatabase Python SDK
+
+Official Python client for **VanillaDatabase (VanillaDB)** — Multi-Tenant SQLite Cloud Engine with Realtime Event Subscriptions, Database-Scoped Media Storage, and Batch Transactions.
+
+## Installation
+
+```bash
+pip install vanilladb
+```
+
+## Quickstart
+
+```python
+import os
+from vanilladb import VanillaDatabase
+
+# 1. Initialize Client
+db = VanillaDatabase(
+    url=os.getenv("VANILLA_DB_URL", "http://localhost:3000/v1/databases/db_your_database_id"),
+    token=os.getenv("VANILLA_DB_TOKEN", "vdb_live_your_api_token_here")
+)
+
+# 2. Parameterized Query
+result = db.query("SELECT * FROM users WHERE active = ?", [1])
+print("Users:", result["rows"])
+
+# 3. Atomic Batch Transaction
+db.batch([
+    {"sql": "INSERT INTO users (username, score) VALUES (?, ?)", "params": ["bob", 100]},
+    {"sql": "INSERT INTO logs (event) VALUES (?)", "params": ["user_registered"]}
+], transaction=True)
+
+# 4. Media Storage (Upload & Range 206 Streaming)
+file_info = db.upload_file("photo.png", filename="user_avatar.png", content_type="image/png")
+print("Stream URL:", db.get_file_url(file_info["id"]))
+```

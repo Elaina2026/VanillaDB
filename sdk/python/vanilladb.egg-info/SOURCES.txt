@@ -1,0 +1,8 @@
+README.md
+pyproject.toml
+vanilladb.py
+vanilladb.egg-info/PKG-INFO
+vanilladb.egg-info/SOURCES.txt
+vanilladb.egg-info/dependency_links.txt
+vanilladb.egg-info/requires.txt
+vanilladb.egg-info/top_level.txt
