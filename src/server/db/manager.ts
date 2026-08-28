@@ -55,6 +55,58 @@ export class DatabaseManager {
       PRAGMA synchronous = NORMAL;
     `);
 
+    // Register Vector Math Custom Functions for AI / RAG Embeddings
+    try {
+      (db as any).function?.('vec_cosine_distance', (aStr: any, bStr: any) => {
+        if (!aStr || !bStr) return 1.0;
+        try {
+          const a = typeof aStr === 'string' ? JSON.parse(aStr) : aStr;
+          const b = typeof bStr === 'string' ? JSON.parse(bStr) : bStr;
+          if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length || a.length === 0) {
+            return 1.0;
+          }
+          let dotProduct = 0;
+          let normA = 0;
+          let normB = 0;
+          for (let i = 0; i < a.length; i++) {
+            dotProduct += a[i] * b[i];
+            normA += a[i] * a[i];
+            normB += b[i] * b[i];
+          }
+          if (normA === 0 || normB === 0) return 1.0;
+          const similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+          return 1.0 - similarity; // 0 = identical, 2 = opposite
+        } catch {
+          return 1.0;
+        }
+      });
+
+      (db as any).function?.('vec_cosine_similarity', (aStr: any, bStr: any) => {
+        if (!aStr || !bStr) return 0.0;
+        try {
+          const a = typeof aStr === 'string' ? JSON.parse(aStr) : aStr;
+          const b = typeof bStr === 'string' ? JSON.parse(bStr) : bStr;
+          if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length || a.length === 0) {
+            return 0.0;
+          }
+          let dotProduct = 0;
+          let normA = 0;
+          let normB = 0;
+          for (let i = 0; i < a.length; i++) {
+            dotProduct += a[i] * b[i];
+            normA += a[i] * a[i];
+            normB += b[i] * b[i];
+          }
+          if (normA === 0 || normB === 0) return 0.0;
+          return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+        } catch {
+          return 0.0;
+        }
+      });
+    } catch {
+      // Ignore function registration if not supported in runtime
+    }
+
     this.handles.set(databaseId, { db, lastUsed: Date.now() });
 
     try {

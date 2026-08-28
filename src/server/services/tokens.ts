@@ -21,6 +21,27 @@ export class TokenService {
     return crypto.createHash('sha256').update(secret).digest('hex');
   }
 
+  private rateLimitBuckets: Map<string, { count: number; resetAt: number }> = new Map();
+
+  public checkRateLimit(tokenId: string, limitPerMinute: number | null | undefined): boolean {
+    if (!limitPerMinute || limitPerMinute <= 0) return true; // Unlimited
+
+    const now = Date.now();
+    let bucket = this.rateLimitBuckets.get(tokenId);
+
+    if (!bucket || now > bucket.resetAt) {
+      this.rateLimitBuckets.set(tokenId, { count: 1, resetAt: now + 60 * 1000 });
+      return true;
+    }
+
+    if (bucket.count >= limitPerMinute) {
+      return false; // Rate limit exceeded
+    }
+
+    bucket.count++;
+    return true;
+  }
+
   public async createToken(params: {
     databaseId: string;
     name: string;
@@ -28,6 +49,7 @@ export class TokenService {
     permissions: TokenPermission[];
     allowedTables?: string[] | null;
     deniedTables?: string[] | null;
+    rateLimit?: number | null;
     expiresInDays?: number | null;
     type?: 'live' | 'test';
   }): Promise<{ tokenRecord: ApiTokenRecord; plainSecret: string }> {
@@ -43,8 +65,8 @@ export class TokenService {
     metaDb.prepare(`
       INSERT INTO api_tokens (
         id, database_id, name, description, token_prefix, token_last_chars, token_hash,
-        permissions, allowed_tables, denied_tables, expires_at, created_at, last_used_at, revoked_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        permissions, allowed_tables, denied_tables, rate_limit, expires_at, created_at, last_used_at, revoked_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       params.databaseId,
@@ -56,6 +78,7 @@ export class TokenService {
       JSON.stringify(params.permissions),
       params.allowedTables ? JSON.stringify(params.allowedTables) : null,
       params.deniedTables ? JSON.stringify(params.deniedTables) : null,
+      params.rateLimit || null,
       expiresAt,
       now,
       null,
@@ -72,6 +95,7 @@ export class TokenService {
       permissions: params.permissions,
       allowed_tables: params.allowedTables || null,
       denied_tables: params.deniedTables || null,
+      rate_limit: params.rateLimit || null,
       expires_at: expiresAt,
       created_at: now,
       last_used_at: null,
@@ -96,7 +120,7 @@ export class TokenService {
       const metaDb = getMetadataDb();
       const row = metaDb.prepare(`
         SELECT id, database_id, name, description, token_prefix, token_last_chars,
-               permissions, allowed_tables, denied_tables, expires_at, created_at, last_used_at, revoked_at
+               permissions, allowed_tables, denied_tables, rate_limit, expires_at, created_at, last_used_at, revoked_at
         FROM api_tokens
         WHERE token_hash = ?
       `).get(tokenHash) as any;
@@ -113,6 +137,7 @@ export class TokenService {
         permissions: JSON.parse(row.permissions),
         allowed_tables: row.allowed_tables ? JSON.parse(row.allowed_tables) : null,
         denied_tables: row.denied_tables ? JSON.parse(row.denied_tables) : null,
+        rate_limit: row.rate_limit || null,
         expires_at: row.expires_at,
         created_at: row.created_at,
         last_used_at: row.last_used_at,
@@ -134,7 +159,7 @@ export class TokenService {
     const metaDb = getMetadataDb();
     const rows = metaDb.prepare(`
       SELECT id, database_id, name, description, token_prefix, token_last_chars,
-             permissions, allowed_tables, denied_tables, expires_at, created_at, last_used_at, revoked_at
+             permissions, allowed_tables, denied_tables, rate_limit, expires_at, created_at, last_used_at, revoked_at
       FROM api_tokens
       WHERE database_id = ?
       ORDER BY created_at DESC
@@ -150,6 +175,7 @@ export class TokenService {
       permissions: JSON.parse(r.permissions),
       allowed_tables: r.allowed_tables ? JSON.parse(r.allowed_tables) : null,
       denied_tables: r.denied_tables ? JSON.parse(r.denied_tables) : null,
+      rate_limit: r.rate_limit || null,
       expires_at: r.expires_at,
       created_at: r.created_at,
       last_used_at: r.last_used_at,

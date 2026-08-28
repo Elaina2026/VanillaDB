@@ -36,6 +36,7 @@ export interface ApiTokenRecord {
   permissions: TokenPermission[];
   allowed_tables?: string[] | null;
   denied_tables?: string[] | null;
+  rate_limit?: number | null; // Max requests per minute (null = unlimited)
   expires_at: number | null;
   created_at: number;
   last_used_at: number | null;

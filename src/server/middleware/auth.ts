@@ -75,6 +75,18 @@ export function requireTokenPermission(permission: TokenPermission) {
       return;
     }
 
+    // Rate Limiting Check
+    if (token.rate_limit && !tokenService.checkRateLimit(token.id, token.rate_limit)) {
+      reply.status(429).send({
+        success: false,
+        error: {
+          code: 'RATE_LIMIT_EXCEEDED',
+          message: `Token rate limit of ${token.rate_limit} req/min exceeded. Please try again later.`,
+        },
+      });
+      return;
+    }
+
     // Check permission: 'database:admin' grants all permissions
     if (!token.permissions.includes('database:admin') && !token.permissions.includes(permission)) {
       reply.status(403).send({

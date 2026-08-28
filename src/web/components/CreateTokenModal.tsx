@@ -13,6 +13,7 @@ export const CreateTokenModal: React.FC<{
   const [description, setDescription] = useState('');
   const [permissions, setPermissions] = useState<TokenPermission[]>(['database:read', 'database:write']);
   const [expiresInDays, setExpiresInDays] = useState<number | null>(null);
+  const [rateLimit, setRateLimit] = useState<number | null>(null);
   const [type, setType] = useState<'live' | 'test'>('live');
 
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
@@ -54,6 +55,7 @@ export const CreateTokenModal: React.FC<{
       name: name.trim(),
       description: description.trim() || undefined,
       permissions,
+      rateLimit,
       expiresInDays,
       type,
     });
@@ -176,7 +178,7 @@ export const CreateTokenModal: React.FC<{
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Expiration</label>
                 <select
@@ -184,7 +186,7 @@ export const CreateTokenModal: React.FC<{
                   onChange={(e) => setExpiresInDays(e.target.value ? parseInt(e.target.value, 10) : null)}
                   className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded-md"
                 >
-                  <option value="">Never Expires</option>
+                  <option value="">Never</option>
                   <option value="7">7 Days</option>
                   <option value="30">30 Days</option>
                   <option value="90">90 Days</option>
@@ -193,14 +195,29 @@ export const CreateTokenModal: React.FC<{
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Token Prefix</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Rate Limit</label>
+                <select
+                  value={rateLimit ?? ''}
+                  onChange={(e) => setRateLimit(e.target.value ? parseInt(e.target.value, 10) : null)}
+                  className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded-md"
+                >
+                  <option value="">Unlimited</option>
+                  <option value="60">60 req/min</option>
+                  <option value="300">300 req/min</option>
+                  <option value="600">600 req/min</option>
+                  <option value="1200">1200 req/min</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Prefix</label>
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value as any)}
                   className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded-md"
                 >
-                  <option value="live">vdb_live_ (Production)</option>
-                  <option value="test">vdb_test_ (Testing)</option>
+                  <option value="live">vdb_live_</option>
+                  <option value="test">vdb_test_</option>
                 </select>
               </div>
             </div>

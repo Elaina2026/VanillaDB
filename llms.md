@@ -105,6 +105,32 @@
 
 ---
 
+### 2.5. Vector Math & Embeddings Functions (AI / RAG)
+VanillaDatabase includes native SQLite scalar functions for vector similarity:
+- `vec_cosine_similarity(vec1_json, vec2_json)`: Returns cosine similarity score between 0.0 and 1.0 (1.0 = identical direction).
+- `vec_cosine_distance(vec1_json, vec2_json)`: Returns cosine distance (0.0 = identical).
+
+Example RAG Query:
+```sql
+SELECT id, title, content,
+       vec_cosine_similarity(embedding, '[0.012, 0.421, -0.198]') as similarity
+FROM documents
+ORDER BY similarity DESC
+LIMIT 5;
+```
+
+---
+
+### 2.6. Full-Text Search (FTS5) Support
+Create full-text search virtual tables directly via SQL:
+```sql
+CREATE VIRTUAL TABLE articles_fts USING fts5(title, content, tokenize='unicode61');
+INSERT INTO articles_fts (title, content) VALUES ('SQLite Engine', 'VanillaDatabase is super fast');
+SELECT * FROM articles_fts WHERE articles_fts MATCH 'VanillaDatabase';
+```
+
+---
+
 ## 3. Official Client SDK Reference & Full Code Examples
 
 ### 3.1. Installation & Environment Configuration

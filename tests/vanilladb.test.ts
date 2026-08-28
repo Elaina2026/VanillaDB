@@ -440,4 +440,57 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     });
     expect(delHookRes.statusCode).toBe(200);
   });
+
+  // 10. AI Vector Cosine Similarity & Rate Limiting Test
+  it('should support vector cosine similarity query and enforce token rate limits', async () => {
+    // 1. Vector Math Query
+    const vecRes = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: {
+        sql: "SELECT vec_cosine_similarity('[1.0, 0.0, 0.0]', '[1.0, 0.0, 0.0]') as sim, vec_cosine_distance('[1.0, 0.0]', '[0.0, 1.0]') as dist;",
+      },
+    });
+
+    expect(vecRes.statusCode).toBe(200);
+    const row = vecRes.json().data.rows[0];
+    expect(Number(row.sim)).toBeCloseTo(1.0, 2);
+    expect(Number(row.dist)).toBeCloseTo(1.0, 2);
+
+    // 2. Create Rate Limited Token (1 request per minute)
+    const rateTokenRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/tokens`,
+      headers: { cookie: adminCookie },
+      payload: {
+        name: 'Rate Limited Bot Token',
+        permissions: ['database:read'],
+        rateLimit: 1,
+      },
+    });
+
+    expect(rateTokenRes.statusCode).toBe(201);
+    const rateToken = rateTokenRes.json().data.plainSecret;
+
+    // First request should succeed
+    const req1 = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${rateToken}` },
+      payload: { sql: 'SELECT 1' },
+    });
+    expect(req1.statusCode).toBe(200);
+
+    // Second request within same minute should be rejected with 429
+    const req2 = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${rateToken}` },
+      payload: { sql: 'SELECT 1' },
+    });
+    expect(req2.statusCode).toBe(429);
+    expect(req2.json().error.code).toBe('RATE_LIMIT_EXCEEDED');
+  });
 });
+

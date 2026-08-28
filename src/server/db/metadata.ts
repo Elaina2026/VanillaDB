@@ -170,6 +170,13 @@ function runMigrations(db: DatabaseSync): void {
         );
         CREATE INDEX IF NOT EXISTS idx_webhooks_db ON webhooks(database_id);
       `
+    },
+    {
+      version: 5,
+      name: 'add_rate_limit_to_tokens',
+      sql: `
+        ALTER TABLE api_tokens ADD COLUMN rate_limit INTEGER;
+      `
     }
   ];
 

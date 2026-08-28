@@ -533,6 +533,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       permissions: z.array(TokenPermissionSchema).min(1),
       allowedTables: z.array(z.string()).optional().nullable(),
       deniedTables: z.array(z.string()).optional().nullable(),
+      rateLimit: z.number().int().positive().optional().nullable(),
       expiresInDays: z.number().int().positive().optional().nullable(),
       type: z.enum(['live', 'test']).optional(),
     });
@@ -549,6 +550,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       permissions: parsed.data.permissions,
       allowedTables: parsed.data.allowedTables,
       deniedTables: parsed.data.deniedTables,
+      rateLimit: parsed.data.rateLimit,
       expiresInDays: parsed.data.expiresInDays,
       type: parsed.data.type,
     });
