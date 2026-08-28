@@ -1897,65 +1897,78 @@ export const DatabaseDetailPage: React.FC<{
         {activeTab === 'api' && (
           <div className="max-w-5xl mx-auto space-y-6">
             <div className="bg-card border border-border rounded-lg p-5 space-y-4 shadow-sm">
-              <h3 className="text-sm font-semibold text-foreground">Connection & Endpoint Reference</h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <Key className="w-4 h-4 text-blue-500" />
+                    Unified Database API & Master Token Access
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Chỉ cần 1 Database Base URL duy nhất. Mọi quyền truy cập (Query, Batch, Realtime SSE, Media Storage) được điều khiển và kích hoạt trực tiếp thông qua API Token.
+                  </p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
                 <div>
-                  <span className="text-muted-foreground block text-[11px] font-sans">Database Query URL</span>
-                  <div className="flex items-center justify-between p-2 bg-muted/60 border border-border rounded mt-1">
-                    <span className="truncate">{window.location.origin}/v1/databases/{databaseId}/query</span>
+                  <span className="text-muted-foreground block text-[11px] font-sans font-medium">1. Database API Base URL (Duy nhất)</span>
+                  <div className="flex items-center justify-between p-2.5 bg-muted/60 border border-border rounded mt-1.5">
+                    <span className="truncate text-blue-400 font-semibold">{window.location.origin}/v1/databases/{databaseId}</span>
                     <button
-                      onClick={() => copyToClipboard(`${window.location.origin}/v1/databases/${databaseId}/query`, 'url')}
-                      className="p-1 hover:bg-accent rounded text-muted-foreground"
+                      onClick={() => copyToClipboard(`${window.location.origin}/v1/databases/${databaseId}`, 'dbUrl')}
+                      className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors ml-2"
+                      title="Copy Database Base URL"
                     >
-                      {copiedKey === 'url' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedKey === 'dbUrl' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
 
                 <div>
-                  <span className="text-muted-foreground block text-[11px] font-sans">Realtime SSE Stream URL</span>
-                  <div className="flex items-center justify-between p-2 bg-muted/60 border border-border rounded mt-1">
-                    <span className="truncate">{window.location.origin}/v1/databases/{databaseId}/realtime</span>
+                  <span className="text-muted-foreground block text-[11px] font-sans font-medium">2. API Token Authorization Header</span>
+                  <div className="flex items-center justify-between p-2.5 bg-muted/60 border border-border rounded mt-1.5">
+                    <span className="truncate text-foreground">Authorization: Bearer <span className="text-emerald-400 font-semibold">vdb_live_...</span></span>
                     <button
-                      onClick={() => copyToClipboard(`${window.location.origin}/v1/databases/${databaseId}/realtime`, 'sseUrl')}
-                      className="p-1 hover:bg-accent rounded text-muted-foreground"
+                      onClick={() => copyToClipboard(`Authorization: Bearer vdb_live_your_token`, 'authHeader')}
+                      className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors ml-2"
+                      title="Copy Header format"
                     >
-                      {copiedKey === 'sseUrl' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-muted-foreground block text-[11px] font-sans">Batch Execution URL</span>
-                  <div className="flex items-center justify-between p-2 bg-muted/60 border border-border rounded mt-1">
-                    <span className="truncate">{window.location.origin}/v1/databases/{databaseId}/batch</span>
-                    <button
-                      onClick={() => copyToClipboard(`${window.location.origin}/v1/databases/${databaseId}/batch`, 'batchUrl')}
-                      className="p-1 hover:bg-accent rounded text-muted-foreground"
-                    >
-                      {copiedKey === 'batchUrl' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-muted-foreground block text-[11px] font-sans">Media & Storage Files URL</span>
-                  <div className="flex items-center justify-between p-2 bg-muted/60 border border-border rounded mt-1">
-                    <span className="truncate">{window.location.origin}/v1/databases/{databaseId}/files</span>
-                    <button
-                      onClick={() => copyToClipboard(`${window.location.origin}/v1/databases/${databaseId}/files`, 'filesUrl')}
-                      className="p-1 hover:bg-accent rounded text-muted-foreground"
-                    >
-                      {copiedKey === 'filesUrl' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedKey === 'authHeader' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-border">
-                <span className="text-muted-foreground block text-[11px] font-sans">HTTP Authorization Header</span>
-                <div className="p-2.5 bg-muted/60 border border-border rounded mt-1 text-xs font-mono text-muted-foreground">
-                  Authorization: Bearer <span className="text-blue-500 font-semibold">vdb_live_your_api_token_here</span>
+              {/* Feature capabilities unlocked by Key */}
+              <div className="pt-3 border-t border-border space-y-2">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                  Các tính năng tự động kích hoạt theo Token Permissions:
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="p-2 bg-muted/40 border border-border rounded">
+                    <div className="font-semibold text-foreground flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-500" /> SQL Queries
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5"><code>/query</code> • Read/Write</div>
+                  </div>
+                  <div className="p-2 bg-muted/40 border border-border rounded">
+                    <div className="font-semibold text-foreground flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" /> Transactions
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5"><code>/batch</code> • Atomic ACID</div>
+                  </div>
+                  <div className="p-2 bg-muted/40 border border-border rounded">
+                    <div className="font-semibold text-foreground flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-500" /> Realtime SSE
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5"><code>/realtime</code> • Live stream</div>
+                  </div>
+                  <div className="p-2 bg-muted/40 border border-border rounded">
+                    <div className="font-semibold text-foreground flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-purple-500" /> Media Storage
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5"><code>/files</code> • Range 206</div>
+                  </div>
                 </div>
               </div>
             </div>

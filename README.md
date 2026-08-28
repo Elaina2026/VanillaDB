@@ -374,18 +374,42 @@ SELECT * FROM articles_fts WHERE articles_fts MATCH 'SQLite OR VanillaDB';
 
 ---
 
-## 📡 API Reference Toàn Diện
+## 📡 Mô Hình Unified API & Master Token Key
 
-### 1. Data Plane APIs (Xác thực bằng `Authorization: Bearer <API_TOKEN>`)
+VanillaDatabase sử dụng **1 Base URL duy nhất** cho mỗi Database (`https://<domain>/v1/databases/:databaseId`), và biến **API Token thành Chìa Khóa Chính (Master Key)** để bật/tắt toàn bộ tính năng và phân quyền:
 
-| Phương thức | Endpoint | Mô tả |
-| :--- | :--- | :--- |
-| `POST` | `/v1/databases/:id/query` | Thực thi câu lệnh SQL có tham số (`sql`, `params`) |
-| `POST` | `/v1/databases/:id/batch` | Chạy nhiều câu lệnh SQL trong Atomic Transaction (`transaction: true`) |
-| `GET` | `/v1/databases/:id/realtime` | Server-Sent Events (SSE) stream nhận live events (`insert`, `update`, `delete`, `schema`) |
-| `GET` | `/v1/databases/:id/files` | Danh sách files media thuộc database |
-| `POST` | `/v1/databases/:id/files` | Tải lên file media mới (Multipart form-data field: `file`) |
-| `GET` | `/v1/files/:fileId/view` | Xem & stream file media (**HTTP 206 Partial Content Range**) |
+```
+                          ┌────────────────────────────────────────────────────────┐
+                          │   1 Single Database Base URL                           │
+                          │   https://vanilladb.example.com/v1/databases/:dbId     │
+                          └──────────────────────────┬─────────────────────────────┘
+                                                     │
+                                   ┌─────────────────┴─────────────────┐
+                                   ▼                                   ▼
+                   ┌───────────────────────────────┐   ┌───────────────────────────────┐
+                   │     Master API Bearer Token   │   │     Token Granular Controls   │
+                   │     vdb_live_your_api_token   │   │  • Permissions (Read/Write)   │
+                   └───────────────┬───────────────┘   │  • Rate Limiting (req/min)    │
+                                   │                   │  • Allowed / Denied Tables    │
+                                   ▼                   └───────────────────────────────┘
+  ┌────────────────────────────────┬────────────────────────────────┬────────────────────────────────┐
+  ▼                                ▼                                ▼                                ▼
+  SQL Queries (/query)             Batch Atomic (/batch)            Realtime SSE (/realtime)         Media Files (/files)
+  • Parameterized queries          • Multi-statement ACID           • Live mutation events           • Upload / Delete
+  • AI Vector Cosine Similarity    • Automatic Rollback on Error    • Server-Sent Events bus         • HTTP 206 Range Stream
+```
+
+### 1. Data Plane APIs (Tất cả nhánh ra từ Base URL duy nhất với `Authorization: Bearer <API_TOKEN>`)
+
+| Nhánh URL | Phương thức | Token Quyền Cần Thiết | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `.../query` | `POST` | `database:read` / `write` | Thực thi câu lệnh SQL có tham số (`sql`, `params`) |
+| `.../batch` | `POST` | `database:write` | Chạy nhiều câu lệnh SQL trong Atomic Transaction (`transaction: true`) |
+| `.../tables/:table/rows` | `GET` / `POST` / `DELETE` | `database:read` / `write` | Fluent Table CRUD không cần viết raw SQL |
+| `.../realtime` | `GET` | `database:read` | Server-Sent Events (SSE) stream nhận live events (`insert`, `update`, `delete`) |
+| `.../files` | `GET` / `POST` | `database:read` / `write` | Danh sách files hoặc tải lên file media mới (Multipart `file`) |
+| `.../files/:fileId` | `DELETE` | `database:write` | Xóa file media khỏi storage |
+| `/v1/files/:fileId/view` | `GET` | `database:read` | Xem & stream file media (**HTTP 206 Partial Content Range**) |
 
 ---
 
