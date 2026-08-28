@@ -88,20 +88,58 @@ export class SystemService {
     };
 
     backupStorageBytes = calculateDirSize(config.backupsDir);
+    const mediaStorageBytes = calculateDirSize(config.storageDir);
+
     const metaDb = getMetadataDb();
     const sqliteVersionRow = metaDb.prepare('SELECT sqlite_version() as version').get() as { version: string };
 
+    // Stats on tokens & webhooks
+    const tokensRow = metaDb.prepare('SELECT COUNT(*) as count FROM api_tokens WHERE revoked_at IS NULL').get() as { count: number };
+    const webhooksRow = metaDb.prepare('SELECT COUNT(*) as count FROM webhooks WHERE active = 1').get() as { count: number };
+
+    // 24h Activity stats
+    const past24h = Date.now() - 24 * 60 * 60 * 1000;
+    const activity24h = metaDb.prepare(`
+      SELECT
+        COUNT(*) as total,
+        AVG(duration_ms) as avg_duration,
+        SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as errors
+      FROM activity_logs
+      WHERE timestamp >= ?
+    `).get(past24h) as { total: number; avg_duration: number | null; errors: number | null };
+
+    const totalQueries24h = activity24h?.total || 0;
+    const avgQueryDurationMs = Math.round((activity24h?.avg_duration || 0) * 100) / 100;
+    const errorRatePercent = totalQueries24h > 0 ? Math.round(((activity24h?.errors || 0) / totalQueries24h) * 10000) / 100 : 0;
+
     const mem = process.memoryUsage();
+    const cpus = os.cpus();
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
 
     return {
       version: '1.0.0',
       nodeVersion: process.version,
       sqliteVersion: sqliteVersionRow.version,
       platform: `${os.type()} ${os.release()} (${os.arch()})`,
+      cpuModel: cpus[0]?.model || 'Generic CPU',
+      cpuCount: cpus.length,
       uptimeSeconds: Math.floor(process.uptime()),
+      systemUptimeSeconds: Math.floor(os.uptime()),
       databaseCount: dbs.length,
       totalDatabaseStorageBytes,
+      mediaStorageBytes,
       backupStorageBytes,
+      totalTokensCount: tokensRow?.count || 0,
+      activeWebhooksCount: webhooksRow?.count || 0,
+      totalQueries24h,
+      avgQueryDurationMs,
+      errorRatePercent,
+      osMemory: {
+        total: totalMem,
+        free: freeMem,
+        used: totalMem - freeMem,
+      },
       memoryUsage: {
         rss: mem.rss,
         heapTotal: mem.heapTotal,

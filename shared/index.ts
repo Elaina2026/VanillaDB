@@ -231,10 +231,24 @@ export interface SystemStatus {
   nodeVersion: string;
   sqliteVersion: string;
   platform: string;
+  cpuModel: string;
+  cpuCount: number;
   uptimeSeconds: number;
+  systemUptimeSeconds: number;
   databaseCount: number;
   totalDatabaseStorageBytes: number;
+  mediaStorageBytes: number;
   backupStorageBytes: number;
+  totalTokensCount: number;
+  activeWebhooksCount: number;
+  totalQueries24h: number;
+  avgQueryDurationMs: number;
+  errorRatePercent: number;
+  osMemory: {
+    total: number;
+    free: number;
+    used: number;
+  };
   memoryUsage: {
     rss: number;
     heapTotal: number;
