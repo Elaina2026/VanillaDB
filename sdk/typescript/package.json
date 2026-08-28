@@ -1,19 +1,22 @@
 {
-  "name": "vanilladb",
+  "name": "@elaina2026/vanilladb",
   "version": "1.0.0",
   "description": "Official TypeScript & Node.js SDK for VanillaDatabase",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/client.js",
+  "types": "./dist/client.d.ts",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js",
+      "default": "./dist/client.js"
     }
   },
   "scripts": {
-    "build": "tsup client.ts --format cjs,esm --dts --out-dir dist"
+    "build": "tsc"
   },
   "repository": {
     "type": "git",
