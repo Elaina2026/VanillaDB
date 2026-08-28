@@ -105,48 +105,138 @@
 
 ---
 
-## 3. Official Client SDK Implementations
+## 3. Official Client SDK Reference & Full Code Examples
 
-### 3.1. TypeScript / Node.js
+### 3.1. Installation & Environment Configuration
+```bash
+# Node.js / TypeScript
+npm install @nullex/vanilladb
+
+# Python
+pip install vanilladb
+```
+
+Environment Variables required by client apps:
+```env
+VANILLA_DB_URL=http://localhost:3000/v1/databases/db_your_database_id
+VANILLA_DB_TOKEN=vdb_live_your_api_token_here
+```
+
+---
+
+### 3.2. TypeScript / Node.js SDK Complete API
+
 ```typescript
 import { VanillaDatabase } from '@nullex/vanilladb';
 
+// 1. Initialization
 const db = new VanillaDatabase({
-  url: 'http://localhost:3000/v1/databases/db_xxx',
-  token: 'vdb_live_xxx'
+  url: process.env.VANILLA_DB_URL!, // e.g. 'http://localhost:3000/v1/databases/db_123'
+  token: process.env.VANILLA_DB_TOKEN! // e.g. 'vdb_live_abc123'
 });
 
-// Query
-const res = await db.query('SELECT * FROM items WHERE price < ?', [50]);
+// 2. Parameterized SQL Query (SELECT, INSERT, UPDATE, DELETE)
+interface User {
+  id: number;
+  username: string;
+  score: number;
+}
+const result = await db.query<User>(
+  'SELECT id, username, score FROM users WHERE score >= ? ORDER BY score DESC LIMIT ?',
+  [100, 10]
+);
+console.log('Returned rows:', result.rows); // Array of typed objects
+console.log('Columns:', result.columns);
+console.log('Execution time ms:', result.durationMs);
 
-// Batch Transaction
-await db.batch([
-  { sql: 'INSERT INTO items (name, price) VALUES (?, ?)', params: ['Item A', 25] }
-], true);
+// 3. Atomic Batch Transaction
+const batchResult = await db.batch([
+  { sql: 'INSERT INTO users (username, score) VALUES (?, ?)', params: ['alice', 250] },
+  { sql: 'INSERT INTO logs (action, timestamp) VALUES (?, ?)', params: ['user_created', Date.now()] },
+  { sql: 'UPDATE stats SET total_users = total_users + 1 WHERE id = 1' }
+], true); // true = execute in atomic BEGIN IMMEDIATE transaction
+console.log('Batch results:', batchResult.results);
 
-// Realtime Stream
+// 4. Realtime SSE Live Events Subscription
+// Listen to all tables, or pass a table name as 2nd parameter
 const unsubscribe = db.subscribe((event) => {
-  console.log('Realtime event:', event);
-}, 'items');
+  console.log('Event Type:', event.type); // 'insert' | 'update' | 'delete' | 'schema'
+  console.log('Target Table:', event.table);
+  console.log('Payload Data:', event.data);
+  console.log('Timestamp:', event.timestamp);
+}, 'users');
+
+// Stop listening when no longer needed
+// unsubscribe();
+
+// 5. Media & File Storage (Upload, List, Stream Range 206)
+// Upload Blob or Buffer
+import fs from 'node:fs';
+const imageBuffer = fs.readFileSync('./avatar.png');
+const uploadedFile = await db.uploadFile(imageBuffer, 'avatar.png', 'image/png');
+console.log('Uploaded File ID:', uploadedFile.id);
+console.log('Direct Stream URL:', db.getFileUrl(uploadedFile.id));
+
+// List all files in this database
+const allFiles = await db.listFiles();
+console.log('Stored files:', allFiles);
 ```
 
-### 3.2. Python
+---
+
+### 3.3. Python SDK Complete API
+
 ```python
+import os
 from vanilladb import VanillaDatabase
 
+# 1. Initialization
 db = VanillaDatabase(
-    url="http://localhost:3000/v1/databases/db_xxx",
-    token="vdb_live_xxx"
+    url=os.getenv("VANILLA_DB_URL", "http://localhost:3000/v1/databases/db_123"),
+    token=os.getenv("VANILLA_DB_TOKEN", "vdb_live_abc123")
 )
 
-# Query
-data = db.query("SELECT * FROM items WHERE price < ?", [50])
-print(data["rows"])
+# 2. Parameterized Query
+result = db.query(
+    "SELECT id, username, score FROM users WHERE score >= ? LIMIT ?",
+    [100, 10]
+)
+print("Rows:", result["rows"])
+print("Columns:", result["columns"])
+print("Changes:", result["changes"])
 
-# Batch
-db.batch([
-    {"sql": "INSERT INTO items (name, price) VALUES (?, ?)", "params": ["Item A", 25]}
+# 3. Atomic Batch Transaction
+batch_res = db.batch([
+    {"sql": "INSERT INTO users (username, score) VALUES (?, ?)", "params": ["bob", 300]},
+    {"sql": "INSERT INTO logs (action) VALUES (?)", "params": ["user_registered"]}
 ], transaction=True)
+print("Batch results:", batch_res["results"])
+
+# 4. Media Storage (Upload from file path or bytes)
+uploaded = db.upload_file("avatar.png", filename="user_bob.png", content_type="image/png")
+print("File ID:", uploaded["id"])
+print("Streaming URL (HTTP 206):", db.get_file_url(uploaded["id"]))
+
+# List stored files
+files = db.list_files()
+print("Files in database:", files)
+```
+
+---
+
+### 3.4. AI Agent System Prompt Template
+When configuring an AI Coding Agent (e.g. Claude, GPT-4, Cursor, AutoGPT) to interact with VanillaDB, inject this snippet into the agent's prompt:
+
+```markdown
+You have access to a VanillaDatabase SQLite Cloud instance.
+Connect using the official client:
+- Node.js: `import { VanillaDatabase } from '@nullex/vanilladb'`
+- Python: `from vanilladb import VanillaDatabase`
+Rules:
+1. Always use parameterized queries (`?`) to avoid SQL injection.
+2. For multi-step modifications, use `db.batch([...], transaction=True)` to ensure atomicity.
+3. Media files uploaded via `db.uploadFile` return IDs that can be streamed with HTTP 206 range requests via `db.getFileUrl(fileId)`.
+4. Realtime mutations can be observed using `db.subscribe(callback, tableName)`.
 ```
 
 ---
