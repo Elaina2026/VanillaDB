@@ -5,6 +5,7 @@
     "moduleResolution": "NodeNext",
     "declaration": true,
     "declarationMap": false,
+    "rootDir": "../../shared",
     "outDir": "./dist",
     "strict": true,
     "esModuleInterop": true,
