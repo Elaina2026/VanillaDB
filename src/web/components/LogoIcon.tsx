@@ -1,6 +1,14 @@
 import React from 'react';
+import { useTheme } from '../hooks/useTheme.js';
 
-export const LogoIcon: React.FC<{ className?: string; size?: number }> = ({ className = 'w-6 h-6', size }) => {
+export const LogoIcon: React.FC<{ className?: string; size?: number; mode?: 'auto' | 'dark' | 'light' }> = ({
+  className = 'w-6 h-6',
+  size,
+  mode = 'auto',
+}) => {
+  const { isDark } = useTheme();
+  const effectiveDark = mode === 'dark' ? true : mode === 'light' ? false : isDark;
+
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -12,8 +20,8 @@ export const LogoIcon: React.FC<{ className?: string; size?: number }> = ({ clas
       <defs>
         {/* Background Gradient */}
         <linearGradient id="vdbBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#0f172a" />
-          <stop offset="100%" stopColor="#020617" />
+          <stop offset="0%" stopColor={effectiveDark ? '#0f172a' : '#ffffff'} />
+          <stop offset="100%" stopColor={effectiveDark ? '#020617' : '#f1f5f9'} />
         </linearGradient>
 
         {/* Cylinder Primary Gradient (Blue to Cyan) */}
@@ -26,22 +34,36 @@ export const LogoIcon: React.FC<{ className?: string; size?: number }> = ({ clas
         {/* Top disk highlight */}
         <linearGradient id="vdbTopDiskGrad" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#60a5fa" />
-          <stop offset="100%" stopColor="#3b82f6" />
+          <stop offset="100%" stopColor={effectiveDark ? '#3b82f6' : '#2563eb'} />
         </linearGradient>
 
         {/* Bolt Gradient */}
         <linearGradient id="vdbBoltGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#38bdf8" />
-          <stop offset="50%" stopColor="#60a5fa" />
-          <stop offset="100%" stopColor="#93c5fd" />
+          <stop offset="0%" stopColor={effectiveDark ? '#38bdf8' : '#0284c7'} />
+          <stop offset="50%" stopColor={effectiveDark ? '#60a5fa' : '#2563eb'} />
+          <stop offset="100%" stopColor={effectiveDark ? '#93c5fd' : '#3b82f6'} />
         </linearGradient>
       </defs>
 
       {/* Rounded App Icon Background */}
-      <rect width="512" height="512" rx="112" fill="url(#vdbBgGrad)" stroke="#334155" strokeWidth="12" />
+      <rect
+        width="512"
+        height="512"
+        rx="112"
+        fill="url(#vdbBgGrad)"
+        stroke={effectiveDark ? '#334155' : '#e2e8f0'}
+        strokeWidth={effectiveDark ? 12 : 8}
+      />
 
       {/* Ambient Glow */}
-      <ellipse cx="256" cy="260" rx="140" ry="140" fill="#3b82f6" opacity="0.25" />
+      <ellipse
+        cx="256"
+        cy="260"
+        rx="140"
+        ry="140"
+        fill="#3b82f6"
+        opacity={effectiveDark ? 0.25 : 0.12}
+      />
 
       {/* Layer 3 (Bottom Disc) */}
       <g transform="translate(0, 110)">
@@ -71,10 +93,10 @@ export const LogoIcon: React.FC<{ className?: string; size?: number }> = ({ clas
       />
 
       {/* Orbital Data Particles */}
-      <circle cx="160" cy="180" r="10" fill="#38bdf8" />
-      <circle cx="355" cy="205" r="9" fill="#60a5fa" />
-      <circle cx="330" cy="380" r="11" fill="#38bdf8" />
-      <circle cx="170" cy="360" r="9" fill="#818cf8" />
+      <circle cx="160" cy="180" r="10" fill={effectiveDark ? '#38bdf8' : '#0284c7'} />
+      <circle cx="355" cy="205" r="9" fill={effectiveDark ? '#60a5fa' : '#2563eb'} />
+      <circle cx="330" cy="380" r="11" fill={effectiveDark ? '#38bdf8' : '#0284c7'} />
+      <circle cx="170" cy="360" r="9" fill={effectiveDark ? '#818cf8' : '#4f46e5'} />
     </svg>
   );
 };

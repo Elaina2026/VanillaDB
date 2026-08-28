@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient for Light Mode -->
+    <linearGradient id="bgGradLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f1f5f9" />
+    </linearGradient>
+
+    <!-- Cylinder Primary Gradient (Vibrant Blue to Deep Indigo) -->
+    <linearGradient id="cylinderGradPrimaryLight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+
+    <!-- Cylinder Accent Gradient (Top disk highlight) -->
+    <linearGradient id="topDiskGradLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+
+    <!-- Subtle Soft Shadow / Glow for Light Mode -->
+    <filter id="shadowLight" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#2563eb" flood-opacity="0.22" />
+    </filter>
+
+    <filter id="glowLight" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Bolt Gradient for Light Mode -->
+    <linearGradient id="boltGradLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="50%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded App Icon Background with Crisp Light Border -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGradLight)" stroke="#e2e8f0" stroke-width="8"/>
+
+  <!-- Ambient Light Soft Aura -->
+  <ellipse cx="256" cy="260" rx="140" ry="140" fill="#3b82f6" opacity="0.12" filter="url(#glowLight)"/>
+
+  <!-- DATABASE CYLINDER STACK WITH SHADOW -->
+  <g filter="url(#shadowLight)">
+    <!-- Layer 3 (Bottom Disc) -->
+    <g transform="translate(0, 110)">
+      <path d="M 146 220 A 110 38 0 0 0 366 220 V 265 A 110 38 0 0 1 146 265 Z" fill="url(#cylinderGradPrimaryLight)" stroke="#1d4ed8" stroke-width="3"/>
+      <ellipse cx="256" cy="220" rx="110" ry="38" fill="#1e40af" stroke="#3b82f6" stroke-width="2"/>
+    </g>
+
+    <!-- Layer 2 (Middle Disc) -->
+    <g transform="translate(0, 55)">
+      <path d="M 146 220 A 110 38 0 0 0 366 220 V 265 A 110 38 0 0 1 146 265 Z" fill="url(#cylinderGradPrimaryLight)" stroke="#1d4ed8" stroke-width="3"/>
+      <ellipse cx="256" cy="220" rx="110" ry="38" fill="#1e40af" stroke="#3b82f6" stroke-width="2"/>
+    </g>
+
+    <!-- Layer 1 (Top Disc) -->
+    <g transform="translate(0, 0)">
+      <path d="M 146 220 A 110 38 0 0 0 366 220 V 265 A 110 38 0 0 1 146 265 Z" fill="url(#cylinderGradPrimaryLight)" stroke="#1d4ed8" stroke-width="3"/>
+      <ellipse cx="256" cy="220" rx="110" ry="38" fill="url(#topDiskGradLight)" stroke="#93c5fd" stroke-width="4"/>
+    </g>
+
+    <!-- Central Realtime & Speed Accent (Stylized V & Spark) -->
+    <path d="M 230 160 L 270 215 L 245 225 L 285 295 L 245 235 L 270 225 Z"
+          fill="url(#boltGradLight)"
+          stroke="#ffffff"
+          stroke-width="4"
+          stroke-linejoin="round"/>
+  </g>
+
+  <!-- Orbital Data Particles -->
+  <circle cx="160" cy="180" r="7" fill="#0284c7"/>
+  <circle cx="355" cy="205" r="6" fill="#2563eb"/>
+  <circle cx="330" cy="380" r="8" fill="#0284c7"/>
+  <circle cx="170" cy="360" r="6.5" fill="#4f46e5"/>
+</svg>
