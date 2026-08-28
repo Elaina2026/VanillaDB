@@ -8,6 +8,7 @@ on:
 jobs:
   publish-npm:
     runs-on: ubuntu-latest
+    if: "${{ secrets.NPM_TOKEN != '' }}"
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -21,7 +22,7 @@ jobs:
     - name: Build TypeScript SDK
       working-directory: sdk/typescript
       run: |
-        npm ci || npm install
+        npm install
         npm run build
 
     - name: Publish to NPM
@@ -32,6 +33,7 @@ jobs:
 
   publish-pypi:
     runs-on: ubuntu-latest
+    if: "${{ secrets.PYPI_API_TOKEN != '' }}"
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
