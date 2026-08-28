@@ -6,17 +6,17 @@ build-backend = "setuptools.build_meta"
 name = "vanilladb"
 version = "1.0.0"
 authors = [
-  { name="Elaina2026", email="elaina2026@gmail.com" },
+  { name="Elaina2026", email="ariaasamane@gmail.com" },
 ]
 description = "Official Python SDK for VanillaDatabase - Multi-tenant SQLite Engine with Realtime & Media Storage"
 readme = "README.md"
 requires-python = ">=3.8"
-license = "MIT"
 dependencies = [
     "requests>=2.28.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
