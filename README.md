@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://github.com/Elaina2026/VanillaDB/actions"><img src="https://img.shields.io/github/actions/workflow/status/Elaina2026/VanillaDB/ci.yml?branch=main&label=CI%2FCD&logo=github" alt="CI Status" /></a>
   <a href="https://www.npmjs.com/package/@nullex/vanilladb"><img src="https://img.shields.io/npm/v/@nullex/vanilladb?color=blue&logo=npm" alt="npm version" /></a>
-  <a href="https://pypi.org/project/vanilladatabase/"><img src="https://img.shields.io/pypi/v/vanilladb?color=emerald&logo=pypi" alt="pypi version" /></a>
+  <a href="https://pypi.org/project/vanilladatabase/"><img src="https://img.shields.io/pypi/v/vanilladatabase?color=emerald&logo=pypi" alt="pypi version" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-20%2B-green.svg?logo=node.js" alt="Node Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-purple.svg" alt="License" /></a>
 </p>
