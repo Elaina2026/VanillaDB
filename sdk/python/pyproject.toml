@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "vanilladb"
 version = "1.0.0"
 authors = [
-  { name="Elaina2026", email="admin@vanilladb.local" },
+  { name="Elaina2026", email="elaina2026@users.noreply.github.com" },
 ]
 description = "Official Python SDK for VanillaDatabase - Multi-tenant SQLite Engine with Realtime & Media Storage"
 readme = "README.md"
