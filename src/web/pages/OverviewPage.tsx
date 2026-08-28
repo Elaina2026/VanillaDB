@@ -271,7 +271,7 @@ export const OverviewPage: React.FC<{
             </div>
             <div className="flex justify-between py-2">
               <span className="text-muted-foreground">Node.js JavaScript Runtime</span>
-              <span className="font-mono font-semibold text-foreground">{status?.nodeVersion || process.version}</span>
+              <span className="font-mono font-semibold text-foreground">{status?.nodeVersion || 'v22.x'}</span>
             </div>
             <div className="flex justify-between py-2">
               <span className="text-muted-foreground">Host Operating System</span>

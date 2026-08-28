@@ -1982,7 +1982,7 @@ export const DatabaseDetailPage: React.FC<{
 
 const db = new VanillaDatabase({
   url: '${window.location.origin}/v1/databases/${databaseId}',
-  token: process.env.VANILLA_DATABASE_TOKEN!
+  token: 'vdb_live_your_api_token'
 });
 
 // 1. Parameterized SQL Query
