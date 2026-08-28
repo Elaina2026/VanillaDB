@@ -256,29 +256,86 @@ const files = await db.listFiles();
 pip install vanilladb
 ```
 
-**Sử dụng:**
+Hoặc cài trực tiếp từ repo GitHub:
+```bash
+pip install git+https://github.com/Elaina2026/VanillaDB.git#subdirectory=sdk/python
+```
+
+**Hướng dẫn sử dụng đầy đủ A-Z:**
 ```python
+import os
 from vanilladb import VanillaDatabase
 
+# 1. Khởi tạo Client
 db = VanillaDatabase(
-    url="http://localhost:3000/v1/databases/db_telegram_bot",
-    token="vdb_live_your_api_token_here"
+    url=os.getenv("VANILLA_DB_URL", "http://localhost:3000/v1/databases/db_telegram_bot"),
+    token=os.getenv("VANILLA_DB_TOKEN", "vdb_live_your_api_token_here")
 )
 
-# 1. Parameterized Query
-res = db.query("SELECT * FROM telegram_users WHERE chat_id = ?", [123456789])
-print("User Data:", res["rows"])
+# 2. Tạo bảng & Chạy Parameterized Query an toàn
+db.query("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        score INTEGER DEFAULT 0,
+        avatar_file_id TEXT
+    );
+""")
 
-# 2. Batch Execution
-db.batch([
-    {"sql": "INSERT INTO telegram_users (chat_id, username) VALUES (?, ?)", "params": [12345, "alice"]},
-    {"sql": "INSERT INTO logs (event) VALUES (?)", "params": ["user_joined"]}
+# Thêm dữ liệu
+insert_res = db.query(
+    "INSERT INTO users (username, score) VALUES (?, ?)",
+    ["elaina", 250]
+)
+print("Last Insert ID:", insert_res.get("lastInsertRowid"))
+
+# Đọc dữ liệu
+users = db.query("SELECT * FROM users WHERE score >= ? ORDER BY score DESC", [100])
+print("Users:", users["rows"])
+
+# 3. Batch Transactions (Nhiều câu lệnh chạy nguyên tử ACID)
+batch_res = db.batch([
+    {"sql": "UPDATE users SET score = score - ? WHERE username = ?", "params": [50, "elaina"]},
+    {"sql": "INSERT INTO logs (action, timestamp) VALUES (?, ?)", "params": ["score_deducted", 1700000000]}
 ], transaction=True)
+print("Batch results:", batch_res["results"])
 
-# 3. Media Storage Upload
-file_info = db.upload_file("video.mp4", filename="intro.mp4", content_type="video/mp4")
-print("File Streaming URL:", db.get_file_url(file_info["id"]))
+# 4. Media Storage (Tải ảnh/video/tài liệu lên và lấy link stream Range 206)
+# Upload từ file đường dẫn:
+uploaded_file = db.upload_file("avatar.png", filename="elaina_avatar.png", content_type="image/png")
+print("Uploaded File ID:", uploaded_file["id"])
+
+# Hoặc upload trực tiếp từ bytes:
+# uploaded_file = db.upload_file(raw_bytes, filename="data.bin", content_type="application/octet-stream")
+
+# Lấy URL xem/stream HTTP 206 trực tiếp:
+stream_url = db.get_file_url(uploaded_file["id"])
+print("Streaming URL:", stream_url)
+
+# Liệt kê tất cả files trong database:
+all_files = db.list_files()
+print("Files in DB:", all_files)
 ```
+
+---
+
+## ⚙️ Cấu hình GitHub Actions CI/CD & Auto Publish (NPM + PyPI)
+
+Dự án đi kèm 2 workflow GitHub Actions sẵn sàng sử dụng trong `.github/workflows/`:
+
+### 1. Workflow Kiểm Thử & Build Tự Động (`.github/workflows/ci.yml`)
+- Tự động kích hoạt khi có `git push` hoặc `pull_request` vào branch `main`.
+- Chạy matrix kiểm thử trên cả 2 phiên bản **Node.js 20.x** và **Node.js 22.x**.
+- Tự động chạy toàn bộ integration test suite (`npm test`) và build ứng dụng web (`npm run build`).
+
+### 2. Workflow Tự Động Publish Package (`.github/workflows/publish.yml`)
+- Tự động build và đẩy package lên **NPM** (`@nullex/vanilladb`) và **PyPI** (`vanilladb`) mỗi khi bạn tạo một **GitHub Release** mới (hoặc bấm chạy thủ công qua `workflow_dispatch`).
+
+#### 🔑 Các Secret cần thêm vào GitHub Repository:
+Vào GitHub repository của bạn: **Settings** ➔ **Secrets and variables** ➔ **Actions** ➔ **New repository secret**:
+
+1. `NPM_TOKEN`: Access Token từ [npmjs.com/settings/tokens](https://www.npmjs.com/settings/tokens) (chọn loại **Automation** hoặc **Granular Token** có quyền Publish).
+2. `PYPI_API_TOKEN`: API Token từ [pypi.org/manage/account/token/](https://pypi.org/manage/account/token/) để publish package Python `vanilladb`.
 
 ---
 
