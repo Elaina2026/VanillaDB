@@ -24,9 +24,7 @@ jobs:
     - name: Build TypeScript SDK
       run: |
         npm install
-        cd sdk/typescript
-        npm install
-        npm run build
+        npm run build --prefix sdk/typescript
 
     - name: Check NPM Secret and Publish
       working-directory: sdk/typescript
@@ -34,7 +32,7 @@ jobs:
         if [ -z "$NODE_AUTH_TOKEN" ]; then
           echo "::warning ::NPM_TOKEN secret is not set in repository settings. Skipping NPM publish."
         else
-          npm publish --access public
+          npm publish --access public --no-git-checks
         fi
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
