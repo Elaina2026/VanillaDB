@@ -40,7 +40,8 @@ import {
   ToggleLeft,
   ToggleRight,
   Radio,
-  User
+  User,
+  TrendingUp
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatTimeAgo, formatDate } from '../lib/utils.js';
