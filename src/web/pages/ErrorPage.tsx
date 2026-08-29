@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, ArrowLeft, Home, WifiOff, AlertTriangle, HelpCircle } from 'lucide-react';
+import { RefreshCw, ArrowLeft, Home, WifiOff, AlertTriangle, Compass, ShieldAlert, Terminal } from 'lucide-react';
 import { LogoIcon } from '../components/LogoIcon.js';
 
 interface ErrorPageProps {
@@ -56,75 +56,83 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
   const isOffline = type === 'offline';
 
   const defaultTitle = isOffline
-    ? 'Máy chủ mất kết nối (Server Offline)'
+    ? 'Mất kết nối máy chủ (503 Server Offline)'
     : is404
     ? '404 - Không tìm thấy trang'
-    : 'Đã xảy ra sự cố hệ thống';
+    : 'Đã xảy ra lỗi hệ thống';
 
   const defaultMessage = isOffline
     ? 'Không thể kết nối đến máy chủ VanillaDatabase. Máy chủ có thể đang tắt, đang khởi động lại hoặc mạng của bạn bị gián đoạn.'
     : is404
-    ? 'Đường dẫn hoặc trang dữ liệu bạn yêu cầu không tồn tại hoặc đã bị xóa.'
-    : 'Gặp lỗi không mong muốn khi xử lý yêu cầu. Vui lòng thử lại sau giây lát.';
+    ? 'Trang hoặc tài nguyên dữ liệu bạn đang tìm kiếm không tồn tại, đã bị đổi tên hoặc bạn không có quyền truy cập.'
+    : 'Hệ thống gặp sự cố không mong muốn trong quá trình xử lý. Vui lòng thử lại sau giây lát.';
+
+  const handleHomeClick = () => {
+    if (onGoHome) {
+      onGoHome();
+    } else {
+      window.location.hash = '/overview';
+    }
+  };
 
   return (
-    <div className="min-h-screen w-screen flex flex-col items-center justify-center bg-background text-foreground p-6 select-none relative overflow-hidden">
-      {/* Subtle Background Glow */}
-      <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 left-1/2 -translate-x-1/2 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none relative overflow-hidden min-h-[500px]">
+      {/* Background Decorative Gradients */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
 
-      <div className="max-w-md w-full text-center space-y-6 z-10 animate-in fade-in zoom-in-95 duration-200">
-        {/* Brand & Status Icon */}
+      <div className="max-w-md w-full space-y-6 z-10 animate-in fade-in zoom-in-95 duration-200">
+        {/* Status Illustration / Badge */}
         <div className="flex flex-col items-center justify-center gap-3">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg bg-card border border-border p-2">
-            <LogoIcon className="w-10 h-10" />
-          </div>
+          {/* Big Error Number / Graphic */}
+          <div className="relative">
+            <span className="text-7xl sm:text-8xl font-black tracking-tighter text-muted-foreground/15 font-mono select-none">
+              {isOffline ? '503' : is404 ? '404' : '500'}
+            </span>
 
-          <div className="relative mt-2">
-            <div className={`p-4 rounded-2xl border shadow-inner ${
-              isOffline
-                ? 'bg-red-500/10 border-red-500/20 text-red-500'
-                : is404
-                ? 'bg-blue-500/10 border-blue-500/20 text-blue-500'
-                : 'bg-amber-500/10 border-amber-500/20 text-amber-500'
-            }`}>
-              {isOffline ? (
-                <WifiOff className="w-12 h-12 stroke-[1.75]" />
-              ) : is404 ? (
-                <HelpCircle className="w-12 h-12 stroke-[1.75]" />
-              ) : (
-                <AlertTriangle className="w-12 h-12 stroke-[1.75]" />
-              )}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className={`p-4 rounded-2xl border shadow-lg backdrop-blur-sm ${
+                isOffline
+                  ? 'bg-red-500/10 border-red-500/30 text-red-500 shadow-red-500/5'
+                  : is404
+                  ? 'bg-blue-500/10 border-blue-500/30 text-blue-500 shadow-blue-500/5'
+                  : 'bg-amber-500/10 border-amber-500/30 text-amber-500 shadow-amber-500/5'
+              }`}>
+                {isOffline ? (
+                  <WifiOff className="w-10 h-10 stroke-[2]" />
+                ) : is404 ? (
+                  <Compass className="w-10 h-10 stroke-[2] animate-spin-slow" />
+                ) : (
+                  <AlertTriangle className="w-10 h-10 stroke-[2]" />
+                )}
+              </div>
             </div>
-
-            {/* Pulsing indicator */}
-            {isOffline && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500" />
-              </span>
-            )}
           </div>
         </div>
 
-        {/* Text Details */}
+        {/* Text Heading & Details */}
         <div className="space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold uppercase tracking-wider bg-muted border border-border text-muted-foreground">
-            {isOffline ? '503 Host Disconnected' : is404 ? '404 Page Not Found' : 'Internal System Error'}
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-semibold uppercase tracking-wider bg-muted border border-border text-muted-foreground shadow-sm">
+            {isOffline ? 'Server Unreachable' : is404 ? 'Page Not Found' : 'Internal Error'}
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">
+
+          <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
             {title || defaultTitle}
           </h1>
+
           <p className="text-xs text-muted-foreground leading-relaxed max-w-sm mx-auto">
             {message || defaultMessage}
           </p>
         </div>
 
-        {/* Auto reconnect countdown ticker (for offline) */}
+        {/* Offline Auto-reconnect Ticker */}
         {isOffline && (
-          <div className="p-3 bg-card border border-border rounded-lg text-xs font-mono flex items-center justify-between text-muted-foreground shadow-sm">
-            <span>Tự động kết nối lại sau:</span>
-            <span className="font-bold text-foreground bg-muted px-2 py-0.5 rounded">
+          <div className="p-3 bg-card border border-border rounded-xl text-xs font-mono flex items-center justify-between text-muted-foreground shadow-sm max-w-xs mx-auto">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+              Tự động thử lại sau:
+            </span>
+            <span className="font-bold text-foreground bg-muted px-2.5 py-0.5 rounded-md border border-border">
               {countdown}s
             </span>
           </div>
@@ -136,7 +144,7 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
             <button
               onClick={handlePingServer}
               disabled={isChecking}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-md transition-all"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-md transition-all cursor-pointer"
             >
               <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
               {isChecking ? 'Đang kiểm tra kết nối...' : 'Thử kết nối lại ngay'}
@@ -144,21 +152,22 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
           ) : (
             <>
               <button
-                onClick={() => {
-                  if (onGoHome) onGoHome();
-                  else {
-                    window.location.hash = '/overview';
-                  }
-                }}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-md transition-all"
+                onClick={handleHomeClick}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-md transition-all cursor-pointer"
               >
                 <Home className="w-4 h-4" />
                 Về Trang Tổng quan
               </button>
 
               <button
-                onClick={() => window.history.back()}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-card border border-border hover:bg-accent text-foreground rounded-lg text-xs font-medium transition-colors"
+                onClick={() => {
+                  if (window.history.length > 1) {
+                    window.history.back();
+                  } else {
+                    window.location.hash = '/overview';
+                  }
+                }}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-card border border-border hover:bg-accent text-foreground rounded-lg text-xs font-medium transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Quay lại trang trước
@@ -167,19 +176,31 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
           )}
         </div>
 
-        {/* Footer info */}
-        <div className="pt-4 text-[11px] text-muted-foreground flex items-center justify-center gap-2">
-          <span>VanillaDatabase Cloud Engine</span>
-          <span>•</span>
-          <a
-            href="/health"
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-foreground underline underline-offset-2"
-          >
-            Health Check API
-          </a>
-        </div>
+        {/* Helpful quick links */}
+        {is404 && (
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground border-t border-border/60">
+            <button
+              onClick={() => { window.location.hash = '/databases'; }}
+              className="hover:text-blue-500 transition-colors underline underline-offset-2"
+            >
+              Danh sách Databases
+            </button>
+            <span>•</span>
+            <button
+              onClick={() => { window.location.hash = '/telemetry'; }}
+              className="hover:text-blue-500 transition-colors underline underline-offset-2"
+            >
+              Live Telemetry
+            </button>
+            <span>•</span>
+            <button
+              onClick={() => { window.location.hash = '/activity'; }}
+              className="hover:text-blue-500 transition-colors underline underline-offset-2"
+            >
+              Activity Logs
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
