@@ -40,4 +40,9 @@ export const systemRoutes: FastifyPluginAsync = async (fastify) => {
     const status = systemService.getSystemStatus();
     return reply.send({ success: true, data: status });
   });
+
+  fastify.get('/metrics', async (req, reply) => {
+    const metrics = systemService.getMetricsHistory();
+    return reply.send({ success: true, data: metrics });
+  });
 };

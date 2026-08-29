@@ -6,34 +6,39 @@ import {
   HardDrive,
   Clock,
   CheckCircle2,
-  FileText,
   Cpu,
   RefreshCw,
-  AlertCircle,
   Activity,
-  Shield,
-  Folder,
-  Radio,
-  Zap,
   Layers,
   ArrowRight,
-  TrendingUp,
-  Percent,
-  Terminal,
-  Key
+  Wifi,
+  BarChart3,
+  Timer,
+  Zap
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
-import { formatBytes, formatTimeAgo, formatDate } from '../lib/utils.js';
+import { formatBytes, formatDate } from '../lib/utils.js';
 import type { SystemStatus, DatabaseRecord } from '@shared/index.js';
+import {
+  NetworkChart,
+  CpuRamChart,
+  StorageBreakdownChart,
+  RequestVolumeChart,
+  QueryLatencyChart,
+  type TimeRange
+} from '../components/MetricsCharts.js';
 
 export const OverviewPage: React.FC<{
   onSelectDatabase: (id: string) => void;
   onOpenCreateModal: () => void;
 }> = ({ onSelectDatabase, onOpenCreateModal }) => {
+  const [timeRange, setTimeRange] = useState<TimeRange>('1h');
+  const [refreshInterval, setRefreshInterval] = useState<number>(10000);
+
   const { data: status, isLoading: isStatusLoading, refetch: refetchStatus } = useQuery<SystemStatus>({
     queryKey: ['systemStatus'],
     queryFn: () => apiRequest('/api/system/status'),
-    refetchInterval: 10000,
+    refetchInterval: refreshInterval > 0 ? refreshInterval : false,
   });
 
   const { data: databases = [] } = useQuery<DatabaseRecord[]>({
@@ -52,14 +57,14 @@ export const OverviewPage: React.FC<{
       : 0;
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto p-6 max-w-7xl mx-auto w-full space-y-6 select-none">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-border">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6 select-none">
+      {/* Header & Telemetry Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold tracking-tight text-foreground">System Overview</h1>
             <span className="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-semibold uppercase tracking-wider flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Healthy
             </span>
           </div>
@@ -67,17 +72,50 @@ export const OverviewPage: React.FC<{
             Host hardware telemetry, SQLite multi-tenant nodes, storage breakdown, and query throughput.
           </p>
         </div>
-        <button
-          onClick={() => refetchStatus()}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-semibold shadow-sm transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Refresh Stats
-        </button>
+
+        {/* Interactive Controls: Range Toggle & Auto Refresh */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Time Range Selector */}
+          <div className="bg-muted/60 p-0.5 rounded-lg border border-border flex items-center gap-0.5 text-xs">
+            {(['10m', '1h', '24h'] as TimeRange[]).map((range) => (
+              <button
+                key={range}
+                onClick={() => setTimeRange(range)}
+                className={`px-2.5 py-1 rounded-md font-medium transition-all text-xs ${
+                  timeRange === range
+                    ? 'bg-card text-foreground shadow-sm font-semibold'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {range === '10m' ? 'Live 10m' : range}
+              </button>
+            ))}
+          </div>
+
+          {/* Refresh Interval Selector */}
+          <select
+            value={refreshInterval}
+            onChange={(e) => setRefreshInterval(Number(e.target.value))}
+            className="bg-card border border-border text-foreground text-xs rounded-md px-2.5 py-1.5 font-medium shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option value={3000}>Refresh: 3s</option>
+            <option value={10000}>Refresh: 10s</option>
+            <option value={30000}>Refresh: 30s</option>
+            <option value={0}>Manual Pause</option>
+          </select>
+
+          <button
+            onClick={() => refetchStatus()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-semibold shadow-sm transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isStatusLoading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* Top 4 Primary KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 1. Databases */}
         <div className="bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden">
           <div className="flex items-center justify-between text-muted-foreground mb-1.5">
@@ -118,7 +156,7 @@ export const OverviewPage: React.FC<{
             {formatBytes(totalStorage)}
           </div>
           <div className="flex items-center gap-1.5 mt-2 text-[11px] text-muted-foreground">
-            <span>DBs, Backups & Media</span>
+            <span>DBs, WAL, Media & Backups</span>
           </div>
         </div>
 
@@ -139,11 +177,78 @@ export const OverviewPage: React.FC<{
         </div>
       </div>
 
-      {/* Storage Breakdown Section */}
+      {/* Primary Telemetry SVG Interactive Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Realtime CPU & RAM Dual Area Trend Chart */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3 flex flex-col">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-indigo-500" />
+              Realtime CPU & RAM Dual Area Trend
+            </h2>
+            <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">
+              {timeRange} window
+            </span>
+          </div>
+          <div className="flex-1 min-h-[200px]">
+            <CpuRamChart timeRange={timeRange} status={status} />
+          </div>
+        </div>
+
+        {/* Network In/Out Speed Area Chart */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3 flex flex-col">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Wifi className="w-4 h-4 text-emerald-500" />
+              Network Traffic Throughput (In / Out)
+            </h2>
+            <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">
+              {timeRange} window
+            </span>
+          </div>
+          <div className="flex-1 min-h-[200px]">
+            <NetworkChart timeRange={timeRange} status={status} />
+          </div>
+        </div>
+
+        {/* Request Volume & Error Rate Timeline */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3 flex flex-col">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-blue-500" />
+              Request Volume & Error Rate Timeline
+            </h2>
+            <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">
+              QPS / Error %
+            </span>
+          </div>
+          <div className="flex-1 min-h-[200px]">
+            <RequestVolumeChart timeRange={timeRange} status={status} />
+          </div>
+        </div>
+
+        {/* Query Latency Distribution (Avg vs P95) */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3 flex flex-col">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Timer className="w-4 h-4 text-cyan-500" />
+              Query Latency Distribution
+            </h2>
+            <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">
+              Avg vs P95 (ms)
+            </span>
+          </div>
+          <div className="flex-1 min-h-[200px]">
+            <QueryLatencyChart timeRange={timeRange} status={status} />
+          </div>
+        </div>
+      </div>
+
+      {/* Storage Breakdown Interactive Donut Section */}
       <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-            <HardDrive className="w-4 h-4 text-blue-500" />
+            <HardDrive className="w-4 h-4 text-purple-500" />
             Storage Allocation Breakdown
           </h2>
           <span className="text-xs font-mono font-semibold text-muted-foreground">
@@ -151,61 +256,11 @@ export const OverviewPage: React.FC<{
           </span>
         </div>
 
-        {/* Multi-segmented Progress Bar */}
-        <div className="w-full h-3 bg-muted rounded-full overflow-hidden flex">
-          <div
-            style={{
-              width: `${totalStorage > 0 ? ((status?.totalDatabaseStorageBytes ?? 0) / totalStorage) * 100 : 0}%`,
-            }}
-            className="bg-blue-500 transition-all duration-300"
-            title="Database Tables Storage"
-          />
-          <div
-            style={{
-              width: `${totalStorage > 0 ? ((status?.mediaStorageBytes ?? 0) / totalStorage) * 100 : 0}%`,
-            }}
-            className="bg-emerald-500 transition-all duration-300"
-            title="Media Storage"
-          />
-          <div
-            style={{
-              width: `${totalStorage > 0 ? ((status?.backupStorageBytes ?? 0) / totalStorage) * 100 : 0}%`,
-            }}
-            className="bg-purple-500 transition-all duration-300"
-            title="Backup Snapshots"
-          />
-        </div>
-
-        {/* Breakdown Legend Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-          <div className="p-3 bg-muted/40 border border-border rounded-lg flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full bg-blue-500 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <span className="text-[11px] text-muted-foreground block truncate">SQLite DB + WAL Files</span>
-              <strong className="text-xs text-foreground font-mono">{formatBytes(status?.totalDatabaseStorageBytes ?? 0)}</strong>
-            </div>
-          </div>
-
-          <div className="p-3 bg-muted/40 border border-border rounded-lg flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full bg-emerald-500 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <span className="text-[11px] text-muted-foreground block truncate">Media & Uploads (Range 206)</span>
-              <strong className="text-xs text-foreground font-mono">{formatBytes(status?.mediaStorageBytes ?? 0)}</strong>
-            </div>
-          </div>
-
-          <div className="p-3 bg-muted/40 border border-border rounded-lg flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full bg-purple-500 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <span className="text-[11px] text-muted-foreground block truncate">Snapshot Backups Archive</span>
-              <strong className="text-xs text-foreground font-mono">{formatBytes(status?.backupStorageBytes ?? 0)}</strong>
-            </div>
-          </div>
-        </div>
+        <StorageBreakdownChart status={status} />
       </div>
 
       {/* Host Hardware Telemetry & Runtime Specs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Host Hardware & Resources */}
         <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
           <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -322,7 +377,7 @@ export const OverviewPage: React.FC<{
             <p className="text-xs text-muted-foreground">No databases created yet.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {databases.slice(0, 6).map((db) => (
               <div
                 key={db.id}

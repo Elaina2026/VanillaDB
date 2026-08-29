@@ -70,6 +70,41 @@ export async function buildApp() {
     credentials: true,
   });
 
+  // Request/Response metrics hook
+  app.addHook('onRequest', async (req) => {
+    (req.raw as any).__startTime = process.hrtime();
+    (req.raw as any).__bytesIn = parseInt(req.headers['content-length'] || '0', 10);
+  });
+
+  app.addHook('onSend', async (req, reply, payload) => {
+    let bytesOut = 0;
+    if (typeof payload === 'string') {
+      bytesOut = Buffer.byteLength(payload);
+    } else if (Buffer.isBuffer(payload)) {
+      bytesOut = payload.length;
+    } else if (payload && typeof (payload as any).pipe === 'function') {
+      const contentLength = reply.getHeader('content-length');
+      if (contentLength) bytesOut = parseInt(String(contentLength), 10);
+    }
+    (req.raw as any).__bytesOut = bytesOut;
+    return payload;
+  });
+
+  app.addHook('onResponse', async (req, reply) => {
+    const startTime = (req.raw as any).__startTime;
+    let durationMs = 0;
+    if (startTime) {
+      const diff = process.hrtime(startTime);
+      durationMs = Math.round((diff[0] * 1000 + diff[1] / 1e6) * 100) / 100;
+    }
+    const bytesIn = (req.raw as any).__bytesIn || 0;
+    const bytesOut = (req.raw as any).__bytesOut || Number(reply.getHeader('content-length')) || 0;
+    const statusCode = reply.statusCode;
+    const isError = statusCode >= 400;
+
+    systemService.recordRequestMetrics(bytesIn, bytesOut, durationMs, isError);
+  });
+
   // Health endpoint
   app.get('/health', async (req, reply) => {
     const metaDb = getMetadataDb();

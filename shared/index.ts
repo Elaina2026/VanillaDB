@@ -75,6 +75,7 @@ export interface WebhookRecord {
   secret: string;
   events: string[];
   active: boolean;
+  table_name?: string | null;
   created_at: number;
   last_triggered_at: number | null;
   failure_count: number;
@@ -256,3 +257,41 @@ export interface SystemStatus {
     external: number;
   };
 }
+
+export interface MetricHistoryPoint {
+  timestamp: number;
+  cpuPercent: number;
+  ramUsedBytes: number;
+  ramTotalBytes: number;
+  ramPercent: number;
+  heapUsedBytes: number;
+  networkInBytes: number;
+  networkOutBytes: number;
+  networkInRate: number; // bytes per second
+  networkOutRate: number; // bytes per second
+  requestsCount: number;
+  errorsCount: number;
+  qps: number;
+  avgDurationMs: number;
+  databaseStorageBytes: number;
+  walStorageBytes: number;
+  mediaStorageBytes: number;
+  backupStorageBytes: number;
+  totalStorageBytes: number;
+}
+
+export interface SystemMetricsHistory {
+  current: MetricHistoryPoint;
+  timeline: MetricHistoryPoint[];
+  summary: {
+    maxQps: number;
+    peakCpu: number;
+    peakRamPercent: number;
+    totalNetworkInBytes: number;
+    totalNetworkOutBytes: number;
+    totalRequests: number;
+    totalErrors: number;
+    avgLatencyMs: number;
+  };
+}
+

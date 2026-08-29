@@ -16,7 +16,7 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
   beforeAll(async () => {
     app = await buildApp();
     await app.ready();
-  });
+  }, 30000);
 
   afterAll(async () => {
     if (testDbId) {
@@ -27,8 +27,8 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
       }
     }
     dbManager.closeAll();
-    await app.close();
-  });
+    if (app) await app.close();
+  }, 30000);
 
   // 1. Authentication & Setup
   it('should allow initial admin setup or login', async () => {
