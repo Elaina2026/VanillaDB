@@ -21,7 +21,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   const [activeTab, setActiveTab] = useState<'export' | 'import'>('export');
 
   // Export states
-  const [exportFormat, setExportFormat] = useState<'sql' | 'csv' | 'json'>('sql');
+  const [exportFormat, setExportFormat] = useState<'sql' | 'csv' | 'json' | 'sqlite'>('sql');
   const [selectedExportTable, setSelectedExportTable] = useState<string>('all');
   const [isExporting, setIsExporting] = useState(false);
 
@@ -137,9 +137,10 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
           <div className="space-y-4 py-2">
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">Export Format</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {[
                   { id: 'sql', label: 'SQL Dump (.sql)' },
+                  { id: 'sqlite', label: 'SQLite Binary (.db)' },
                   { id: 'csv', label: 'CSV (.csv)' },
                   { id: 'json', label: 'JSON (.json)' },
                 ].map((fmt) => (
@@ -147,7 +148,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                     key={fmt.id}
                     type="button"
                     onClick={() => setExportFormat(fmt.id as any)}
-                    className={`py-2 px-3 text-xs rounded-md border text-center transition-colors font-medium ${
+                    className={`py-2 px-2 text-xs rounded-md border text-center transition-colors font-medium ${
                       exportFormat === fmt.id
                         ? 'border-blue-600 bg-blue-500/10 text-blue-500 font-semibold'
                         : 'border-border bg-background text-muted-foreground hover:text-foreground'
@@ -159,23 +160,25 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Target Table</label>
-              <select
-                value={selectedExportTable}
-                onChange={(e) => setSelectedExportTable(e.target.value)}
-                className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground"
-              >
-                {exportFormat === 'sql' && <option value="all">All Tables (Entire Database)</option>}
-                {schema
-                  .filter((s) => s.type === 'table')
-                  .map((t) => (
-                    <option key={t.name} value={t.name}>
-                      Table: {t.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
+            {exportFormat !== 'sqlite' && (
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Target Table</label>
+                <select
+                  value={selectedExportTable}
+                  onChange={(e) => setSelectedExportTable(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground"
+                >
+                  {exportFormat === 'sql' && <option value="all">All Tables (Entire Database)</option>}
+                  {schema
+                    .filter((s) => s.type === 'table')
+                    .map((t) => (
+                      <option key={t.name} value={t.name}>
+                        Table: {t.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
 
             <div className="pt-3 flex justify-end gap-2">
               <button onClick={onClose} className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md">

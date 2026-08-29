@@ -942,6 +942,24 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send(sqlDump);
     }
 
+    if (format === 'sqlite' || format === 'db') {
+      const dbPath = dbManager.resolveDatabasePath(id);
+      if (!fs.existsSync(dbPath)) {
+        return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Database file not found' } });
+      }
+
+      // Checkpoint WAL to consolidate all pending writes into the main file before sending
+      try {
+        const activeDb = dbManager.get(id);
+        activeDb.exec('PRAGMA wal_checkpoint(PASSIVE);');
+      } catch {}
+
+      const fileBuffer = fs.readFileSync(dbPath);
+      reply.header('Content-Type', 'application/vnd.sqlite3');
+      reply.header('Content-Disposition', `attachment; filename="${id}.sqlite"`);
+      return reply.send(fileBuffer);
+    }
+
     if (format === 'json') {
       const tableName = targetTable || schema.find(s => s.type === 'table')?.name;
       if (!tableName) {
