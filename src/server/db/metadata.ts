@@ -44,8 +44,8 @@ function runMigrations(db: DatabaseSync): void {
           id TEXT PRIMARY KEY,
           username TEXT NOT NULL UNIQUE,
           password_hash TEXT NOT NULL,
-          role TEXT NOT NULL DEFAULT 'admin',
-          max_databases INTEGER NOT NULL DEFAULT 100,
+          role TEXT NOT NULL DEFAULT 'super_admin',
+          max_databases INTEGER NOT NULL DEFAULT 1000,
           rate_limit_per_minute INTEGER NOT NULL DEFAULT 0,
           status TEXT NOT NULL DEFAULT 'active',
           created_at INTEGER NOT NULL,
@@ -58,6 +58,7 @@ function runMigrations(db: DatabaseSync): void {
           slug TEXT NOT NULL UNIQUE,
           description TEXT,
           filename TEXT NOT NULL UNIQUE,
+          owner_id TEXT,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL,
           last_accessed_at INTEGER
@@ -74,6 +75,7 @@ function runMigrations(db: DatabaseSync): void {
           permissions TEXT NOT NULL,
           allowed_tables TEXT,
           denied_tables TEXT,
+          rate_limit INTEGER,
           expires_at INTEGER,
           created_at INTEGER NOT NULL,
           last_used_at INTEGER,
@@ -202,7 +204,17 @@ function runMigrations(db: DatabaseSync): void {
       logger.info({ migration: m.name, version: m.version }, 'Applying metadata migration');
       db.exec('BEGIN TRANSACTION;');
       try {
-        db.exec(m.sql);
+        const statements = m.sql.split(';').map(s => s.trim()).filter(Boolean);
+        for (const stmt of statements) {
+          try {
+            db.exec(stmt);
+          } catch (stmtErr: any) {
+            // Ignore duplicate column errors if table was already created with the column
+            if (!stmtErr.message?.includes('duplicate column name')) {
+              throw stmtErr;
+            }
+          }
+        }
         db.prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(
           m.version,
           m.name,
