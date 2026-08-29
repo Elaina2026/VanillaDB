@@ -30,6 +30,7 @@ export interface DatabaseRecord {
   description: string | null;
   filename: string;
   owner_id?: string | null;
+  owner_username?: string | null;
   created_at: number;
   updated_at: number;
   last_accessed_at: number | null;

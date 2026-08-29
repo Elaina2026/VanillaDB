@@ -1248,7 +1248,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const description = (data.fields?.description as any)?.value;
     const dbName = (explicitName || filename.replace(/\.[^/.]+$/, '')).trim();
 
-    const record = databaseService.createDatabase(dbName, description || `Imported from ${filename}`);
+    const record = databaseService.createDatabase(dbName, description || `Imported from ${filename}`, req.adminUser?.userId);
     const id = record.id;
     const ext = filename.split('.').pop()?.toLowerCase() || '';
 

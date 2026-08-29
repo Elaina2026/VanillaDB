@@ -25,7 +25,14 @@ export class DatabaseService {
     }
 
     const id = `db_${nanoid(16)}`;
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `db-${nanoid(6)}`;
+    let baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'db';
+    let slug = baseSlug;
+
+    // Check if slug exists to guarantee uniqueness
+    const existingSlug = metaDb.prepare('SELECT id FROM databases WHERE slug = ?').get(slug);
+    if (existingSlug) {
+      slug = `${baseSlug}-${nanoid(6).toLowerCase()}`;
+    }
 
     const filename = `${id}.sqlite`;
     const dbPath = path.resolve(config.databasesDir, filename);
@@ -65,17 +72,29 @@ export class DatabaseService {
 
   public listDatabases(userId?: string, role?: string): DatabaseRecord[] {
     const metaDb = getMetadataDb();
+    const queryBase = `
+      SELECT d.id, d.name, d.slug, d.description, d.filename, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
+             u.username as owner_username
+      FROM databases d
+      LEFT JOIN users u ON d.owner_id = u.id
+    `;
     if (userId && role === 'user') {
-      const rows = metaDb.prepare('SELECT id, name, slug, description, filename, owner_id, created_at, updated_at, last_accessed_at FROM databases WHERE owner_id = ? ORDER BY created_at DESC').all(userId) as any[];
+      const rows = metaDb.prepare(`${queryBase} WHERE d.owner_id = ? ORDER BY d.created_at DESC`).all(userId) as any[];
       return rows;
     }
-    const rows = metaDb.prepare('SELECT id, name, slug, description, filename, owner_id, created_at, updated_at, last_accessed_at FROM databases ORDER BY created_at DESC').all() as any[];
+    const rows = metaDb.prepare(`${queryBase} ORDER BY d.created_at DESC`).all() as any[];
     return rows;
   }
 
   public getDatabase(databaseId: string): DatabaseRecord | null {
     const metaDb = getMetadataDb();
-    const row = metaDb.prepare('SELECT id, name, slug, description, filename, owner_id, created_at, updated_at, last_accessed_at FROM databases WHERE id = ?').get(databaseId) as any;
+    const row = metaDb.prepare(`
+      SELECT d.id, d.name, d.slug, d.description, d.filename, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
+             u.username as owner_username
+      FROM databases d
+      LEFT JOIN users u ON d.owner_id = u.id
+      WHERE d.id = ?
+    `).get(databaseId) as any;
     return row || null;
   }
 

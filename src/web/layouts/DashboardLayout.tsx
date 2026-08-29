@@ -292,22 +292,24 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 Activity Logs
               </button>
 
-              <button
-                onClick={() => {
-                  setSelectedDatabaseId(null);
-                  setCurrentTab('users');
-                  closeMobileMenu();
-                }}
-                className={cn(
-                  'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
-                  currentTab === 'users'
-                    ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                )}
-              >
-                <Users className="w-4 h-4" />
-                User Management
-              </button>
+              {(user?.role === 'super_admin' || user?.role === 'admin') && (
+                <button
+                  onClick={() => {
+                    setSelectedDatabaseId(null);
+                    setCurrentTab('users');
+                    closeMobileMenu();
+                  }}
+                  className={cn(
+                    'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
+                    currentTab === 'users'
+                      ? 'bg-blue-600 text-white font-semibold'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  )}
+                >
+                  <Users className="w-4 h-4" />
+                  User Management
+                </button>
+              )}
 
               <button
                 onClick={() => {

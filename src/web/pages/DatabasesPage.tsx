@@ -1,20 +1,32 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Database, Plus, Search, Layers, Server, Activity, Shield, Terminal, HardDrive, Settings, ExternalLink, Trash2, Copy, Check, Clock, Table } from 'lucide-react';
+import { Database, Plus, Search, Layers, Server, Activity, Shield, Terminal, HardDrive, Settings, ExternalLink, Trash2, Copy, Check, Clock, Table, User } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatTimeAgo, formatDate } from '../lib/utils.js';
+import { ConfirmModal } from '../components/ConfirmModal.js';
+import { useAuth } from '../hooks/useAuth.js';
 import type { DatabaseRecord } from '@shared/index.js';
 
 export const DatabasesPage: React.FC<{
   onSelectDatabase: (id: string) => void;
   onOpenCreateModal: () => void;
 }> = ({ onSelectDatabase, onOpenCreateModal }) => {
+  const { user: currentUser } = useAuth();
   const [search, setSearch] = useState('');
+  const [deletingDb, setDeletingDb] = useState<DatabaseRecord | null>(null);
   const queryClient = useQueryClient();
 
   const { data: databases = [], isLoading } = useQuery<DatabaseRecord[]>({
     queryKey: ['databases'],
     queryFn: () => apiRequest('/api/admin/databases'),
+  });
+
+  const deleteDbMutation = useMutation({
+    mutationFn: (id: string) => apiRequest(`/api/admin/databases/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['databases'] });
+      setDeletingDb(null);
+    },
   });
 
   const filtered = databases.filter(
@@ -95,9 +107,23 @@ export const DatabasesPage: React.FC<{
             >
               <div>
                 <div className="flex items-start justify-between gap-2 mb-1.5">
-                  <h3 className="text-sm font-semibold tracking-tight text-foreground group-hover:text-blue-500 transition-colors truncate">
-                    {db.name}
-                  </h3>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold tracking-tight text-foreground group-hover:text-blue-500 transition-colors truncate">
+                      {db.name}
+                    </h3>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {db.owner_username ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.2 bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded font-medium">
+                          <User className="w-2.5 h-2.5" />
+                          {db.owner_username === currentUser?.username ? 'You' : db.owner_username}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border rounded font-medium">
+                          System
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   <span className="text-[10px] font-mono px-1.5 py-0.5 bg-muted text-muted-foreground rounded border border-border shrink-0">
                     {db.id}
                   </span>
@@ -112,14 +138,41 @@ export const DatabasesPage: React.FC<{
                   <Clock className="w-3 h-3" />
                   {formatTimeAgo(db.last_accessed_at || db.created_at)}
                 </span>
-                <span className="font-mono text-blue-500 hover:underline flex items-center gap-0.5">
-                  Open <ExternalLink className="w-3 h-3" />
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeletingDb(db);
+                    }}
+                    className="p-1 hover:bg-red-500/10 hover:text-red-500 rounded text-muted-foreground transition-colors"
+                    title="Delete Database"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="font-mono text-blue-500 hover:underline flex items-center gap-0.5">
+                    Open <ExternalLink className="w-3 h-3" />
+                  </span>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Delete Database Confirm Modal */}
+      <ConfirmModal
+        isOpen={!!deletingDb}
+        onClose={() => setDeletingDb(null)}
+        onConfirm={() => {
+          if (deletingDb) deleteDbMutation.mutate(deletingDb.id);
+        }}
+        title={`Delete "${deletingDb?.name}"?`}
+        message="Are you sure you want to delete this database? All data, tables, files, and API tokens will be permanently removed."
+        confirmText="Confirm Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={deleteDbMutation.isPending}
+      />
     </div>
   );
 };

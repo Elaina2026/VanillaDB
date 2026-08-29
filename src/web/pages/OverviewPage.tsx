@@ -13,10 +13,12 @@ import {
   ArrowRight,
   TrendingUp,
   ShieldCheck,
-  Zap
+  Zap,
+  User
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatDate } from '../lib/utils.js';
+import { useAuth } from '../hooks/useAuth.js';
 import type { SystemStatus, DatabaseRecord } from '@shared/index.js';
 
 export const OverviewPage: React.FC<{
@@ -24,6 +26,7 @@ export const OverviewPage: React.FC<{
   onOpenCreateModal: () => void;
   onNavigateToTelemetry: () => void;
 }> = ({ onSelectDatabase, onOpenCreateModal, onNavigateToTelemetry }) => {
+  const { user: currentUser } = useAuth();
   const { data: status, isLoading: isStatusLoading, refetch: refetchStatus } = useQuery<SystemStatus>({
     queryKey: ['systemStatus'],
     queryFn: () => apiRequest('/api/system/status'),
@@ -277,6 +280,18 @@ export const OverviewPage: React.FC<{
                     <span className="text-[10px] font-mono px-1.5 py-0.2 bg-muted rounded text-muted-foreground">
                       {db.id}
                     </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {db.owner_username ? (
+                      <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.2 bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded font-medium">
+                        <User className="w-2.5 h-2.5" />
+                        {db.owner_username === currentUser?.username ? 'You' : db.owner_username}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border rounded font-medium">
+                        System
+                      </span>
+                    )}
                   </div>
                   {db.description && (
                     <p className="text-[11px] text-muted-foreground line-clamp-1 mt-1">

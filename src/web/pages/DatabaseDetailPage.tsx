@@ -39,13 +39,16 @@ import {
   Webhook as WebhookIcon,
   ToggleLeft,
   ToggleRight,
-  Radio
+  Radio,
+  User
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatTimeAgo, formatDate } from '../lib/utils.js';
 import { CreateTableModal } from '../components/CreateTableModal.js';
 import { RowModal } from '../components/RowModal.js';
 import { ImportExportModal } from '../components/ImportExportModal.js';
+import { ConfirmModal } from '../components/ConfirmModal.js';
+import { useAuth } from '../hooks/useAuth.js';
 import type {
   DatabaseOverviewStats,
   TableSchemaDetail,
@@ -64,6 +67,7 @@ export const DatabaseDetailPage: React.FC<{
   onBack: () => void;
   onOpenCreateToken: (dbId: string) => void;
 }> = ({ databaseId, initialTab = 'overview', onTabChange, onBack, onOpenCreateToken }) => {
+  const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'backups' | 'settings'>(initialTab);
   const queryClient = useQueryClient();
 
@@ -225,6 +229,24 @@ export const DatabaseDetailPage: React.FC<{
       setIsUploading(false);
     }
   };
+
+  // Generic confirmation modal state
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    variant?: 'danger' | 'warning' | 'primary';
+    onConfirm: () => void;
+    isLoading?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
 
   // Table browser states
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -462,7 +484,8 @@ export const DatabaseDetailPage: React.FC<{
     onSuccess: (newDb) => {
       setIsCloneModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['databases'] });
-      alert(`Database successfully cloned to "${newDb.name}" (${newDb.id})`);
+      setNotificationMessage(`Database cloned to "${newDb.name}" (${newDb.id})`);
+      setTimeout(() => setNotificationMessage(null), 4000);
     },
   });
 
@@ -511,6 +534,16 @@ export const DatabaseDetailPage: React.FC<{
               <span className="text-[10px] font-mono px-1.5 py-0.5 bg-muted text-muted-foreground rounded border border-border">
                 {databaseId}
               </span>
+              {stats?.database.owner_username ? (
+                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded font-medium">
+                  <User className="w-2.5 h-2.5" />
+                  {stats.database.owner_username === currentUser?.username ? 'You' : stats.database.owner_username}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-muted text-muted-foreground border border-border rounded font-medium">
+                  System
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-muted-foreground truncate max-w-xs sm:max-w-md">
               {stats?.database.description || 'Native SQLite Engine (WAL Mode)'}
@@ -841,9 +874,18 @@ export const DatabaseDetailPage: React.FC<{
                     {selectedRowIds.length > 0 && (
                       <button
                         onClick={() => {
-                          if (confirm(`Delete ${selectedRowIds.length} selected row(s)?`)) {
-                            deleteBulkMutation.mutate(selectedRowIds);
-                          }
+                          setConfirmConfig({
+                            isOpen: true,
+                            title: 'Delete Selected Rows?',
+                            message: `Are you sure you want to delete ${selectedRowIds.length} selected row(s)? This action cannot be undone.`,
+                            confirmText: `Delete ${selectedRowIds.length} Rows`,
+                            variant: 'danger',
+                            isLoading: deleteBulkMutation.isPending,
+                            onConfirm: () => {
+                              deleteBulkMutation.mutate(selectedRowIds);
+                              setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+                            },
+                          });
                         }}
                         disabled={deleteBulkMutation.isPending}
                         className="flex items-center gap-1.5 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold shadow-sm transition-colors"
@@ -877,9 +919,18 @@ export const DatabaseDetailPage: React.FC<{
                     {/* Truncate Table */}
                     <button
                       onClick={() => {
-                        if (confirm(`Truncate table "${selectedTable}"? All data will be deleted.`)) {
-                          truncateTableMutation.mutate();
-                        }
+                        setConfirmConfig({
+                          isOpen: true,
+                          title: `Truncate Table "${selectedTable}"?`,
+                          message: `Are you sure you want to empty table "${selectedTable}"? All row records will be permanently purged.`,
+                          confirmText: 'Truncate Table',
+                          variant: 'danger',
+                          isLoading: truncateTableMutation.isPending,
+                          onConfirm: () => {
+                            truncateTableMutation.mutate();
+                            setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+                          },
+                        });
                       }}
                       disabled={truncateTableMutation.isPending}
                       className="px-2.5 py-1 bg-background border border-border hover:bg-accent rounded text-xs font-medium transition-colors text-muted-foreground hover:text-red-500"
@@ -890,9 +941,18 @@ export const DatabaseDetailPage: React.FC<{
                     {/* Drop Table */}
                     <button
                       onClick={() => {
-                        if (confirm(`Are you sure you want to drop table "${selectedTable}"?`)) {
-                          dropTableMutation.mutate();
-                        }
+                        setConfirmConfig({
+                          isOpen: true,
+                          title: `Drop Table "${selectedTable}"?`,
+                          message: `Are you sure you want to permanently DROP table "${selectedTable}" and all its columns, data, and indexes?`,
+                          confirmText: 'Drop Table',
+                          variant: 'danger',
+                          isLoading: dropTableMutation.isPending,
+                          onConfirm: () => {
+                            dropTableMutation.mutate();
+                            setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+                          },
+                        });
                       }}
                       disabled={dropTableMutation.isPending}
                       className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
@@ -1007,9 +1067,18 @@ export const DatabaseDetailPage: React.FC<{
                                 </button>
                                 <button
                                   onClick={() => {
-                                    if (confirm('Delete this row?')) {
-                                      deleteBulkMutation.mutate([pkVal]);
-                                    }
+                                    setConfirmConfig({
+                                      isOpen: true,
+                                      title: 'Delete Row?',
+                                      message: `Are you sure you want to delete row with ${primaryKeyCol} = "${pkVal}"?`,
+                                      confirmText: 'Delete Row',
+                                      variant: 'danger',
+                                      isLoading: deleteBulkMutation.isPending,
+                                      onConfirm: () => {
+                                        deleteBulkMutation.mutate([pkVal]);
+                                        setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+                                      },
+                                    });
                                   }}
                                   className="p-1 hover:bg-red-500/20 rounded text-[#a1a1aa] hover:text-red-400 transition-colors"
                                   title="Delete Row"
@@ -1408,9 +1477,18 @@ export const DatabaseDetailPage: React.FC<{
 
                             <button
                               onClick={() => {
-                                if (confirm(`Delete file "${file.original_name}"?`)) {
-                                  deleteFileMutation.mutate(file.id);
-                                }
+                                setConfirmConfig({
+                                  isOpen: true,
+                                  title: `Delete File "${file.original_name}"?`,
+                                  message: `Are you sure you want to permanently delete file "${file.original_name}"?`,
+                                  confirmText: 'Delete File',
+                                  variant: 'danger',
+                                  isLoading: deleteFileMutation.isPending,
+                                  onConfirm: () => {
+                                    deleteFileMutation.mutate(file.id);
+                                    setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+                                  },
+                                });
                               }}
                               className="p-1 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
                               title="Delete file"
@@ -1822,8 +1900,11 @@ export const DatabaseDetailPage: React.FC<{
                           try {
                             await apiRequest(`/api/admin/webhooks/${wh.id}/test`, { method: 'POST' });
                             refetchWebhooks();
+                            setNotificationMessage('Test webhook sent successfully');
+                            setTimeout(() => setNotificationMessage(null), 3000);
                           } catch (err: any) {
-                            alert(err.message || 'Failed to send test webhook');
+                            setNotificationMessage(err.message || 'Failed to send test webhook');
+                            setTimeout(() => setNotificationMessage(null), 4000);
                           }
                         }}
                         className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-muted-foreground hover:text-foreground font-medium transition-colors"
@@ -1838,8 +1919,11 @@ export const DatabaseDetailPage: React.FC<{
                             try {
                               await apiRequest(`/api/admin/webhooks/${wh.id}/reset-failures`, { method: 'POST' });
                               refetchWebhooks();
+                              setNotificationMessage('Webhook failure count reset to 0');
+                              setTimeout(() => setNotificationMessage(null), 3000);
                             } catch (err: any) {
-                              alert(err.message || 'Failed to reset failure count');
+                              setNotificationMessage(err.message || 'Failed to reset failure count');
+                              setTimeout(() => setNotificationMessage(null), 4000);
                             }
                           }}
                           className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-amber-500 hover:text-amber-400 font-medium transition-colors"
@@ -2321,9 +2405,18 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                       </a>
                       <button
                         onClick={() => {
-                          if (confirm('Are you sure you want to restore this snapshot? Current database will be restored.')) {
-                            restoreBackupMutation.mutate(bkp.id);
-                          }
+                          setConfirmConfig({
+                            isOpen: true,
+                            title: 'Restore Database Snapshot?',
+                            message: `Are you sure you want to restore snapshot "${bkp.filename}"? Current database data will be overwritten with this backup snapshot.`,
+                            confirmText: 'Restore Backup',
+                            variant: 'warning',
+                            isLoading: restoreBackupMutation.isPending,
+                            onConfirm: () => {
+                              restoreBackupMutation.mutate(bkp.id);
+                              setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+                            },
+                          });
                         }}
                         disabled={restoreBackupMutation.isPending}
                         className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-foreground flex items-center gap-1 transition-colors"
@@ -2332,7 +2425,20 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                         Restore
                       </button>
                       <button
-                        onClick={() => deleteBackupMutation.mutate(bkp.id)}
+                        onClick={() => {
+                          setConfirmConfig({
+                            isOpen: true,
+                            title: 'Delete Backup Snapshot?',
+                            message: `Are you sure you want to delete backup file "${bkp.filename}"?`,
+                            confirmText: 'Delete Backup',
+                            variant: 'danger',
+                            isLoading: deleteBackupMutation.isPending,
+                            onConfirm: () => {
+                              deleteBackupMutation.mutate(bkp.id);
+                              setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+                            },
+                          });
+                        }}
                         className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -2643,6 +2749,26 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
           refetchStats();
         }}
       />
+
+      {/* Generic Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        variant={confirmConfig.variant}
+        isLoading={confirmConfig.isLoading}
+        onClose={() => setConfirmConfig((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmConfig.onConfirm}
+      />
+
+      {/* Notification Toast */}
+      {notificationMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-card border border-border shadow-xl rounded-lg px-4 py-3 text-xs text-foreground flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span>{notificationMessage}</span>
+        </div>
+      )}
     </div>
   );
 };

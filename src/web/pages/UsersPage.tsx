@@ -20,6 +20,7 @@ import {
 import { apiRequest } from '../api/client.js';
 import { formatDate } from '../lib/utils.js';
 import { useAuth } from '../hooks/useAuth.js';
+import { ConfirmModal } from '../components/ConfirmModal.js';
 import type { UserRecord, UserRole } from '@shared/index.js';
 
 export const UsersPage: React.FC = () => {
@@ -461,41 +462,19 @@ export const UsersPage: React.FC = () => {
       )}
 
       {/* Delete Confirmation Modal */}
-      {deletingUserId && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-xl max-w-sm w-full p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center gap-3 text-red-500">
-              <div className="p-2 bg-red-500/10 rounded-lg">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-foreground">Delete Account?</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">This action cannot be undone.</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Are you sure you want to permanently delete this user account? Their created databases will remain intact but ownership will be detached.
-            </p>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-              <button
-                onClick={() => setDeletingUserId(null)}
-                className="px-3 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded text-xs font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => deleteUserMutation.mutate(deletingUserId)}
-                disabled={deleteUserMutation.isPending}
-                className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold shadow-sm"
-              >
-                {deleteUserMutation.isPending ? 'Deleting...' : 'Confirm Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        isOpen={!!deletingUserId}
+        onClose={() => setDeletingUserId(null)}
+        onConfirm={() => {
+          if (deletingUserId) deleteUserMutation.mutate(deletingUserId);
+        }}
+        title="Delete Account?"
+        message="Are you sure you want to permanently delete this user account? Their created databases will remain intact but ownership will be detached."
+        confirmText="Confirm Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={deleteUserMutation.isPending}
+      />
     </div>
   );
 };
