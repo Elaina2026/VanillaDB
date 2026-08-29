@@ -15,26 +15,27 @@ export function formatBytes(bytes: number, decimals = 2): string {
 }
 
 export function formatDate(timestamp: number | null): string {
-  if (!timestamp) return 'Never';
-  return new Date(timestamp).toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  if (!timestamp) return 'Chưa có';
+  const d = new Date(timestamp);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  const seconds = pad(d.getSeconds());
+  const day = pad(d.getDate());
+  const month = pad(d.getMonth() + 1);
+  const year = d.getFullYear();
+  return `${hours}:${minutes}:${seconds} - ${day}/${month}/${year}`;
 }
 
 export function formatTimeAgo(timestamp: number | null): string {
-  if (!timestamp) return 'Never';
+  if (!timestamp) return 'Chưa có';
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 5) return 'Just now';
-  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 5) return 'Vừa xong';
+  if (seconds < 60) return `${seconds} giây trước`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return `${minutes} phút trước`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return `${hours} giờ trước`;
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return `${days} ngày trước`;
 }

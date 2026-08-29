@@ -28,9 +28,12 @@ export class BackupService {
       fs.mkdirSync(dbBackupsDir, { recursive: true });
     }
 
-    const timestampIso = new Date().toISOString().replace(/[:.]/g, '-');
+    const now = Date.now();
+    const d = new Date(now);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const vnFormatted = `${pad(d.getHours())}h${pad(d.getMinutes())}_${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
     const backupId = `bkp_${nanoid(16)}`;
-    const filename = `${timestampIso}.sqlite`;
+    const filename = `backup_${vnFormatted}_${nanoid(6)}.sqlite`;
     const targetPath = path.resolve(dbBackupsDir, filename);
 
     const sourcePath = dbManager.resolveDatabasePath(databaseId);
@@ -38,7 +41,6 @@ export class BackupService {
 
     const sizeBytes = fs.statSync(targetPath).size;
     const checksum = this.calculateChecksum(targetPath);
-    const now = Date.now();
 
     metaDb.prepare(`
       INSERT INTO database_backups (id, database_id, filename, size_bytes, checksum, backup_type, status, created_at)
