@@ -9,6 +9,16 @@ export default defineConfig({
   build: {
     outDir: 'dist/client',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-query': ['@tanstack/react-query', '@tanstack/react-table'],
+          'vendor-icons': ['lucide-react'],
+        },
+      },
+    },
   },
   resolve: {
     alias: {

@@ -43,14 +43,17 @@ if (!sessionSecret || sessionSecret.trim() === '') {
   }
 }
 
+const appEnv = process.env.VDB_ENV || process.env.NODE_ENV || 'development';
+const isProduction = appEnv === 'production';
+
 const insecureSecrets = ['changeme', 'password', '123456', 'secret', 'admin'];
-if (process.env.NODE_ENV === 'production' && insecureSecrets.includes(sessionSecret.toLowerCase())) {
+if (isProduction && insecureSecrets.includes(sessionSecret.toLowerCase())) {
   throw new Error(`Insecure VDB_SESSION_SECRET configured: "${sessionSecret}". Please provide a secure random secret.`);
 }
 
 export const config = {
-  env: process.env.NODE_ENV || 'development',
-  isProduction: process.env.NODE_ENV === 'production',
+  env: appEnv,
+  isProduction,
   host: process.env.VDB_HOST || process.env.HOST || '0.0.0.0',
   port: getEnvInt('VDB_PORT', getEnvInt('PORT', 3000)),
   dataDir,
