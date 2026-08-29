@@ -47,11 +47,11 @@ export const ActivityPage: React.FC = () => {
   });
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto p-6 max-w-7xl mx-auto w-full space-y-4">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto p-4 md:p-6 max-w-7xl mx-auto w-full space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-border">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-border gap-3">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+          <h1 className="text-lg md:text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Activity className="w-5 h-5 text-blue-500" />
             System & Security Logs
           </h1>
@@ -59,11 +59,11 @@ export const ActivityPage: React.FC = () => {
             Real-time API executions, SQL queries, and administrative audit trails.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start sm:self-auto">
           <div className="flex bg-muted p-0.5 rounded-md border border-border">
             <button
               onClick={() => setActiveTab('activity')}
-              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+              className={`px-2.5 sm:px-3 py-1 text-xs font-medium rounded transition-colors ${
                 activeTab === 'activity' ? 'bg-card text-foreground shadow-sm font-semibold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -71,7 +71,7 @@ export const ActivityPage: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('audit')}
-              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+              className={`px-2.5 sm:px-3 py-1 text-xs font-medium rounded transition-colors ${
                 activeTab === 'audit' ? 'bg-card text-foreground shadow-sm font-semibold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >

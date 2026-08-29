@@ -496,11 +496,11 @@ export const DatabaseDetailPage: React.FC<{
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
       {/* Top Header Information */}
-      <div className="h-14 border-b border-border bg-card px-6 flex items-center justify-between shrink-0">
+      <div className="h-auto md:h-14 border-b border-border bg-card px-4 md:px-6 py-2.5 md:py-0 flex flex-wrap items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="p-1.5 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground transition-colors md:hidden"
+            className="p-1.5 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground transition-colors"
             title="Back to databases"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -512,7 +512,7 @@ export const DatabaseDetailPage: React.FC<{
                 {databaseId}
               </span>
             </div>
-            <p className="text-[11px] text-muted-foreground truncate max-w-md">
+            <p className="text-[11px] text-muted-foreground truncate max-w-xs sm:max-w-md">
               {stats?.database.description || 'Native SQLite Engine (WAL Mode)'}
             </p>
           </div>
@@ -529,7 +529,7 @@ export const DatabaseDetailPage: React.FC<{
       </div>
 
       {/* Main Tab Content */}
-      <div className="flex-1 overflow-y-auto bg-background p-6">
+      <div className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
         {/* OVERVIEW & FULL STATISTICAL DASHBOARD */}
         {activeTab === 'overview' && (
           <div className="max-w-7xl mx-auto space-y-6">
@@ -779,9 +779,9 @@ export const DatabaseDetailPage: React.FC<{
 
         {/* TABLES BROWSER TAB */}
         {activeTab === 'tables' && (
-          <div className="h-full flex gap-4 overflow-hidden -m-6 p-6">
+          <div className="h-full flex flex-col md:flex-row gap-4 overflow-hidden -m-6 p-4 md:p-6">
             {/* Table Sidebar */}
-            <div className="w-56 bg-card border border-border rounded-lg flex flex-col shrink-0 overflow-hidden shadow-sm">
+            <div className="w-full md:w-56 bg-card border border-border rounded-lg flex flex-col shrink-0 overflow-hidden shadow-sm max-h-48 md:max-h-none">
               <div className="p-3 border-b border-border font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center justify-between">
                 <span>Tables ({schema.filter((s) => s.type === 'table').length})</span>
                 <div className="flex items-center gap-1">
@@ -797,7 +797,7 @@ export const DatabaseDetailPage: React.FC<{
                   </button>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              <div className="flex-1 overflow-y-auto p-2 flex flex-row md:flex-col gap-1 overflow-x-auto">
                 {schema
                   .filter((s) => s.type === 'table')
                   .map((t) => (
@@ -808,14 +808,14 @@ export const DatabaseDetailPage: React.FC<{
                         setTableOffset(0);
                         setSelectedRowIds([]);
                       }}
-                      className={`w-full text-left px-2.5 py-1.5 rounded text-xs flex items-center justify-between font-mono transition-colors ${
+                      className={`whitespace-nowrap md:whitespace-normal text-left px-2.5 py-1.5 rounded text-xs flex items-center justify-between font-mono transition-colors shrink-0 md:shrink ${
                         selectedTable === t.name
                           ? 'bg-blue-600 text-white font-semibold'
                           : 'hover:bg-accent text-foreground'
                       }`}
                     >
                       <span className="truncate">{t.name}</span>
-                      <span className="text-[10px] opacity-70">
+                      <span className="text-[10px] opacity-70 ml-2">
                         {t.rowCountEstimate !== undefined ? t.rowCountEstimate : ''}
                       </span>
                     </button>
@@ -824,7 +824,7 @@ export const DatabaseDetailPage: React.FC<{
             </div>
 
             {/* Table Rows Viewer */}
-            <div className="flex-1 bg-card border border-border rounded-lg flex flex-col overflow-hidden shadow-sm">
+            <div className="flex-1 bg-card border border-border rounded-lg flex flex-col overflow-hidden shadow-sm min-h-0">
               {/* Table Toolbar */}
               <div className="min-h-12 border-b border-border px-4 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0 bg-muted/20">
                 <div className="flex items-center gap-3">
@@ -1076,17 +1076,17 @@ export const DatabaseDetailPage: React.FC<{
 
         {/* HIGH-CONTRAST PURE DARK SQL EDITOR TAB */}
         {activeTab === 'editor' && (
-          <div className="h-full flex flex-col space-y-3 -m-6 p-6 overflow-hidden">
+          <div className="h-full flex flex-col space-y-3 -m-6 p-4 md:p-6 overflow-hidden">
             {/* Editor Console Header */}
-            <div className="flex items-center justify-between pb-2 border-b border-border shrink-0">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between pb-2 border-b border-border gap-2 shrink-0">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={handleExecuteSql}
                   disabled={isExecuting}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  Run (Ctrl+Enter)
+                  Run <span className="hidden sm:inline">(Ctrl+Enter)</span>
                 </button>
                 <button
                   onClick={handleExplainQuery}
@@ -1105,14 +1105,14 @@ export const DatabaseDetailPage: React.FC<{
 
               {queryResult && (
                 <div className="text-xs text-muted-foreground font-mono">
-                  Executed in {queryResult.durationMs} ms
+                  {queryResult.durationMs} ms
                   {'rowCount' in queryResult ? ` • ${queryResult.rowCount} rows` : ` • ${queryResult.changes} changes`}
                 </div>
               )}
             </div>
 
             {/* SQL Editor Area: Pure Dark High-Contrast */}
-            <div className="h-56 border border-[#27272a] rounded-lg overflow-hidden shrink-0 relative bg-[#09090b] shadow-inner">
+            <div className="h-40 md:h-56 border border-[#27272a] rounded-lg overflow-hidden shrink-0 relative bg-[#09090b] shadow-inner">
               <textarea
                 value={sqlText}
                 onChange={(e) => setSqlText(e.target.value)}
@@ -2311,6 +2311,14 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <a
+                        href={`/api/admin/backups/${bkp.id}/download`}
+                        download={bkp.filename}
+                        className="p-1.5 border border-border hover:bg-accent rounded text-foreground transition-colors"
+                        title="Download Backup (.sqlite)"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
                       <button
                         onClick={() => {
                           if (confirm('Are you sure you want to restore this snapshot? Current database will be restored.')) {

@@ -25,7 +25,9 @@ import {
   Archive,
   Sliders,
   BarChart3,
-  ArrowUpDown
+  ArrowUpDown,
+  Menu,
+  X
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import { useTheme } from '../hooks/useTheme.js';
@@ -53,11 +55,64 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 }) => {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-border flex flex-col justify-between bg-card shrink-0 select-none">
+    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground flex-col md:flex-row">
+      {/* Mobile Top Navigation Bar */}
+      <header className="md:hidden h-14 border-b border-border bg-card px-4 flex items-center justify-between shrink-0 z-30">
+        <div
+          className="flex items-center gap-2.5 cursor-pointer"
+          onClick={() => {
+            setSelectedDatabaseId(null);
+            setCurrentTab('databases');
+            closeMobileMenu();
+          }}
+        >
+          <div className="w-7 h-7 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+            <LogoIcon className="w-7 h-7" />
+          </div>
+          <div>
+            <span className="font-semibold text-xs tracking-tight block">VanillaDatabase</span>
+            <span className="text-[9px] text-muted-foreground block -mt-0.5">SQLite Cloud</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
+            title="Toggle theme"
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile Backdrop */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+          onClick={closeMobileMenu}
+        />
+      )}
+
+      {/* Sidebar (Responsive Drawer on Mobile, Fixed Sidebar on Desktop) */}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 w-72 bg-card border-r border-border flex flex-col justify-between select-none transition-transform duration-200 ease-in-out md:static md:w-64 md:translate-x-0 shrink-0',
+          isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+        )}
+      >
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
           {/* Brand Header */}
           <div className="h-14 border-b border-border flex items-center justify-between px-4 shrink-0">
@@ -66,6 +121,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               onClick={() => {
                 setSelectedDatabaseId(null);
                 setCurrentTab('databases');
+                closeMobileMenu();
               }}
             >
               <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
@@ -76,6 +132,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <span className="text-[10px] text-muted-foreground block -mt-0.5">SQLite Platform</span>
               </div>
             </div>
+            <button
+              onClick={closeMobileMenu}
+              className="p-1 hover:bg-accent rounded text-muted-foreground md:hidden"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
           {/* If a Database is selected -> Show Database-scoped Sidebar Menu */}
@@ -83,7 +145,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             <div className="p-3 space-y-4">
               {/* Back to all databases button */}
               <button
-                onClick={() => setSelectedDatabaseId(null)}
+                onClick={() => {
+                  setSelectedDatabaseId(null);
+                  closeMobileMenu();
+                }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors font-medium"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
@@ -126,7 +191,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   return (
                     <button
                       key={t.id}
-                      onClick={() => setSelectedDatabaseId(selectedDatabaseId, t.id)}
+                      onClick={() => {
+                        setSelectedDatabaseId(selectedDatabaseId, t.id);
+                        closeMobileMenu();
+                      }}
                       className={cn(
                         'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
                         active
@@ -148,6 +216,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 onClick={() => {
                   setSelectedDatabaseId(null);
                   setCurrentTab('overview');
+                  closeMobileMenu();
                 }}
                 className={cn(
                   'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
@@ -164,6 +233,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 onClick={() => {
                   setSelectedDatabaseId(null);
                   setCurrentTab('databases');
+                  closeMobileMenu();
                 }}
                 className={cn(
                   'w-full flex items-center justify-between px-3 py-2 text-xs rounded-md font-medium transition-colors',
@@ -181,6 +251,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   onClick={(e) => {
                     e.stopPropagation();
                     onOpenCreateDb();
+                    closeMobileMenu();
                   }}
                 />
               </button>
@@ -189,6 +260,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 onClick={() => {
                   setSelectedDatabaseId(null);
                   setCurrentTab('activity');
+                  closeMobileMenu();
                 }}
                 className={cn(
                   'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
@@ -205,6 +277,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 onClick={() => {
                   setSelectedDatabaseId(null);
                   setCurrentTab('settings');
+                  closeMobileMenu();
                 }}
                 className={cn(
                   'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',

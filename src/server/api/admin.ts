@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import fs from 'fs';
+import path from 'path';
+import { config } from '../config/index.js';
 import { dbManager } from '../db/manager.js';
 import { databaseService } from '../services/database.js';
 import { tokenService } from '../services/tokens.js';
@@ -712,6 +714,24 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       details: JSON.stringify({ backupId }),
     });
     return reply.send({ success: true, message: 'Database restored successfully' });
+  });
+
+  fastify.get('/backups/:backupId/download', async (req, reply) => {
+    const { backupId } = req.params as { backupId: string };
+    const backup = backupService.getBackup(backupId);
+    if (!backup) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Backup not found' } });
+    }
+
+    const filePath = path.resolve(config.backupsDir, backup.database_id, backup.filename);
+    if (!fs.existsSync(filePath)) {
+      return reply.status(404).send({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'Backup file missing on disk' } });
+    }
+
+    reply.header('Content-Disposition', `attachment; filename="${backup.filename}"`);
+    reply.header('Content-Type', 'application/x-sqlite3');
+    reply.header('Content-Length', fs.statSync(filePath).size);
+    return reply.send(fs.createReadStream(filePath));
   });
 
   fastify.delete('/backups/:backupId', async (req, reply) => {
