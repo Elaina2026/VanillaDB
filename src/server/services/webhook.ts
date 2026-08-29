@@ -107,7 +107,52 @@ export class WebhookService {
         const events: string[] = JSON.parse(hook.events || '[]');
         if (!events.includes('*') && !events.includes(payload.type)) return;
 
-        const body = JSON.stringify(payload);
+        const isDiscord = hook.url.includes('discord.com/api/webhooks') || hook.url.includes('discordapp.com/api/webhooks');
+        const isSlack = hook.url.includes('hooks.slack.com');
+
+        let postPayload: any;
+        if (isDiscord) {
+          const colorMap: Record<string, number> = {
+            insert: 0x10b981,
+            update: 0x3b82f6,
+            delete: 0xef4444,
+            schema: 0x8b5cf6,
+          };
+          const dataStr = JSON.stringify(payload.data ?? {}, null, 2);
+          const truncatedData = dataStr.length > 1000 ? dataStr.slice(0, 1000) + '...' : dataStr;
+
+          postPayload = {
+            username: 'VanillaDatabase',
+            embeds: [
+              {
+                title: `📦 Event: ${payload.type.toUpperCase()}`,
+                color: colorMap[payload.type] || 0x64748b,
+                fields: [
+                  { name: 'Database', value: `\`${payload.databaseId}\``, inline: true },
+                  { name: 'Table', value: payload.table ? `\`${payload.table}\`` : '—', inline: true },
+                  { name: 'Data', value: `\`\`\`json\n${truncatedData}\n\`\`\``, inline: false },
+                ],
+                timestamp: new Date(payload.timestamp || Date.now()).toISOString(),
+                footer: { text: 'VanillaDatabase Webhooks' },
+              },
+            ],
+          };
+        } else if (isSlack) {
+          postPayload = {
+            text: `[VanillaDB] ${payload.type.toUpperCase()} on \`${payload.databaseId}\`${payload.table ? ` (\`${payload.table}\`)` : ''}`,
+            attachments: [
+              {
+                color: payload.type === 'insert' ? '#10b981' : payload.type === 'update' ? '#3b82f6' : '#ef4444',
+                text: `\`\`\`${JSON.stringify(payload.data ?? {}, null, 2)}\`\`\``,
+                ts: Math.floor((payload.timestamp || Date.now()) / 1000),
+              },
+            ],
+          };
+        } else {
+          postPayload = payload;
+        }
+
+        const body = JSON.stringify(postPayload);
         const signature = crypto.createHmac('sha256', hook.secret).update(body).digest('hex');
 
         const controller = new AbortController();

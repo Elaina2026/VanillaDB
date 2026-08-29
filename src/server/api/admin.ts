@@ -867,6 +867,35 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true });
   });
 
+  fastify.post('/webhooks/:webhookId/test', async (req, reply) => {
+    const { webhookId } = req.params as { webhookId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const hook = metaDb.prepare('SELECT * FROM webhooks WHERE id = ?').get(webhookId) as any;
+    if (!hook) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Webhook not found' } });
+    }
+
+    try {
+      await webhookService.dispatch({
+        databaseId: hook.database_id,
+        table: 'test_table',
+        type: 'insert',
+        data: { message: 'Test webhook dispatch from VanillaDatabase', triggeredAt: new Date().toISOString() },
+        timestamp: Date.now(),
+      });
+      return reply.send({ success: true, message: 'Test webhook event dispatched' });
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: { code: 'DISPATCH_ERROR', message: err.message } });
+    }
+  });
+
+  fastify.post('/webhooks/:webhookId/reset-failures', async (req, reply) => {
+    const { webhookId } = req.params as { webhookId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    metaDb.prepare('UPDATE webhooks SET failure_count = 0 WHERE id = ?').run(webhookId);
+    return reply.send({ success: true, message: 'Failure count reset to 0' });
+  });
+
   // Export Data (SQL, CSV, JSON)
   fastify.get('/databases/:id/export', async (req, reply) => {
     const { id } = req.params as { id: string };

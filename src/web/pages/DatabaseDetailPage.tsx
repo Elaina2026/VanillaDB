@@ -1731,14 +1731,48 @@ export const DatabaseDetailPage: React.FC<{
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => deleteWebhookMutation.mutate(wh.id)}
-                      disabled={deleteWebhookMutation.isPending}
-                      className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
-                      title="Delete webhook"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await apiRequest(`/api/admin/webhooks/${wh.id}/test`, { method: 'POST' });
+                            refetchWebhooks();
+                          } catch (err: any) {
+                            alert(err.message || 'Failed to send test webhook');
+                          }
+                        }}
+                        className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-muted-foreground hover:text-foreground font-medium transition-colors"
+                        title="Send test ping to webhook URL"
+                      >
+                        Test
+                      </button>
+
+                      {wh.failure_count > 0 && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await apiRequest(`/api/admin/webhooks/${wh.id}/reset-failures`, { method: 'POST' });
+                              refetchWebhooks();
+                            } catch (err: any) {
+                              alert(err.message || 'Failed to reset failure count');
+                            }
+                          }}
+                          className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-amber-500 hover:text-amber-400 font-medium transition-colors"
+                          title="Reset failure count to 0"
+                        >
+                          Reset Failures
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => deleteWebhookMutation.mutate(wh.id)}
+                        disabled={deleteWebhookMutation.isPending}
+                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                        title="Delete webhook"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
