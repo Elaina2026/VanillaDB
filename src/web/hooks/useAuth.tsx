@@ -7,6 +7,7 @@ interface AuthContextType {
   authenticated: boolean;
   user: { userId: string; username: string } | null;
   isLoading: boolean;
+  isOffline: boolean;
   logout: () => void;
   refetchStatus: () => void;
 }
@@ -16,12 +17,15 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const queryClient = useQueryClient();
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['authStatus'],
     queryFn: () => apiRequest('/api/auth/status'),
-    retry: false,
+    retry: 2,
+    retryDelay: 1000,
     staleTime: 1000 * 60,
   });
+
+  const isOffline = !!error && ((error as any).status === 502 || (error as any).status === 503 || (error as any).status === 504 || (error as any).message?.includes('Failed to fetch') || (error as any).message?.includes('NetworkError') || !navigator.onLine);
 
   const logoutMutation = useMutation({
     mutationFn: () => apiRequest('/api/auth/logout', { method: 'POST' }),
@@ -37,6 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authenticated: data?.authenticated ?? false,
         user: data?.user ?? null,
         isLoading,
+        isOffline,
         logout: () => logoutMutation.mutate(),
         refetchStatus: () => refetch(),
       }}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth.js';
 import { AuthPage } from './pages/AuthPage.js';
+import { ErrorPage } from './pages/ErrorPage.js';
 import { DashboardLayout } from './layouts/DashboardLayout.js';
 import { OverviewPage } from './pages/OverviewPage.js';
 import { DatabasesPage } from './pages/DatabasesPage.js';
@@ -11,7 +12,7 @@ import { CreateDatabaseModal } from './components/CreateDatabaseModal.js';
 import { CreateTokenModal } from './components/CreateTokenModal.js';
 
 export const App: React.FC = () => {
-  const { authenticated, isLoading } = useAuth();
+  const { authenticated, isLoading, isOffline, refetchStatus } = useAuth();
 
   // URL Hash routing: #/overview, #/databases, #/databases/:id, #/databases/:id/:tab, #/activity, #/settings
   const parseHash = () => {
@@ -55,6 +56,10 @@ export const App: React.FC = () => {
   const [isCreateDbOpen, setIsCreateDbOpen] = useState(false);
   const [createTokenDbId, setCreateTokenDbId] = useState<string | null>(null);
 
+  if (isOffline) {
+    return <ErrorPage type="offline" onRetry={refetchStatus} />;
+  }
+
   if (isLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background text-muted-foreground text-xs font-mono">
@@ -67,6 +72,9 @@ export const App: React.FC = () => {
     return <AuthPage />;
   }
 
+  const validTabs = ['overview', 'databases', 'activity', 'settings'];
+  const isInvalidTab = !route.databaseId && !validTabs.includes(route.tab);
+
   return (
     <DashboardLayout
       currentTab={route.tab}
@@ -76,7 +84,9 @@ export const App: React.FC = () => {
       setSelectedDatabaseId={(id, tab = 'overview') => (id ? navigateTo('databases', id, tab) : navigateTo('databases'))}
       onOpenCreateDb={() => setIsCreateDbOpen(true)}
     >
-      {route.databaseId ? (
+      {isInvalidTab ? (
+        <ErrorPage type="404" onGoHome={() => navigateTo('overview')} />
+      ) : route.databaseId ? (
         <DatabaseDetailPage
           databaseId={route.databaseId}
           initialTab={route.dbTab as any}
@@ -99,10 +109,7 @@ export const App: React.FC = () => {
       ) : route.tab === 'settings' ? (
         <SettingsPage />
       ) : (
-        <OverviewPage
-          onSelectDatabase={(id) => navigateTo('databases', id)}
-          onOpenCreateModal={() => setIsCreateDbOpen(true)}
-        />
+        <ErrorPage type="404" onGoHome={() => navigateTo('overview')} />
       )}
 
       {/* Modals */}
