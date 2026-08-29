@@ -206,6 +206,60 @@ export interface TableSchemaDetail {
   rowCountEstimate?: number;
 }
 
+export interface DatabaseStorageStats {
+  pageSize: number;
+  pageCount: number;
+  freelistCount: number;
+  activePageCount: number;
+  fileSizeBytes: number;
+  walSizeBytes: number;
+  totalSizeBytes: number;
+  fragmentationPercent: number;
+  journalMode: string;
+  synchronous: string;
+  autoVacuum: number | string;
+  cacheSize: number;
+  schemaVersion: number;
+  tables: Array<{
+    name: string;
+    type: 'table' | 'view';
+    rowCount: number;
+    estimatedSizeBytes: number;
+    indexCount: number;
+  }>;
+  indexes: Array<{
+    name: string;
+    tableName: string;
+    unique: boolean;
+  }>;
+}
+
+export interface DatabaseMetricsStats {
+  databaseId: string;
+  totalRequests: number;
+  totalQueries: number;
+  totalSelect: number;
+  totalInsert: number;
+  totalUpdate: number;
+  totalDelete: number;
+  totalDdl: number;
+  totalErrors: number;
+  avgLatencyMs: number;
+  p95LatencyMs: number;
+  timeline: Array<{
+    timeLabel: string;
+    timestamp: number;
+    selectCount: number;
+    insertCount: number;
+    updateCount: number;
+    deleteCount: number;
+    ddlCount: number;
+    errorCount: number;
+    totalCount: number;
+    avgDurationMs: number;
+  }>;
+}
+
 export interface DatabaseOverviewStats {
   database: DatabaseRecord;
   sqliteVersion: string;

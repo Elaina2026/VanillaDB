@@ -176,6 +176,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </span>
                 {[
                   { id: 'overview', label: 'Overview & Stats', icon: BarChart3 },
+                  { id: 'analytics', label: 'Requests & Disk B-Tree', icon: TrendingUp },
                   { id: 'tables', label: 'Tables Browser', icon: TableIcon },
                   { id: 'editor', label: 'SQL Editor', icon: Terminal },
                   { id: 'schema', label: 'Schema Viewer', icon: FileCode },

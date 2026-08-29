@@ -69,6 +69,26 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true, data: stats });
   });
 
+  fastify.get('/databases/:id/storage-stats', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const db = databaseService.getDatabase(id);
+    if (!db) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Database not found' } });
+    }
+    const stats = databaseService.getDatabaseStorageStats(id);
+    return reply.send({ success: true, data: stats });
+  });
+
+  fastify.get('/databases/:id/metrics', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const db = databaseService.getDatabase(id);
+    if (!db) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Database not found' } });
+    }
+    const metrics = databaseService.getDatabaseMetricsStats(id);
+    return reply.send({ success: true, data: metrics });
+  });
+
   fastify.patch('/databases/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const Schema = z.object({
@@ -143,13 +163,15 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const limit = Math.min(Math.max(parseInt(query.limit || '100', 10), 1), 1000);
     const offset = Math.max(parseInt(query.offset || '0', 10), 0);
 
-    const schema = dbManager.getSchema(id);
-    const tableExists = schema.some(t => t.name === table);
-    if (!tableExists) {
-      return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
+    const db = dbManager.get(id);
+    const tableRow = db.prepare(`SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') AND (name = ? OR LOWER(name) = LOWER(?)) LIMIT 1`).get(table, table) as { name: string } | undefined;
+
+    if (!tableRow) {
+      return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found in database "${id}"` } });
     }
 
-    const sql = `SELECT * FROM "${table}" LIMIT ? OFFSET ?`;
+    const actualTableName = tableRow.name;
+    const sql = `SELECT * FROM "${actualTableName.replace(/"/g, '""')}" LIMIT ? OFFSET ?`;
     try {
       const result = dbManager.executeSql(id, sql, [limit, offset]);
       return reply.send({ success: true, data: result });

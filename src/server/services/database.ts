@@ -7,7 +7,7 @@ import { getMetadataDb } from '../db/metadata.js';
 import { dbManager } from '../db/manager.js';
 import { logger } from '../utils/logger.js';
 import { storageService } from './storage.js';
-import type { DatabaseRecord, DatabaseOverviewStats, BackupRecord } from '../../../shared/index.js';
+import type { DatabaseRecord, DatabaseOverviewStats, BackupRecord, DatabaseStorageStats, DatabaseMetricsStats } from '../../../shared/index.js';
 
 export class DatabaseService {
   public createDatabase(name: string, description?: string | null, ownerId?: string | null): DatabaseRecord {
@@ -358,6 +358,248 @@ export class DatabaseService {
         usesIndex,
         recommendation,
       },
+    };
+  }
+
+  public getDatabaseStorageStats(databaseId: string): DatabaseStorageStats {
+    const dbRecord = this.getDatabase(databaseId);
+    if (!dbRecord) throw new Error(`Database not found: ${databaseId}`);
+
+    const db = dbManager.get(databaseId);
+    const dbPath = dbManager.resolveDatabasePath(databaseId);
+
+    let fileSizeBytes = 0;
+    let walSizeBytes = 0;
+
+    try {
+      fileSizeBytes = fs.statSync(dbPath).size;
+      const walPath = `${dbPath}-wal`;
+      if (fs.existsSync(walPath)) {
+        walSizeBytes = fs.statSync(walPath).size;
+      }
+    } catch {}
+
+    const pageSizeRow = db.prepare('PRAGMA page_size;').get() as { page_size: number };
+    const pageCountRow = db.prepare('PRAGMA page_count;').get() as { page_count: number };
+    const freelistRow = db.prepare('PRAGMA freelist_count;').get() as { freelist_count: number };
+    const journalModeRow = db.prepare('PRAGMA journal_mode;').get() as { journal_mode: string };
+    const synchronousRow = db.prepare('PRAGMA synchronous;').get() as { synchronous: number | string };
+    const autoVacuumRow = db.prepare('PRAGMA auto_vacuum;').get() as { auto_vacuum: number | string };
+    const cacheSizeRow = db.prepare('PRAGMA cache_size;').get() as { cache_size: number };
+    const schemaVersionRow = db.prepare('PRAGMA schema_version;').get() as { schema_version: number };
+
+    const pageSize = pageSizeRow?.page_size || 4096;
+    const pageCount = pageCountRow?.page_count || 0;
+    const freelistCount = freelistRow?.freelist_count || 0;
+    const activePageCount = Math.max(0, pageCount - freelistCount);
+    const totalSizeBytes = fileSizeBytes + walSizeBytes;
+    const fragmentationPercent = pageCount > 0 ? Math.round((freelistCount / pageCount) * 1000) / 10 : 0;
+
+    const schemaObjects = db.prepare(`
+      SELECT type, name, tbl_name
+      FROM sqlite_schema
+      WHERE name NOT LIKE 'sqlite_%'
+      ORDER BY type, name
+    `).all() as Array<{ type: string; name: string; tbl_name: string }>;
+
+    const rawTables = schemaObjects.filter((o) => o.type === 'table' || o.type === 'view');
+    const rawIndexes = schemaObjects.filter((o) => o.type === 'index');
+
+    const tables: DatabaseStorageStats['tables'] = [];
+    for (const t of rawTables) {
+      let rowCount = 0;
+      if (t.type === 'table') {
+        try {
+          const c = db.prepare(`SELECT COUNT(*) as count FROM "${t.name.replace(/"/g, '""')}"`).get() as { count: number };
+          rowCount = c.count;
+        } catch {}
+      }
+
+      const indexCount = rawIndexes.filter((idx) => idx.tbl_name === t.name).length;
+      const estimatedSizeBytes = t.type === 'table' ? Math.max(pageSize, rowCount * 128) : 0;
+
+      tables.push({
+        name: t.name,
+        type: t.type as 'table' | 'view',
+        rowCount,
+        estimatedSizeBytes,
+        indexCount,
+      });
+    }
+
+    const indexes: DatabaseStorageStats['indexes'] = rawIndexes.map((idx) => {
+      let unique = false;
+      try {
+        const list = db.prepare(`PRAGMA index_list("${idx.tbl_name.replace(/"/g, '""')}")`).all() as any[];
+        const match = list.find((item) => item.name === idx.name);
+        unique = match ? Boolean(match.unique) : false;
+      } catch {}
+      return {
+        name: idx.name,
+        tableName: idx.tbl_name,
+        unique,
+      };
+    });
+
+    return {
+      pageSize,
+      pageCount,
+      freelistCount,
+      activePageCount,
+      fileSizeBytes,
+      walSizeBytes,
+      totalSizeBytes,
+      fragmentationPercent,
+      journalMode: journalModeRow?.journal_mode || 'wal',
+      synchronous: String(synchronousRow?.synchronous ?? 'normal'),
+      autoVacuum: autoVacuumRow?.auto_vacuum ?? 'none',
+      cacheSize: cacheSizeRow?.cache_size ?? -2000,
+      schemaVersion: schemaVersionRow?.schema_version ?? 1,
+      tables,
+      indexes,
+    };
+  }
+
+  public getDatabaseMetricsStats(databaseId: string): DatabaseMetricsStats {
+    const metaDb = getMetadataDb();
+
+    // Query 24h activity for this database
+    const past24h = Date.now() - 24 * 60 * 60 * 1000;
+    const logs = metaDb.prepare(`
+      SELECT operation, duration_ms, status, timestamp
+      FROM activity_logs
+      WHERE database_id = ? AND timestamp >= ?
+      ORDER BY timestamp ASC
+    `).all(databaseId, past24h) as Array<{
+      operation: string;
+      duration_ms: number;
+      status: string;
+      timestamp: number;
+    }>;
+
+    let totalSelect = 0;
+    let totalInsert = 0;
+    let totalUpdate = 0;
+    let totalDelete = 0;
+    let totalDdl = 0;
+    let totalErrors = 0;
+    let totalDuration = 0;
+    const durations: number[] = [];
+
+    // Bucket into 12 two-hour windows
+    const bucketIntervalMs = 2 * 60 * 60 * 1000;
+    const numBuckets = 12;
+    const now = Date.now();
+    const startTime = now - 24 * 60 * 60 * 1000;
+
+    const buckets: Array<{
+      timeLabel: string;
+      timestamp: number;
+      selectCount: number;
+      insertCount: number;
+      updateCount: number;
+      deleteCount: number;
+      ddlCount: number;
+      errorCount: number;
+      totalCount: number;
+      durationSum: number;
+    }> = [];
+
+    for (let i = 0; i < numBuckets; i++) {
+      const bucketStart = startTime + i * bucketIntervalMs;
+      const d = new Date(bucketStart);
+      const timeLabel = `${String(d.getHours()).padStart(2, '0')}:00`;
+      buckets.push({
+        timeLabel,
+        timestamp: bucketStart,
+        selectCount: 0,
+        insertCount: 0,
+        updateCount: 0,
+        deleteCount: 0,
+        ddlCount: 0,
+        errorCount: 0,
+        totalCount: 0,
+        durationSum: 0,
+      });
+    }
+
+    for (const log of logs) {
+      durations.push(log.duration_ms);
+      totalDuration += log.duration_ms;
+
+      const isError = log.status === 'error';
+      if (isError) totalErrors++;
+
+      const op = (log.operation || '').toUpperCase();
+      let category: 'select' | 'insert' | 'update' | 'delete' | 'ddl' | 'other' = 'other';
+
+      if (op.includes('SELECT') || op.includes('READ') || op.startsWith('GET')) {
+        totalSelect++;
+        category = 'select';
+      } else if (op.includes('INSERT') || op.includes('IMPORT') || op.startsWith('POST')) {
+        totalInsert++;
+        category = 'insert';
+      } else if (op.includes('UPDATE') || op.startsWith('PUT') || op.startsWith('PATCH')) {
+        totalUpdate++;
+        category = 'update';
+      } else if (op.includes('DELETE') || op.includes('TRUNCATE') || op.includes('DROP')) {
+        totalDelete++;
+        category = 'delete';
+      } else if (op.includes('CREATE') || op.includes('ALTER') || op.includes('SCHEMA')) {
+        totalDdl++;
+        category = 'ddl';
+      } else {
+        totalSelect++;
+        category = 'select';
+      }
+
+      // Assign to bucket
+      const bucketIdx = Math.min(
+        Math.max(Math.floor((log.timestamp - startTime) / bucketIntervalMs), 0),
+        numBuckets - 1
+      );
+      const b = buckets[bucketIdx];
+      b.totalCount++;
+      b.durationSum += log.duration_ms;
+      if (isError) b.errorCount++;
+      if (category === 'select') b.selectCount++;
+      else if (category === 'insert') b.insertCount++;
+      else if (category === 'update') b.updateCount++;
+      else if (category === 'delete') b.deleteCount++;
+      else if (category === 'ddl') b.ddlCount++;
+    }
+
+    durations.sort((a, b) => a - b);
+    const avgLatencyMs = logs.length > 0 ? Math.round((totalDuration / logs.length) * 100) / 100 : 0;
+    const p95Index = Math.floor(durations.length * 0.95);
+    const p95LatencyMs = durations.length > 0 ? Math.round((durations[p95Index] || 0) * 100) / 100 : 0;
+
+    const timeline = buckets.map((b) => ({
+      timeLabel: b.timeLabel,
+      timestamp: b.timestamp,
+      selectCount: b.selectCount,
+      insertCount: b.insertCount,
+      updateCount: b.updateCount,
+      deleteCount: b.deleteCount,
+      ddlCount: b.ddlCount,
+      errorCount: b.errorCount,
+      totalCount: b.totalCount,
+      avgDurationMs: b.totalCount > 0 ? Math.round((b.durationSum / b.totalCount) * 100) / 100 : 0,
+    }));
+
+    return {
+      databaseId,
+      totalRequests: logs.length,
+      totalQueries: logs.length,
+      totalSelect,
+      totalInsert,
+      totalUpdate,
+      totalDelete,
+      totalDdl,
+      totalErrors,
+      avgLatencyMs,
+      p95LatencyMs,
+      timeline,
     };
   }
 }

@@ -51,6 +51,8 @@ import { ConfirmModal } from '../components/ConfirmModal.js';
 import { useAuth } from '../hooks/useAuth.js';
 import type {
   DatabaseOverviewStats,
+  DatabaseStorageStats,
+  DatabaseMetricsStats,
   TableSchemaDetail,
   ApiTokenRecord,
   BackupRecord,
@@ -62,20 +64,20 @@ import type {
 
 export const DatabaseDetailPage: React.FC<{
   databaseId: string;
-  initialTab?: 'overview' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'backups' | 'settings';
+  initialTab?: 'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'backups' | 'settings';
   onTabChange?: (tab: string) => void;
   onBack: () => void;
   onOpenCreateToken: (dbId: string) => void;
 }> = ({ databaseId, initialTab = 'overview', onTabChange, onBack, onOpenCreateToken }) => {
   const { user: currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'backups' | 'settings'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'backups' | 'settings'>(initialTab);
   const queryClient = useQueryClient();
 
   const [isImportExportOpen, setIsImportExportOpen] = useState(false);
 
   useEffect(() => {
     if (initialTab && initialTab !== activeTab) {
-      setActiveTab(initialTab);
+      setActiveTab(initialTab as any);
     }
   }, [initialTab]);
 
@@ -90,6 +92,20 @@ export const DatabaseDetailPage: React.FC<{
   const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useQuery<DatabaseOverviewStats>({
     queryKey: ['dbStats', databaseId],
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}`),
+  });
+
+  const { data: storageStats, isLoading: isStorageLoading, refetch: refetchStorageStats } = useQuery<DatabaseStorageStats>({
+    queryKey: ['dbStorageStats', databaseId],
+    queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/storage-stats`),
+    enabled: activeTab === 'analytics' || activeTab === 'overview',
+    refetchInterval: 15000,
+  });
+
+  const { data: metricsStats, isLoading: isMetricsLoading, refetch: refetchMetrics } = useQuery<DatabaseMetricsStats>({
+    queryKey: ['dbMetricsStats', databaseId],
+    queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/metrics`),
+    enabled: activeTab === 'analytics',
+    refetchInterval: 10000,
   });
 
   const { data: schema = [], isLoading: isSchemaLoading, refetch: refetchSchema } = useQuery<TableSchemaDetail[]>({
@@ -618,57 +634,6 @@ export const DatabaseDetailPage: React.FC<{
               </div>
             </div>
 
-            {/* B-Tree & Storage Visual Breakdown */}
-            <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">SQLite Storage & B-Tree Page Allocation</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Physical disk allocation per 4096-byte database page.
-                  </p>
-                </div>
-                <span className="text-xs font-mono px-2 py-1 bg-muted rounded border border-border text-foreground">
-                  Page Size: {stats?.pageSize || 4096} bytes
-                </span>
-              </div>
-
-              {/* Visual Storage Bar */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Disk Storage Breakdown</span>
-                  <span className="font-mono">{formatBytes(totalDbStorage)} total</span>
-                </div>
-                <div className="h-4 w-full bg-muted rounded-full overflow-hidden flex border border-border">
-                  <div
-                    style={{ width: `${totalDbStorage > 0 ? ((stats?.fileSizeBytes || 0) / totalDbStorage) * 100 : 100}%` }}
-                    className="bg-blue-600 h-full"
-                    title={`Main DB File: ${formatBytes(stats?.fileSizeBytes || 0)}`}
-                  />
-                  <div
-                    style={{ width: `${totalDbStorage > 0 ? ((stats?.walSizeBytes || 0) / totalDbStorage) * 100 : 0}%` }}
-                    className="bg-emerald-500 h-full"
-                    title={`Write-Ahead Log (WAL): ${formatBytes(stats?.walSizeBytes || 0)}`}
-                  />
-                </div>
-                <div className="flex items-center gap-6 text-[11px] text-muted-foreground pt-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                    <span>Main Database File ({formatBytes(stats?.fileSizeBytes || 0)})</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <span>Write-Ahead Log ({formatBytes(stats?.walSizeBytes || 0)})</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 ml-auto">
-                    <span className="text-muted-foreground">Fragmentation:</span>
-                    <span className={`font-semibold font-mono ${fragmentationPercent > 20 ? 'text-amber-500' : 'text-emerald-500'}`}>
-                      {fragmentationPercent}% free list
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {/* Detailed Diagnostics & Pragmas */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Pragma Parameters */}
@@ -806,6 +771,310 @@ export const DatabaseDetailPage: React.FC<{
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ANALYTICS & STORAGE B-TREE ALLOCATION TAB */}
+        {activeTab === 'analytics' && (
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Top Cards for Requests & Disk Allocation */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
+                <div className="flex items-center justify-between text-muted-foreground mb-1">
+                  <span className="text-xs font-medium">Total 24h Requests</span>
+                  <Activity className="w-4 h-4 text-blue-500" />
+                </div>
+                <div className="text-2xl font-bold text-foreground font-mono">
+                  {metricsStats?.totalRequests?.toLocaleString() ?? 0}
+                </div>
+                <div className="text-[10px] text-muted-foreground flex justify-between mt-1">
+                  <span>Avg: {metricsStats?.avgLatencyMs ?? 0} ms</span>
+                  <span>P95: {metricsStats?.p95LatencyMs ?? 0} ms</span>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
+                <div className="flex items-center justify-between text-muted-foreground mb-1">
+                  <span className="text-xs font-medium">Write Operations (DML/DDL)</span>
+                  <TrendingUp className="w-4 h-4 text-emerald-500" />
+                </div>
+                <div className="text-2xl font-bold text-emerald-500 font-mono">
+                  {((metricsStats?.totalInsert ?? 0) + (metricsStats?.totalUpdate ?? 0) + (metricsStats?.totalDelete ?? 0)).toLocaleString()}
+                </div>
+                <div className="text-[10px] text-muted-foreground flex justify-between mt-1">
+                  <span>Ins: {metricsStats?.totalInsert ?? 0}</span>
+                  <span>Upd: {metricsStats?.totalUpdate ?? 0}</span>
+                  <span>Del: {metricsStats?.totalDelete ?? 0}</span>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
+                <div className="flex items-center justify-between text-muted-foreground mb-1">
+                  <span className="text-xs font-medium">Total Disk Footprint</span>
+                  <HardDrive className="w-4 h-4 text-purple-500" />
+                </div>
+                <div className="text-2xl font-bold text-foreground font-mono">
+                  {formatBytes(storageStats?.totalSizeBytes ?? totalDbStorage)}
+                </div>
+                <div className="text-[10px] text-muted-foreground flex justify-between mt-1">
+                  <span>Main: {formatBytes(storageStats?.fileSizeBytes ?? stats?.fileSizeBytes ?? 0)}</span>
+                  <span>WAL: {formatBytes(storageStats?.walSizeBytes ?? stats?.walSizeBytes ?? 0)}</span>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
+                <div className="flex items-center justify-between text-muted-foreground mb-1">
+                  <span className="text-xs font-medium">B-Tree Page Utilization</span>
+                  <PieChart className="w-4 h-4 text-amber-500" />
+                </div>
+                <div className="text-2xl font-bold text-foreground font-mono">
+                  {storageStats?.pageCount ? `${100 - (storageStats.fragmentationPercent || 0)}%` : '100%'}
+                </div>
+                <div className="text-[10px] text-muted-foreground flex justify-between mt-1">
+                  <span>Active: {storageStats?.activePageCount ?? activePages} pages</span>
+                  <span>Free: {storageStats?.freelistCount ?? freePages} pages</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 1. Request Operations Timeline & Breakdown Bar Chart */}
+            <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-3 gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-blue-500" />
+                    Database Request Operations (24h Window)
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Real-time distribution of SELECT, INSERT, UPDATE, DELETE, and DDL operations.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                    <span className="text-muted-foreground">SELECT</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <span className="text-muted-foreground">INSERT</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    <span className="text-muted-foreground">UPDATE</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                    <span className="text-muted-foreground">DELETE</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                    <span className="text-muted-foreground">DDL</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stacked Timeline Chart */}
+              {isMetricsLoading ? (
+                <div className="py-16 text-center text-xs text-muted-foreground">Loading request metrics timeline...</div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="h-44 flex items-end gap-2 pt-6 pb-2 border-b border-border">
+                    {(metricsStats?.timeline || []).map((t, idx) => {
+                      const maxTotal = Math.max(...(metricsStats?.timeline || []).map((x) => x.totalCount), 1);
+                      const barHeightPercent = Math.min(100, Math.max(8, (t.totalCount / maxTotal) * 100));
+                      const selectPct = t.totalCount > 0 ? (t.selectCount / t.totalCount) * 100 : 0;
+                      const insertPct = t.totalCount > 0 ? (t.insertCount / t.totalCount) * 100 : 0;
+                      const updatePct = t.totalCount > 0 ? (t.updateCount / t.totalCount) * 100 : 0;
+                      const deletePct = t.totalCount > 0 ? (t.deleteCount / t.totalCount) * 100 : 0;
+                      const ddlPct = t.totalCount > 0 ? (t.ddlCount / t.totalCount) * 100 : 0;
+
+                      return (
+                        <div key={idx} className="flex-1 flex flex-col items-center h-full justify-end group relative">
+                          <div className="text-[10px] font-mono text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mb-1 absolute -top-5">
+                            {t.totalCount}
+                          </div>
+                          <div
+                            style={{ height: `${barHeightPercent}%` }}
+                            className="w-full max-w-[28px] rounded-t overflow-hidden flex flex-col-reverse bg-muted/40 transition-all hover:brightness-110"
+                          >
+                            <div style={{ height: `${selectPct}%` }} className="bg-blue-500 w-full" title={`SELECT: ${t.selectCount}`} />
+                            <div style={{ height: `${insertPct}%` }} className="bg-emerald-500 w-full" title={`INSERT: ${t.insertCount}`} />
+                            <div style={{ height: `${updatePct}%` }} className="bg-amber-500 w-full" title={`UPDATE: ${t.updateCount}`} />
+                            <div style={{ height: `${deletePct}%` }} className="bg-red-500 w-full" title={`DELETE: ${t.deleteCount}`} />
+                            <div style={{ height: `${ddlPct}%` }} className="bg-purple-500 w-full" title={`DDL: ${t.ddlCount}`} />
+                          </div>
+                          <span className="text-[9px] font-mono text-muted-foreground mt-1 block truncate">
+                            {t.timeLabel}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Summary row */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1 text-xs">
+                    <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-md">
+                      <div className="text-muted-foreground text-[10px]">SELECT Queries</div>
+                      <div className="text-base font-bold text-blue-500 font-mono">{metricsStats?.totalSelect ?? 0}</div>
+                    </div>
+                    <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-md">
+                      <div className="text-muted-foreground text-[10px]">INSERT Statements</div>
+                      <div className="text-base font-bold text-emerald-500 font-mono">{metricsStats?.totalInsert ?? 0}</div>
+                    </div>
+                    <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                      <div className="text-muted-foreground text-[10px]">UPDATE Statements</div>
+                      <div className="text-base font-bold text-amber-500 font-mono">{metricsStats?.totalUpdate ?? 0}</div>
+                    </div>
+                    <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-md">
+                      <div className="text-muted-foreground text-[10px]">DELETE Statements</div>
+                      <div className="text-base font-bold text-red-500 font-mono">{metricsStats?.totalDelete ?? 0}</div>
+                    </div>
+                    <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-md">
+                      <div className="text-muted-foreground text-[10px]">DDL / Migrations</div>
+                      <div className="text-base font-bold text-purple-500 font-mono">{metricsStats?.totalDdl ?? 0}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 2. Redesigned SQLite Storage & B-Tree Page Allocation Chart */}
+            <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-3 gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <HardDrive className="w-4 h-4 text-purple-500" />
+                    SQLite Storage & B-Tree Page Allocation
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Physical disk allocation per {storageStats?.pageSize || 4096}-byte database page.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono px-2.5 py-1 bg-muted rounded border border-border text-foreground">
+                    Page Size: {storageStats?.pageSize || 4096} bytes
+                  </span>
+                  <span className="text-xs font-mono px-2.5 py-1 bg-muted rounded border border-border text-foreground">
+                    Pages: {storageStats?.pageCount || 0}
+                  </span>
+                </div>
+              </div>
+
+              {/* Physical Disk Allocation Visual Bar */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Physical Disk Breakdown</span>
+                  <span className="font-mono font-bold text-foreground">
+                    {formatBytes(storageStats?.totalSizeBytes ?? totalDbStorage)} total
+                  </span>
+                </div>
+
+                <div className="h-5 w-full bg-muted rounded-md overflow-hidden flex border border-border p-0.5 gap-0.5">
+                  <div
+                    style={{
+                      width: `${(storageStats?.totalSizeBytes ?? totalDbStorage) > 0 ? (((storageStats?.fileSizeBytes ?? stats?.fileSizeBytes ?? 0) / (storageStats?.totalSizeBytes ?? totalDbStorage)) * 100) : 100}%`,
+                    }}
+                    className="bg-blue-600 h-full rounded-sm transition-all"
+                    title={`Main Database Binary: ${formatBytes(storageStats?.fileSizeBytes ?? stats?.fileSizeBytes ?? 0)}`}
+                  />
+                  <div
+                    style={{
+                      width: `${(storageStats?.totalSizeBytes ?? totalDbStorage) > 0 ? (((storageStats?.walSizeBytes ?? stats?.walSizeBytes ?? 0) / (storageStats?.totalSizeBytes ?? totalDbStorage)) * 100) : 0}%`,
+                    }}
+                    className="bg-emerald-500 h-full rounded-sm transition-all"
+                    title={`Write-Ahead Log (WAL): ${formatBytes(storageStats?.walSizeBytes ?? stats?.walSizeBytes ?? 0)}`}
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-muted-foreground pt-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-sm bg-blue-600 shrink-0" />
+                    <span>Main Database File ({formatBytes(storageStats?.fileSizeBytes ?? stats?.fileSizeBytes ?? 0)})</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-sm bg-emerald-500 shrink-0" />
+                    <span>Write-Ahead Log ({formatBytes(storageStats?.walSizeBytes ?? stats?.walSizeBytes ?? 0)})</span>
+                  </div>
+                  <div className="flex items-center gap-2 font-mono">
+                    <span>Fragmentation:</span>
+                    <span className={`font-bold ${(storageStats?.fragmentationPercent || fragmentationPercent) > 20 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                      {storageStats?.fragmentationPercent ?? fragmentationPercent}% freelist
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* B-Tree Page Matrix Grid */}
+              <div className="border border-border rounded-lg p-4 bg-muted/20 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-foreground">B-Tree Page Allocation Grid</span>
+                  <div className="flex items-center gap-4 text-[11px] text-muted-foreground font-mono">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-blue-500" />
+                      Active: {storageStats?.activePageCount ?? activePages}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                      Free: {storageStats?.freelistCount ?? freePages}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-1 bg-background border border-border rounded-md">
+                  {Array.from({ length: Math.min(storageStats?.pageCount || totalPages || 20, 200) }).map((_, i) => {
+                    const isFree = i >= (storageStats?.activePageCount ?? activePages);
+                    return (
+                      <div
+                        key={i}
+                        title={`Page #${i + 1}: ${isFree ? 'Free Page (Freelist)' : 'Active B-Tree Page'}`}
+                        className={`w-3.5 h-3.5 rounded-sm transition-colors ${
+                          isFree ? 'bg-muted-foreground/20' : 'bg-blue-500 hover:bg-blue-400'
+                        }`}
+                      />
+                    );
+                  })}
+                  {(storageStats?.pageCount || totalPages) > 200 && (
+                    <span className="text-[10px] text-muted-foreground self-center px-1 font-mono">
+                      +{(storageStats?.pageCount || totalPages) - 200} more pages
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Table & Index Storage Breakdown Table */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Table & Index Storage Distribution
+                </h4>
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead className="bg-muted/50 border-b border-border text-muted-foreground">
+                      <tr>
+                        <th className="py-2 px-3">Entity Name</th>
+                        <th className="py-2 px-3">Type</th>
+                        <th className="py-2 px-3 text-right">Rows</th>
+                        <th className="py-2 px-3 text-right">Indexes</th>
+                        <th className="py-2 px-3 text-right">Estimated Size</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {(storageStats?.tables || []).map((tbl) => (
+                        <tr key={tbl.name} className="hover:bg-muted/20">
+                          <td className="py-2 px-3 font-semibold text-foreground flex items-center gap-1.5">
+                            <TableIcon className="w-3.5 h-3.5 text-blue-500" />
+                            {tbl.name}
+                          </td>
+                          <td className="py-2 px-3 uppercase text-[10px] text-muted-foreground">{tbl.type}</td>
+                          <td className="py-2 px-3 text-right text-foreground font-bold">{tbl.rowCount.toLocaleString()}</td>
+                          <td className="py-2 px-3 text-right text-muted-foreground">{tbl.indexCount}</td>
+                          <td className="py-2 px-3 text-right text-muted-foreground font-mono">{formatBytes(tbl.estimatedSizeBytes)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         )}

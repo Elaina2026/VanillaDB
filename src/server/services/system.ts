@@ -9,9 +9,8 @@ import { logger } from '../utils/logger.js';
 import type { SystemSettings, SystemStatus, MetricHistoryPoint, SystemMetricsHistory } from '../../../shared/index.js';
 
 export class SystemService {
-  private schedulerInterval: NodeJS.Timeout | null = null;
   private metricsInterval: NodeJS.Timeout | null = null;
-  private isBackupRunning = false;
+  private storageCacheInterval: NodeJS.Timeout | null = null;
 
   // Real-time telemetry rolling history
   private metricsHistory: MetricHistoryPoint[] = [];
@@ -30,15 +29,66 @@ export class SystemService {
   private currentIntervalErrors = 0;
   private currentIntervalDurations: number[] = [];
 
+  // Cached storage metrics to prevent synchronous file system blocking on event loop
+  private cachedStorage = {
+    databaseStorageBytes: 0,
+    walStorageBytes: 0,
+    backupStorageBytes: 0,
+    mediaStorageBytes: 0,
+    totalStorageBytes: 0,
+  };
+
   // CPU measurement anchor
   private lastCpuUsage = process.cpuUsage();
   private lastCpuTime = Date.now();
 
   constructor() {
-    this.schedulerInterval = setInterval(() => this.runScheduledTasks(), 60 * 1000);
+    this.refreshStorageCache();
+    this.storageCacheInterval = setInterval(() => this.refreshStorageCache(), 30 * 1000);
     this.metricsInterval = setInterval(() => this.sampleMetrics(), 5000);
     // Initial sample
     this.sampleMetrics();
+  }
+
+  private refreshStorageCache(): void {
+    try {
+      const dbs = databaseService.listDatabases();
+      let databaseStorageBytes = 0;
+      let walStorageBytes = 0;
+
+      for (const db of dbs) {
+        const dbPath = path.resolve(config.databasesDir, db.filename);
+        if (fs.existsSync(dbPath)) databaseStorageBytes += fs.statSync(dbPath).size;
+        const walPath = `${dbPath}-wal`;
+        if (fs.existsSync(walPath)) walStorageBytes += fs.statSync(walPath).size;
+      }
+
+      const calculateDirSize = (dirPath: string): number => {
+        let size = 0;
+        if (!fs.existsSync(dirPath)) return 0;
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dirPath, entry.name);
+          if (entry.isDirectory()) size += calculateDirSize(fullPath);
+          else size += fs.statSync(fullPath).size;
+        }
+        return size;
+      };
+
+      const backupStorageBytes = calculateDirSize(config.backupsDir);
+      const mediaStorageBytes = calculateDirSize(config.storageDir);
+      const totalStorageBytes = databaseStorageBytes + walStorageBytes + backupStorageBytes + mediaStorageBytes;
+
+      this.cachedStorage = {
+        databaseStorageBytes,
+        walStorageBytes,
+        backupStorageBytes,
+        mediaStorageBytes,
+        totalStorageBytes,
+      };
+    } catch (err) {
+      logger.warn({ err }, 'Failed to refresh storage cache');
+    }
   }
 
   public recordRequestMetrics(bytesIn: number, bytesOut: number, durationMs: number, isError: boolean): void {
@@ -76,34 +126,6 @@ export class SystemService {
     const ramPercent = Math.round((usedMem / totalMem) * 1000) / 10;
     const mem = process.memoryUsage();
 
-    // Storage calculation
-    const dbs = databaseService.listDatabases();
-    let databaseStorageBytes = 0;
-    let walStorageBytes = 0;
-
-    for (const db of dbs) {
-      const dbPath = path.resolve(config.databasesDir, db.filename);
-      if (fs.existsSync(dbPath)) databaseStorageBytes += fs.statSync(dbPath).size;
-      const walPath = `${dbPath}-wal`;
-      if (fs.existsSync(walPath)) walStorageBytes += fs.statSync(walPath).size;
-    }
-
-    const calculateDirSize = (dirPath: string): number => {
-      let size = 0;
-      if (!fs.existsSync(dirPath)) return 0;
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name);
-        if (entry.isDirectory()) size += calculateDirSize(fullPath);
-        else size += fs.statSync(fullPath).size;
-      }
-      return size;
-    };
-
-    const backupStorageBytes = calculateDirSize(config.backupsDir);
-    const mediaStorageBytes = calculateDirSize(config.storageDir);
-    const totalStorageBytes = databaseStorageBytes + walStorageBytes + backupStorageBytes + mediaStorageBytes;
-
     // QPS & Network Rates
     const qps = Math.round((this.currentIntervalRequests / elapsedSec) * 10) / 10;
     const networkInRate = Math.round(this.currentIntervalInBytes / elapsedSec);
@@ -133,11 +155,11 @@ export class SystemService {
       errorsCount: this.currentIntervalErrors,
       qps,
       avgDurationMs,
-      databaseStorageBytes,
-      walStorageBytes,
-      mediaStorageBytes,
-      backupStorageBytes,
-      totalStorageBytes,
+      databaseStorageBytes: this.cachedStorage.databaseStorageBytes,
+      walStorageBytes: this.cachedStorage.walStorageBytes,
+      mediaStorageBytes: this.cachedStorage.mediaStorageBytes,
+      backupStorageBytes: this.cachedStorage.backupStorageBytes,
+      totalStorageBytes: this.cachedStorage.totalStorageBytes,
     };
 
     this.metricsHistory.push(point);
@@ -269,38 +291,6 @@ export class SystemService {
 
   public getSystemStatus(): SystemStatus {
     const dbs = databaseService.listDatabases();
-    let totalDatabaseStorageBytes = 0;
-    let backupStorageBytes = 0;
-
-    for (const db of dbs) {
-      const dbPath = path.resolve(config.databasesDir, db.filename);
-      if (fs.existsSync(dbPath)) {
-        totalDatabaseStorageBytes += fs.statSync(dbPath).size;
-      }
-      const walPath = `${dbPath}-wal`;
-      if (fs.existsSync(walPath)) {
-        totalDatabaseStorageBytes += fs.statSync(walPath).size;
-      }
-    }
-
-    const calculateDirSize = (dirPath: string): number => {
-      let size = 0;
-      if (!fs.existsSync(dirPath)) return 0;
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name);
-        if (entry.isDirectory()) {
-          size += calculateDirSize(fullPath);
-        } else {
-          size += fs.statSync(fullPath).size;
-        }
-      }
-      return size;
-    };
-
-    backupStorageBytes = calculateDirSize(config.backupsDir);
-    const mediaStorageBytes = calculateDirSize(config.storageDir);
-
     const metaDb = getMetadataDb();
     const sqliteVersionRow = metaDb.prepare('SELECT sqlite_version() as version').get() as { version: string };
 
@@ -338,9 +328,9 @@ export class SystemService {
       uptimeSeconds: Math.floor(process.uptime()),
       systemUptimeSeconds: Math.floor(os.uptime()),
       databaseCount: dbs.length,
-      totalDatabaseStorageBytes,
-      mediaStorageBytes,
-      backupStorageBytes,
+      totalDatabaseStorageBytes: this.cachedStorage.databaseStorageBytes,
+      mediaStorageBytes: this.cachedStorage.mediaStorageBytes,
+      backupStorageBytes: this.cachedStorage.backupStorageBytes,
       totalTokensCount: tokensRow?.count || 0,
       activeWebhooksCount: webhooksRow?.count || 0,
       totalQueries24h,
@@ -360,57 +350,10 @@ export class SystemService {
     };
   }
 
-  private async runScheduledTasks(): Promise<void> {
-    if (this.isBackupRunning) return;
-    this.isBackupRunning = true;
-
-    try {
-      const settings = this.getSettings();
-      if (settings.backup_schedule === 'disabled') return;
-
-      const dbs = databaseService.listDatabases();
-      const now = Date.now();
-
-      for (const db of dbs) {
-        const backups = backupService.listBackups(db.id);
-        const lastBackup = backups.length > 0 ? backups[0] : null;
-
-        let intervalMs = 24 * 60 * 60 * 1000; // default daily
-        if (settings.backup_schedule === 'hourly') intervalMs = 60 * 60 * 1000;
-        if (settings.backup_schedule === '6hours') intervalMs = 6 * 60 * 60 * 1000;
-        if (settings.backup_schedule === '12hours') intervalMs = 12 * 60 * 60 * 1000;
-        if (settings.backup_schedule === 'weekly') intervalMs = 7 * 24 * 60 * 60 * 1000;
-
-        if (!lastBackup || now - lastBackup.created_at >= intervalMs) {
-          logger.info({ databaseId: db.id }, 'Triggering scheduled backup');
-          try {
-            backupService.createBackup(db.id, 'scheduled');
-          } catch (err) {
-            logger.error({ err, databaseId: db.id }, 'Scheduled backup failed');
-          }
-        }
-
-        // Apply backup retention
-        if (settings.backup_retention > 0 && backups.length > settings.backup_retention) {
-          const toDelete = backups.slice(settings.backup_retention);
-          for (const bkp of toDelete) {
-            try {
-              backupService.deleteBackup(bkp.id);
-            } catch (err) {
-              logger.warn({ err, backupId: bkp.id }, 'Failed to delete expired backup');
-            }
-          }
-        }
-      }
-    } finally {
-      this.isBackupRunning = false;
-    }
-  }
-
   public destroy(): void {
-    if (this.schedulerInterval) {
-      clearInterval(this.schedulerInterval);
-      this.schedulerInterval = null;
+    if (this.storageCacheInterval) {
+      clearInterval(this.storageCacheInterval);
+      this.storageCacheInterval = null;
     }
     if (this.metricsInterval) {
       clearInterval(this.metricsInterval);
