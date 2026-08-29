@@ -77,6 +77,10 @@ export const App: React.FC = () => {
   const validTabs = ['overview', 'telemetry', 'users', 'databases', 'activity', 'settings'];
   const isInvalidTab = !route.databaseId && !validTabs.includes(route.tab);
 
+  if (isInvalidTab) {
+    return <ErrorPage type="404" onGoHome={() => navigateTo('overview')} />;
+  }
+
   return (
     <DashboardLayout
       currentTab={route.tab}
@@ -86,9 +90,7 @@ export const App: React.FC = () => {
       setSelectedDatabaseId={(id, tab = 'overview') => (id ? navigateTo('databases', id, tab) : navigateTo('databases'))}
       onOpenCreateDb={() => setIsCreateDbOpen(true)}
     >
-      {isInvalidTab ? (
-        <ErrorPage type="404" onGoHome={() => navigateTo('overview')} />
-      ) : route.databaseId ? (
+      {route.databaseId ? (
         <DatabaseDetailPage
           databaseId={route.databaseId}
           initialTab={route.dbTab as any}
@@ -116,7 +118,11 @@ export const App: React.FC = () => {
       ) : route.tab === 'settings' ? (
         <SettingsPage />
       ) : (
-        <ErrorPage type="404" onGoHome={() => navigateTo('overview')} />
+        <OverviewPage
+          onSelectDatabase={(id) => navigateTo('databases', id)}
+          onOpenCreateModal={() => setIsCreateDbOpen(true)}
+          onNavigateToTelemetry={() => navigateTo('telemetry')}
+        />
       )}
 
       {/* Modals */}

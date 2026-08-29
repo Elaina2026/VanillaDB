@@ -76,7 +76,7 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none relative overflow-hidden min-h-[500px]">
+    <div className="h-screen w-screen flex flex-col items-center justify-center p-6 text-center select-none relative overflow-hidden bg-background text-foreground">
       {/* Background Decorative Gradients */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
