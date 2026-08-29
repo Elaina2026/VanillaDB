@@ -38,6 +38,9 @@ Control Plane Endpoints (Admin Session Auth):
 | :--- | :--- | :--- |
 | **Multi-DB Import** | `POST /api/admin/databases/:id/import` | Auto-translates and ingests MySQL, Postgres, Mongo (JSON/NDJSON), CSV |
 | **1-Click Create from Dump**| `POST /api/admin/databases/import-new` | Creates new database directly initialized from uploaded dump file |
+| **Database Export** | `GET /api/admin/databases/:id/export?format=sqlite\|sql\|csv\|json` | Direct export to SQLite binary (.db), SQL Dump, CSV, JSON |
+| **Download Backup** | `GET /api/admin/backups/:backupId/download` | Direct download of WAL-consistent SQLite snapshot (.sqlite) |
+| **Explain Query Plan** | `POST /api/admin/databases/:id/explain` | Analyzes execution plan, indexes, and full table scans |
 | **System & Security Logs** | `GET /api/admin/activity`<br>`GET /api/admin/audit` | Live API query metrics, execution duration, and admin audit trail |
 
 ---
@@ -146,7 +149,7 @@ SELECT * FROM articles_fts WHERE articles_fts MATCH 'VanillaDatabase';
 
 ---
 
-## 4. Official Client SDK Reference (v1.2.0)
+## 4. Official Client SDK Reference (v1.3.0)
 
 ### 4.1. Installation
 ```bash
