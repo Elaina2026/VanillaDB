@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execSync } from 'child_process';
 import { config } from '../config/index.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { backupService } from './backup.js';
@@ -290,55 +289,6 @@ export class SystemService {
     return updated;
   }
 
-  public detectOSDiskEncryption(): { detected: boolean; type: 'LUKS' | 'BitLocker' | 'FileVault' | 'None' | 'Unknown'; details: string } {
-    try {
-      const platform = process.platform;
-      if (platform === 'linux') {
-        // Check for LUKS / dm-crypt in /dev/mapper or lsblk
-        try {
-          const lsblkOut = execSync('lsblk -o TYPE,FSTYPE 2>/dev/null', { encoding: 'utf-8', timeout: 1500 });
-          if (lsblkOut.includes('crypt') || lsblkOut.includes('crypto_LUKS')) {
-            return { detected: true, type: 'LUKS', details: 'Linux dm-crypt/LUKS partition encryption active' };
-          }
-        } catch {}
-
-        if (fs.existsSync('/dev/mapper')) {
-          const mappers = fs.readdirSync('/dev/mapper');
-          const hasLuks = mappers.some(m => m.toLowerCase().includes('luks') || m.toLowerCase().includes('crypt'));
-          if (hasLuks) {
-            return { detected: true, type: 'LUKS', details: 'Linux LUKS mapper volume detected' };
-          }
-        }
-
-        return { detected: false, type: 'None', details: 'No Linux LUKS/dm-crypt block device detected on root volumes' };
-      }
-
-      if (platform === 'win32') {
-        try {
-          const bdeOut = execSync('manage-bde -status 2>nul', { encoding: 'utf-8', timeout: 1500 });
-          if (bdeOut.includes('Protection On') || bdeOut.includes('Fully Encrypted')) {
-            return { detected: true, type: 'BitLocker', details: 'Windows BitLocker full-disk protection enabled' };
-          }
-        } catch {}
-        return { detected: false, type: 'None', details: 'Windows BitLocker not active or volume not encrypted' };
-      }
-
-      if (platform === 'darwin') {
-        try {
-          const fdeOut = execSync('fdesetup status 2>/dev/null', { encoding: 'utf-8', timeout: 1500 });
-          if (fdeOut.includes('FileVault is On')) {
-            return { detected: true, type: 'FileVault', details: 'macOS FileVault full-disk encryption active' };
-          }
-        } catch {}
-        return { detected: false, type: 'None', details: 'macOS FileVault is turned off' };
-      }
-
-      return { detected: false, type: 'Unknown', details: `Platform ${platform} disk encryption detection not supported` };
-    } catch {
-      return { detected: false, type: 'Unknown', details: 'Could not probe OS disk encryption status' };
-    }
-  }
-
   public getSystemStatus(): SystemStatus {
     const dbs = databaseService.listDatabases();
     const metaDb = getMetadataDb();
@@ -367,23 +317,6 @@ export class SystemService {
     const cpus = os.cpus();
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
-
-    const fde = this.detectOSDiskEncryption();
-
-    const recommendations: string[] = [
-      'Application Data-At-Rest Encryption is ACTIVE (AES-256-GCM for all Backups and Media storage).',
-      'SQLite SQL-Level Field Encryption is ENABLED (encrypt_aes, decrypt_aes, hash_sha256, hash_hmac).',
-    ];
-
-    if (!fde.detected) {
-      if (process.platform === 'linux') {
-        recommendations.push('Recommended: Enable LUKS full-disk partition encryption on host filesystem to protect raw database files.');
-      } else if (process.platform === 'win32') {
-        recommendations.push('Recommended: Enable BitLocker drive encryption on Windows host to protect the ./data directory.');
-      }
-    } else {
-      recommendations.push(`Host OS Full-Disk Encryption is active (${fde.type}).`);
-    }
 
     return {
       version: '1.0.0',
@@ -417,8 +350,6 @@ export class SystemService {
       securityDiagnostics: {
         atRestEncryptionActive: true,
         encryptionAlgorithm: 'AES-256-GCM (Authenticated)',
-        osFullDiskEncryption: fde,
-        recommendations,
       },
     };
   }

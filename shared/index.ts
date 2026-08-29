@@ -333,12 +333,6 @@ export interface SystemStatus {
   securityDiagnostics?: {
     atRestEncryptionActive: boolean;
     encryptionAlgorithm: string;
-    osFullDiskEncryption: {
-      detected: boolean;
-      type: 'LUKS' | 'BitLocker' | 'FileVault' | 'None' | 'Unknown';
-      details: string;
-    };
-    recommendations: string[];
   };
 }
 
