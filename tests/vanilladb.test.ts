@@ -271,7 +271,32 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     expect(checkRes.json().data.rowCount).toBe(0);
   });
 
-  // 6. Security & Sandbox
+  // 6. Security & Sandbox & SQL Crypto Functions
+  it('should execute SQL native AES-256-GCM encryption & hashing functions', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: {
+        sql: `
+          SELECT
+            encrypt_aes('sensitive_ssn_1234', 'customSecretKey') as enc,
+            decrypt_aes(encrypt_aes('sensitive_ssn_1234', 'customSecretKey'), 'customSecretKey') as dec,
+            hash_sha256('hello_world') as sha,
+            hash_hmac('data', 'secret_key') as hmac
+        `,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const row = res.json().data.rows[0];
+    expect(row.enc).toBeDefined();
+    expect(typeof row.enc).toBe('string');
+    expect(row.dec).toBe('sensitive_ssn_1234');
+    expect(row.sha).toBe('35072c1ae546350e0bfa7ab11d49dc6f129e72ccd57ec7eb671225bbd197c8f1');
+    expect(row.hmac).toBeDefined();
+  });
+
   it('should block ATTACH DATABASE attempt', async () => {
     const res = await app.inject({
       method: 'POST',

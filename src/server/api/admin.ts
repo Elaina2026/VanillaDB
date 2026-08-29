@@ -14,6 +14,7 @@ import { activityService } from '../services/activity.js';
 import { authService } from '../services/auth.js';
 import { requireAdminAuth, requireRole } from '../middleware/auth.js';
 import { SqlTranslator } from '../utils/sqlTranslator.js';
+import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
 import { TokenPermissionSchema } from '../../../shared/index.js';
 
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
@@ -748,6 +749,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/backups/:backupId/download', async (req, reply) => {
     const { backupId } = req.params as { backupId: string };
+    const raw = (req.query as any)?.raw === 'true';
     const backup = backupService.getBackup(backupId);
     if (!backup) {
       return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Backup not found' } });
@@ -758,10 +760,27 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'Backup file missing on disk' } });
     }
 
-    reply.header('Content-Disposition', `attachment; filename="${backup.filename}"`);
-    reply.header('Content-Type', 'application/x-sqlite3');
-    reply.header('Content-Length', fs.statSync(filePath).size);
-    return reply.send(fs.createReadStream(filePath));
+    if (raw || !isEncryptedFile(filePath)) {
+      reply.header('Content-Disposition', `attachment; filename="${backup.filename}"`);
+      reply.header('Content-Type', 'application/x-sqlite3');
+      reply.header('Content-Length', fs.statSync(filePath).size);
+      return reply.send(fs.createReadStream(filePath));
+    }
+
+    // Decrypt on-the-fly for user download
+    try {
+      const rawEncBuffer = fs.readFileSync(filePath);
+      const decrypted = decryptBuffer(rawEncBuffer);
+      reply.header('Content-Disposition', `attachment; filename="${backup.filename}"`);
+      reply.header('Content-Type', 'application/x-sqlite3');
+      reply.header('Content-Length', decrypted.length);
+      return reply.send(decrypted);
+    } catch {
+      reply.header('Content-Disposition', `attachment; filename="${backup.filename}"`);
+      reply.header('Content-Type', 'application/x-sqlite3');
+      reply.header('Content-Length', fs.statSync(filePath).size);
+      return reply.send(fs.createReadStream(filePath));
+    }
   });
 
   fastify.delete('/backups/:backupId', async (req, reply) => {

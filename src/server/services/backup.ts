@@ -6,6 +6,7 @@ import { config } from '../config/index.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { dbManager } from '../db/manager.js';
 import { logger } from '../utils/logger.js';
+import { encryptFile, decryptFile, isEncryptedFile } from '../utils/crypto.js';
 import type { BackupRecord } from '../../../shared/index.js';
 
 export class BackupService {
@@ -37,7 +38,9 @@ export class BackupService {
     const targetPath = path.resolve(dbBackupsDir, filename);
 
     const sourcePath = dbManager.resolveDatabasePath(databaseId);
-    fs.copyFileSync(sourcePath, targetPath);
+
+    // Encrypt at-rest with AES-256-GCM
+    encryptFile(sourcePath, targetPath);
 
     const sizeBytes = fs.statSync(targetPath).size;
     const checksum = this.calculateChecksum(targetPath);
@@ -127,7 +130,7 @@ export class BackupService {
     // 3. Close database handle
     dbManager.close(databaseId);
 
-    // 4. Overwrite database file atomically
+    // 4. Overwrite database file atomically (decrypt if encrypted at-rest)
     const dbPath = dbManager.resolveDatabasePath(databaseId);
     const walPath = `${dbPath}-wal`;
     const shmPath = `${dbPath}-shm`;
@@ -135,7 +138,11 @@ export class BackupService {
     if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
     if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
 
-    fs.copyFileSync(backupFilePath, dbPath);
+    if (isEncryptedFile(backupFilePath)) {
+      decryptFile(backupFilePath, dbPath);
+    } else {
+      fs.copyFileSync(backupFilePath, dbPath);
+    }
 
     // 5. Reopen and verify health
     try {

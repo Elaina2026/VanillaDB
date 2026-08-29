@@ -6,6 +6,7 @@ import { Readable } from 'stream';
 import { nanoid } from 'nanoid';
 import { config } from '../config/index.js';
 import { getMetadataDb } from '../db/metadata.js';
+import { encryptBuffer, decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
 import type { FileRecord } from '../../../shared/index.ts';
 
 export class StorageService {
@@ -47,19 +48,24 @@ export class StorageService {
     const filename = `${id}${ext}`;
     const filePath = this.getStoragePath(params.databaseId, filename);
 
-    const hash = crypto.createHash('sha256');
-    let sizeBytes = 0;
-
-    const fileWriteStream = fs.createWriteStream(filePath);
-
+    const chunks: Buffer[] = [];
     params.stream.on('data', (chunk: Buffer) => {
-      sizeBytes += chunk.length;
-      hash.update(chunk);
+      chunks.push(chunk);
     });
 
-    await pipeline(params.stream, fileWriteStream);
+    await new Promise((resolve, reject) => {
+      params.stream.on('end', resolve);
+      params.stream.on('error', reject);
+    });
 
-    const checksum = hash.digest('hex');
+    const plainBuffer = Buffer.concat(chunks);
+    const sizeBytes = plainBuffer.length;
+    const checksum = crypto.createHash('sha256').update(plainBuffer).digest('hex');
+
+    // Encrypt at rest
+    const encryptedBuffer = encryptBuffer(plainBuffer);
+    fs.writeFileSync(filePath, encryptedBuffer);
+
     const now = Date.now();
 
     metaDb.prepare(`
@@ -105,7 +111,8 @@ export class StorageService {
     const filename = `${id}${ext}`;
 
     const filePath = this.getStoragePath(params.databaseId, filename);
-    fs.writeFileSync(filePath, params.buffer);
+    const encrypted = encryptBuffer(params.buffer);
+    fs.writeFileSync(filePath, encrypted);
 
     const checksum = crypto.createHash('sha256').update(params.buffer).digest('hex');
     const sizeBytes = params.buffer.length;

@@ -43,6 +43,22 @@ if (!sessionSecret || sessionSecret.trim() === '') {
   }
 }
 
+// Master Encryption Key for Data-At-Rest Encryption (AES-256-GCM)
+let masterKey = process.env.VDB_MASTER_KEY || process.env.VDB_ENCRYPTION_KEY;
+const masterKeyFilePath = path.join(systemDir, '.master_key');
+
+if (!masterKey || masterKey.trim() === '') {
+  if (fs.existsSync(masterKeyFilePath)) {
+    masterKey = fs.readFileSync(masterKeyFilePath, 'utf-8').trim();
+  } else {
+    masterKey = crypto.randomBytes(32).toString('hex');
+    fs.writeFileSync(masterKeyFilePath, masterKey, { encoding: 'utf-8', mode: 0o600 });
+  }
+}
+
+// Derive a 256-bit binary encryption key using PBKDF2
+const derivedEncryptionKey = crypto.pbkdf2Sync(masterKey, 'vdb_at_rest_salt', 100000, 32, 'sha256');
+
 const appEnv = process.env.VDB_ENV || process.env.NODE_ENV || 'development';
 const isProduction = appEnv === 'production';
 
@@ -63,6 +79,8 @@ export const config = {
   storageDir,
   tempDir,
   sessionSecret,
+  masterKey,
+  derivedEncryptionKey,
   trustProxy: getEnvBool('VDB_TRUST_PROXY', false),
   corsOrigins: process.env.VDB_CORS_ORIGINS ? process.env.VDB_CORS_ORIGINS.split(',').map(s => s.trim()) : [],
   sqlBusyTimeoutMs: getEnvInt('VDB_SQL_BUSY_TIMEOUT_MS', 5000),

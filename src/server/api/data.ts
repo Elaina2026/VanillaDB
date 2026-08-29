@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import fs from 'fs';
+import { Readable } from 'stream';
 import { config } from '../config/index.js';
 import { dbManager } from '../db/manager.js';
 import { authService } from '../services/auth.js';
@@ -8,9 +9,23 @@ import { activityService } from '../services/activity.js';
 import { storageService } from '../services/storage.js';
 import { realtimeService } from '../services/realtime.js';
 import { requireTokenPermission } from '../middleware/auth.js';
+import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
 
 export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, filePath: string, mimeType: string, fileSize: number) {
   const range = req.headers.range;
+  const isEncrypted = isEncryptedFile(filePath);
+
+  // If encrypted, decrypt the file into buffer for range slicing
+  let fileBuffer: Buffer | null = null;
+  if (isEncrypted) {
+    try {
+      const rawEnc = fs.readFileSync(filePath);
+      fileBuffer = decryptBuffer(rawEnc);
+      fileSize = fileBuffer.length;
+    } catch {
+      // fallback
+    }
+  }
 
   if (range) {
     const parts = range.replace(/bytes=/, '').split('-');
@@ -23,7 +38,6 @@ export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, fileP
     }
 
     const chunksize = end - start + 1;
-    const stream = fs.createReadStream(filePath, { start, end });
 
     reply.status(206);
     reply.header('Content-Range', `bytes ${start}-${end}/${fileSize}`);
@@ -31,6 +45,12 @@ export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, fileP
     reply.header('Content-Length', chunksize);
     reply.header('Content-Type', mimeType);
 
+    if (fileBuffer) {
+      const sliced = fileBuffer.subarray(start, end + 1);
+      return reply.send(sliced);
+    }
+
+    const stream = fs.createReadStream(filePath, { start, end });
     req.raw.on('close', () => {
       stream.destroy();
     });
@@ -40,8 +60,12 @@ export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, fileP
     reply.header('Content-Length', fileSize);
     reply.header('Content-Type', mimeType);
     reply.header('Accept-Ranges', 'bytes');
-    const stream = fs.createReadStream(filePath);
 
+    if (fileBuffer) {
+      return reply.send(fileBuffer);
+    }
+
+    const stream = fs.createReadStream(filePath);
     req.raw.on('close', () => {
       stream.destroy();
     });

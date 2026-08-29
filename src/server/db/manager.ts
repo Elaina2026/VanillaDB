@@ -5,6 +5,8 @@ import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { getMetadataDb } from './metadata.js';
 import { serializeSqlRow, deserializeSqlParam } from '../utils/serialize.js';
+import { encryptBuffer, decryptBuffer, deriveKeyFromString } from '../utils/crypto.js';
+import crypto from 'crypto';
 import type { SqlQueryResult, SqlWriteResult, TableSchemaDetail, TableColumnInfo, TableIndexInfo, TableForeignKeyInfo, TableTriggerInfo } from '../../../shared/index.js';
 
 interface CachedHandle {
@@ -102,6 +104,41 @@ export class DatabaseManager {
         } catch {
           return 0.0;
         }
+      });
+
+      // At-Rest & In-Flight SQL Column/Field Encryption Functions (AES-256-GCM)
+      (db as any).function?.('encrypt_aes', (data: any, customKey?: any) => {
+        if (data === null || data === undefined || data === '') return null;
+        try {
+          const key = customKey ? deriveKeyFromString(String(customKey)) : (config.derivedEncryptionKey as Buffer);
+          const buf = Buffer.isBuffer(data) ? data : Buffer.from(String(data), 'utf-8');
+          const encrypted = encryptBuffer(buf, key);
+          return encrypted.toString('hex');
+        } catch {
+          return null;
+        }
+      });
+
+      (db as any).function?.('decrypt_aes', (hexCipher: any, customKey?: any) => {
+        if (hexCipher === null || hexCipher === undefined || hexCipher === '') return null;
+        try {
+          const key = customKey ? deriveKeyFromString(String(customKey)) : (config.derivedEncryptionKey as Buffer);
+          const buf = Buffer.from(String(hexCipher), 'hex');
+          const decrypted = decryptBuffer(buf, key);
+          return decrypted.toString('utf-8');
+        } catch {
+          return null;
+        }
+      });
+
+      (db as any).function?.('hash_sha256', (data: any) => {
+        if (data === null || data === undefined) return null;
+        return crypto.createHash('sha256').update(String(data)).digest('hex');
+      });
+
+      (db as any).function?.('hash_hmac', (data: any, secret: any) => {
+        if (data === null || data === undefined || !secret) return null;
+        return crypto.createHmac('sha256', String(secret)).update(String(data)).digest('hex');
       });
     } catch {
       // Ignore function registration if not supported in runtime

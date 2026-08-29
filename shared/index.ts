@@ -330,6 +330,16 @@ export interface SystemStatus {
     heapUsed: number;
     external: number;
   };
+  securityDiagnostics?: {
+    atRestEncryptionActive: boolean;
+    encryptionAlgorithm: string;
+    osFullDiskEncryption: {
+      detected: boolean;
+      type: 'LUKS' | 'BitLocker' | 'FileVault' | 'None' | 'Unknown';
+      details: string;
+    };
+    recommendations: string[];
+  };
 }
 
 export interface MetricHistoryPoint {
