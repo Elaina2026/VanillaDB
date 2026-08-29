@@ -59,12 +59,12 @@ import type {
 
 export const DatabaseDetailPage: React.FC<{
   databaseId: string;
-  initialTab?: 'overview' | 'tables' | 'editor' | 'schema' | 'storage' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'backups' | 'settings';
+  initialTab?: 'overview' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'backups' | 'settings';
   onTabChange?: (tab: string) => void;
   onBack: () => void;
   onOpenCreateToken: (dbId: string) => void;
 }> = ({ databaseId, initialTab = 'overview', onTabChange, onBack, onOpenCreateToken }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'tables' | 'editor' | 'schema' | 'storage' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'backups' | 'settings'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'overview' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'backups' | 'settings'>(initialTab);
   const queryClient = useQueryClient();
 
   const [isImportExportOpen, setIsImportExportOpen] = useState(false);
@@ -1450,6 +1450,91 @@ export const DatabaseDetailPage: React.FC<{
           </div>
         )}
 
+        {/* IMPORT & EXPORT TAB */}
+        {activeTab === 'import-export' && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <div>
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Download className="w-5 h-5 text-blue-500" />
+                  Database Import & Export Center
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Export database tables to SQL dump, SQLite binary (.db), CSV, JSON or import dump files from MySQL, PostgreSQL, MongoDB, and SQLite.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsImportExportOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Open Importer / Exporter
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Quick Export Card */}
+              <div className="bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm flex flex-col justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-blue-500/10 text-blue-500 rounded-lg">
+                      <Download className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-foreground">Direct Database Export</h4>
+                      <p className="text-xs text-muted-foreground">Download instant snapshots of this database</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-2">
+                    Supports <strong>SQL Script (.sql)</strong>, <strong>SQLite Binary (.db)</strong>, <strong>CSV Spreadsheet (.csv)</strong>, and structured <strong>JSON (.json)</strong>.
+                  </p>
+                </div>
+                <div className="pt-4 border-t border-border flex flex-wrap gap-2">
+                  <a
+                    href={`/api/admin/databases/${databaseId}/export?format=sqlite`}
+                    className="flex-1 text-center py-2 px-3 bg-muted hover:bg-accent border border-border rounded-md text-xs font-semibold text-foreground transition-colors"
+                  >
+                    SQLite Binary (.db)
+                  </a>
+                  <a
+                    href={`/api/admin/databases/${databaseId}/export?format=sql`}
+                    className="flex-1 text-center py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold transition-colors"
+                  >
+                    SQL Dump (.sql)
+                  </a>
+                </div>
+              </div>
+
+              {/* Quick Import Card */}
+              <div className="bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm flex flex-col justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg">
+                      <UploadCloud className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-foreground">Multi-Dialect Data Ingestion</h4>
+                      <p className="text-xs text-muted-foreground">Upload and auto-convert external databases</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-2">
+                    Automatically converts <strong>MySQL</strong> dumps (backticks, engine), <strong>PostgreSQL</strong> dumps (SERIAL, COPY stdin), <strong>MongoDB</strong> (JSON / NDJSON), and CSV.
+                  </p>
+                </div>
+                <div className="pt-4 border-t border-border">
+                  <button
+                    onClick={() => setIsImportExportOpen(true)}
+                    className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    Upload & Ingest File
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* REALTIME EVENT STREAM TAB */}
         {activeTab === 'realtime' && (
           <div className="max-w-6xl mx-auto space-y-6">
@@ -2536,6 +2621,18 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
         onClose={() => setIsCreateTableOpen(false)}
         onSuccess={(name) => {
           setSelectedTable(name);
+        }}
+      />
+
+      {/* Import / Export Modal */}
+      <ImportExportModal
+        isOpen={isImportExportOpen}
+        databaseId={databaseId}
+        schema={schema}
+        onClose={() => setIsImportExportOpen(false)}
+        onSuccess={() => {
+          refetchSchema();
+          refetchStats();
         }}
       />
     </div>

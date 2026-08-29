@@ -24,7 +24,8 @@ import {
   Key,
   Archive,
   Sliders,
-  BarChart3
+  BarChart3,
+  ArrowUpDown
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import { useTheme } from '../hooks/useTheme.js';
@@ -112,6 +113,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   { id: 'editor', label: 'SQL Editor', icon: Terminal },
                   { id: 'schema', label: 'Schema Viewer', icon: FileCode },
                   { id: 'storage', label: 'Media Storage', icon: Folder },
+                  { id: 'import-export', label: 'Import & Export', icon: ArrowUpDown },
                   { id: 'realtime', label: 'Realtime Stream', icon: Radio },
                   { id: 'webhooks', label: 'Webhooks', icon: WebhookIcon },
                   { id: 'api', label: 'API & Quickstart', icon: Key },
