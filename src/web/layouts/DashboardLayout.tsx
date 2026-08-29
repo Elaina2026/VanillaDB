@@ -73,7 +73,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             closeMobileMenu();
           }}
         >
-          <div className="w-7 h-7 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 flex items-center justify-center shrink-0">
             <LogoIcon className="w-7 h-7" />
           </div>
           <div>
@@ -126,7 +126,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 closeMobileMenu();
               }}
             >
-              <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 flex items-center justify-center shrink-0">
                 <LogoIcon className="w-8 h-8" />
               </div>
               <div>

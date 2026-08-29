@@ -47,7 +47,7 @@ export const AuthPage: React.FC = () => {
       <div className="w-full max-w-sm bg-card border border-border rounded-xl shadow-lg p-6 space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-1.5">
-          <div className="inline-flex w-16 h-16 rounded-2xl items-center justify-center mb-2 shadow-lg">
+          <div className="inline-flex w-16 h-16 items-center justify-center mb-2">
             <LogoIcon className="w-16 h-16" />
           </div>
           <h1 className="text-lg font-bold tracking-tight">
