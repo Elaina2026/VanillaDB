@@ -63,6 +63,22 @@ export class TableQueryBuilder<T = Record<string, any>> {
     return json.data;
   }
 
+  async update(where: { [key: string]: any }, values: Partial<T>): Promise<SqlExecutionResult> {
+    const base = this.client.getBaseUrl();
+    const res = await fetch(`${base}/tables/${encodeURIComponent(this.tableName)}/rows`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${this.client.getToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ where, values }),
+    });
+
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.error?.message || `Update failed: ${res.status}`);
+    return json.data;
+  }
+
   async delete(primaryKeyOrCondition: { [key: string]: any }): Promise<SqlExecutionResult> {
     const base = this.client.getBaseUrl();
     const params = new URLSearchParams();

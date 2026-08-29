@@ -31,6 +31,16 @@ class TableQueryBuilder:
             raise Exception(data.get("error", {}).get("message", "Insert row failed"))
         return data.get("data")
 
+    def update(self, where: Dict[str, Any], values: Dict[str, Any]) -> Dict[str, Any]:
+        """Update rows matching condition."""
+        base = self.client.get_base_url()
+        res = requests.put(f"{base}/tables/{self.table_name}/rows", headers=self.client.headers, json={"where": where, "values": values})
+        res.raise_for_status()
+        data = res.json()
+        if not data.get("success"):
+            raise Exception(data.get("error", {}).get("message", "Update row failed"))
+        return data.get("data")
+
     def delete(self, condition: Dict[str, Any]) -> Dict[str, Any]:
         """Delete rows by primary key or condition."""
         base = self.client.get_base_url()

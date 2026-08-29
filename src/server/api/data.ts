@@ -312,6 +312,79 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  // REST Table API (Update)
+  fastify.put('/databases/:databaseId/tables/:table/rows', {
+    preHandler: [requireTokenPermission('database:write')],
+  }, async (req, reply) => {
+    const databaseId = req.databaseId!;
+    const { table } = req.params as { table: string };
+
+    const schema = dbManager.getSchema(databaseId);
+    const tableObj = schema.find(t => t.name === table);
+    if (!tableObj) {
+      return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
+    }
+
+    const Schema = z.object({
+      where: z.record(z.any()),
+      values: z.record(z.any()),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_PAYLOAD', message: 'Field "where" and "values" objects required' },
+      });
+    }
+
+    const { where, values } = parsed.data;
+    const updateKeys = Object.keys(values);
+    const whereKeys = Object.keys(where);
+
+    if (updateKeys.length === 0) {
+      return reply.status(400).send({ success: false, error: { code: 'EMPTY_UPDATE', message: 'No fields to update' } });
+    }
+    if (whereKeys.length === 0) {
+      return reply.status(400).send({ success: false, error: { code: 'EMPTY_WHERE', message: 'Target condition required' } });
+    }
+
+    const setClauses = updateKeys.map(k => `"${k.replace(/"/g, '""')}" = ?`).join(', ');
+    const whereClauses = whereKeys.map(k => `"${k.replace(/"/g, '""')}" = ?`).join(' AND ');
+    const sql = `UPDATE "${table}" SET ${setClauses} WHERE ${whereClauses}`;
+    const params = [...Object.values(values), ...Object.values(where)];
+
+    try {
+      const startTime = performance.now();
+      const result = dbManager.executeSql(databaseId, sql, params);
+      const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
+
+      activityService.recordActivity({
+        databaseId,
+        tokenId: req.apiToken?.id || `admin:${req.adminUser?.username || 'user'}`,
+        operation: `REST_UPDATE:${table}`,
+        durationMs,
+        status: 'success',
+        rowCount: (result as any).changes || 1,
+      });
+
+      realtimeService.emitEvent({
+        databaseId,
+        table,
+        type: 'update',
+        data: { where, values, result },
+        timestamp: Date.now(),
+      });
+
+      return reply.send({ success: true, data: result });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 400).send({
+        success: false,
+        error: { code: err.code || 'SQLITE_ERROR', message: err.message, requestId: req.id },
+      });
+    }
+  });
+
   // REST Table API (Delete)
   fastify.delete('/databases/:databaseId/tables/:table/rows', {
     preHandler: [requireTokenPermission('database:write')],

@@ -28,7 +28,7 @@ All Data Plane operations branch from the single database Base URL:
 | :--- | :--- | :--- |
 | **SQL Query Engine** | `POST /query` | `database:read` (SELECT) / `database:write` (DML) |
 | **Atomic Transactions** | `POST /batch` | `database:write` |
-| **Table CRUD (Rows)** | `GET /tables/:table/rows`<br>`POST /tables/:table/rows`<br>`DELETE /tables/:table/rows` | `database:read`<br>`database:write`<br>`database:write` |
+| **Table CRUD (Rows)** | `GET /tables/:table/rows`<br>`POST /tables/:table/rows`<br>`PUT /tables/:table/rows`<br>`DELETE /tables/:table/rows` | `database:read`<br>`database:write`<br>`database:write`<br>`database:write` |
 | **Realtime Event Stream** | `GET /realtime?table=<table_name>` | `database:read` (Accepts Bearer header, `?token=`, or session cookie) |
 | **Media File Storage** | `GET /files`<br>`POST /files`<br>`DELETE /files/:fileId` | `database:read`<br>`database:write`<br>`database:write` |
 | **Media Stream (Range 206)** | `GET /files/:fileId/view` | `database:read` (Supports `Range: bytes=start-end`) |
@@ -189,6 +189,9 @@ const { rows } = await db.from('users').select({
 });
 console.log('Top Users:', rows);
 
+// Update row(s)
+await db.from('users').update({ id: 1 }, { score: 200 });
+
 // Delete row
 await db.from('users').delete({ id: 1 });
 
@@ -257,6 +260,9 @@ db.table("users").insert({"username": "elaina", "score": 250})
 users = db.table("users").select(limit=10, order_by="score", order="DESC")
 print("Top Users:", users["rows"])
 
+# Update row(s)
+db.table("users").update(where={"id": 1}, values={"score": 300})
+
 # Delete row
 db.table("users").delete({"id": 1})
 
@@ -310,3 +316,51 @@ Usage Rules:
 5. For semantic vector search, use `db.vectorSearch({...})` or native `vec_cosine_similarity` in SQL.
 6. Upload media files via `db.uploadFile()` and stream them via `db.getFileUrl(fileId)` with HTTP 206 partial content support.
 ```
+
+---
+
+## 6. Client Integration Best Practices & Troubleshooting
+
+Critical production guidelines to avoid common pitfalls (timeouts, deadlocks, connection drops, and API rejections):
+
+### 6.1. Network Timeouts & Background Workers
+- **Default Timeout**: Set client HTTP timeout to at least `30_000ms` (30s) or `45_000ms` (45s).
+- **Background Tasks (e.g. sweeps, schedulers, cron jobs)**: Background sweeps across growing tables need custom timeout allowances (`60_000ms`).
+- **Transient Error Retry**: Implement automatic retries with exponential backoff (e.g. 3 attempts, 1s/2s/4s delay) for network errors (`ETIMEDOUT`, `ECONNRESET`, `UND_ERR_CONNECT_TIMEOUT`, `request-timeout`). Never retry client-side `4xx` errors (400, 401, 403, 404).
+
+### 6.2. SQLite Concurrency & Query Optimization
+- **Index Composite Columns**: Tables queried periodically by status and timestamp (e.g. `WHERE status = 'pending' AND expires_at <= ?`) **must** have composite indexes:
+  ```sql
+  CREATE INDEX IF NOT EXISTS idx_entitlements_status_expiry ON entitlements(status, expires_at);
+  ```
+  *Lack of indexes triggers full-table scans that block SQLite's synchronous single-thread execution.*
+- **Batch Processing with `LIMIT`**: Avoid unbounded batch queries or sweeping operations (`DELETE ... WHERE expires_at < now`). Slice operations into bounded chunks:
+  ```sql
+  DELETE FROM queue_jobs WHERE id IN (SELECT id FROM queue_jobs WHERE status = 'expired' LIMIT 500);
+  ```
+- **Transaction Scope**: Keep transactions small and fast to prevent `SQLITE_BUSY` contention on WAL checkpoints.
+
+### 6.3. HTTP vs. HTTPS & Reverse Proxy Settings
+- **Protocol Matching**: Do not force HTTPS for local development or internal networks (`http://localhost:3000` or `http://127.0.0.1:3000`). Attempting TLS handshakes against plain HTTP ports causes 15–30s connection hangs.
+- **Nginx Reverse Proxy Configuration**:
+  ```nginx
+  upstream vanilladb_backend {
+      server 127.0.0.1:3000;
+      keepalive 32;
+  }
+  server {
+      location / {
+          proxy_pass http://vanilladb_backend;
+          proxy_http_version 1.1;
+          proxy_set_header Connection "";
+          proxy_connect_timeout 60s;
+          proxy_read_timeout 60s;
+          proxy_send_timeout 60s;
+      }
+  }
+  ```
+
+### 6.4. Realtime SSE & Webhook Dispatching
+- **Discord & Slack Webhooks**: Webhook payloads are automatically formatted as rich embeds. When sending custom payloads, ensure valid payload schemas to prevent Discord `400 Bad Request` rejections.
+- **SSE Heartbeat Handling**: The Realtime SSE endpoint emits ping heartbeats (`event: ping`) every 20s. Clients should ignore ping events and automatically reconnect with backoff on stream termination.
+
