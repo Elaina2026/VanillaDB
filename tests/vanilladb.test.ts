@@ -32,7 +32,7 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
 
   // 1. Authentication & Setup
   it('should allow initial admin setup or login', async () => {
-    const res = await app.inject({
+    let res = await app.inject({
       method: 'POST',
       url: '/api/auth/setup',
       payload: {
@@ -49,13 +49,13 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
       expect(session).toBeDefined();
       adminCookie = `vdb_session=${session.value}`;
     } else {
-      // If bootstrapped, login with bootstrap admin or admin_test
+      // If already initialized, try logging in with admin_test first, then fallback to environment credentials
       let loginRes = await app.inject({
         method: 'POST',
         url: '/api/auth/login',
         payload: {
-          username: process.env.VDB_ADMIN_USERNAME || 'VanillaDatabase',
-          password: process.env.VDB_ADMIN_PASSWORD || '123456',
+          username: 'admin_test',
+          password: 'SuperSecretPassword123!',
         },
       });
 
@@ -64,8 +64,8 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
           method: 'POST',
           url: '/api/auth/login',
           payload: {
-            username: 'admin_test',
-            password: 'SuperSecretPassword123!',
+            username: process.env.VDB_ADMIN_USERNAME || 'VanillaDatabase',
+            password: process.env.VDB_ADMIN_PASSWORD || '123456',
           },
         });
       }
