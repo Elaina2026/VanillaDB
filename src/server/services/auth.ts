@@ -246,6 +246,23 @@ export class AuthService {
     }
   }
 
+  public async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
+    const metaDb = getMetadataDb();
+    const row = metaDb.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as { password_hash: string } | undefined;
+    if (!row) {
+      throw new Error('User not found');
+    }
+
+    const isValid = await this.verifyPassword(row.password_hash, currentPassword);
+    if (!isValid) {
+      throw new Error('Mật khẩu hiện tại không chính xác');
+    }
+
+    const newHash = await this.hashPassword(newPassword);
+    metaDb.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(newHash, Date.now(), userId);
+    return true;
+  }
+
   public generateSessionCookie(user: UserRecord, secret: string): { cookieValue: string; expires: Date } {
     const maxAgeMs = 7 * 24 * 60 * 60 * 1000; // 7 days
     const expiresAt = Date.now() + maxAgeMs;

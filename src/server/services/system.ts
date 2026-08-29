@@ -222,9 +222,19 @@ export class SystemService {
       default_busy_timeout: map.default_busy_timeout ? parseInt(map.default_busy_timeout, 10) : config.sqlBusyTimeoutMs,
       default_synchronous: map.default_synchronous || 'normal',
       default_foreign_keys: map.default_foreign_keys !== 'false',
+      default_cache_size: map.default_cache_size ? parseInt(map.default_cache_size, 10) : -2000,
+      default_auto_vacuum: map.default_auto_vacuum || 'none',
       backup_schedule: map.backup_schedule || 'daily',
       backup_retention: map.backup_retention ? parseInt(map.backup_retention, 10) : 10,
+      max_upload_size_mb: map.max_upload_size_mb ? parseInt(map.max_upload_size_mb, 10) : 50,
+      default_user_rate_limit: map.default_user_rate_limit ? parseInt(map.default_user_rate_limit, 10) : 60,
+      default_user_max_databases: map.default_user_max_databases ? parseInt(map.default_user_max_databases, 10) : 5,
+      enable_query_logging: map.enable_query_logging !== 'false',
       log_sql: map.log_sql === 'true',
+      debug_mode: map.debug_mode === 'true',
+      log_level: (map.log_level as any) || config.logLevel || 'info',
+      enable_cors_all: map.enable_cors_all === 'true',
+      enable_stack_traces: map.enable_stack_traces === 'true',
     };
   }
 
@@ -246,7 +256,15 @@ export class SystemService {
       throw err;
     }
 
-    return this.getSettings();
+    const updated = this.getSettings();
+
+    // Dynamically adjust logger level if modified
+    if (settings.log_level && logger.level !== settings.log_level) {
+      logger.level = settings.log_level;
+      logger.info({ newLogLevel: settings.log_level }, 'Dynamically adjusted server log level');
+    }
+
+    return updated;
   }
 
   public getSystemStatus(): SystemStatus {

@@ -232,9 +232,19 @@ export interface SystemSettings {
   default_busy_timeout: number;
   default_synchronous: string;
   default_foreign_keys: boolean;
+  default_cache_size: number;
+  default_auto_vacuum: string;
   backup_schedule: string;
   backup_retention: number;
+  max_upload_size_mb: number;
+  default_user_rate_limit: number;
+  default_user_max_databases: number;
+  enable_query_logging: boolean;
   log_sql: boolean;
+  debug_mode: boolean;
+  log_level: 'trace' | 'debug' | 'info' | 'warn' | 'error';
+  enable_cors_all: boolean;
+  enable_stack_traces: boolean;
 }
 
 export interface SystemStatus {

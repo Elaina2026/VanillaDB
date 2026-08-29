@@ -154,4 +154,37 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       data: { user: req.adminUser },
     });
   });
+
+  fastify.post('/change-password', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const Schema = z.object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(6).max(128),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Dữ liệu mật khẩu không hợp lệ (tối thiểu 6 ký tự)' },
+      });
+    }
+
+    try {
+      await authService.changePassword(req.adminUser!.userId, parsed.data.currentPassword, parsed.data.newPassword);
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'user.change_password',
+        resource: req.adminUser!.userId,
+        result: 'success',
+        requestId: req.id,
+      });
+
+      return reply.send({ success: true, message: 'Đổi mật khẩu thành công' });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'CHANGE_PASSWORD_ERROR', message: err.message },
+      });
+    }
+  });
 };

@@ -19,9 +19,19 @@ export const systemRoutes: FastifyPluginAsync = async (fastify) => {
       default_busy_timeout: z.number().int().positive().optional(),
       default_synchronous: z.string().optional(),
       default_foreign_keys: z.boolean().optional(),
+      default_cache_size: z.number().int().optional(),
+      default_auto_vacuum: z.enum(['none', 'full', 'incremental']).optional(),
       backup_schedule: z.enum(['disabled', 'hourly', '6hours', '12hours', 'daily', 'weekly']).optional(),
       backup_retention: z.number().int().min(0).optional(),
+      max_upload_size_mb: z.number().int().min(1).max(500).optional(),
+      default_user_rate_limit: z.number().int().min(0).optional(),
+      default_user_max_databases: z.number().int().min(0).optional(),
+      enable_query_logging: z.boolean().optional(),
       log_sql: z.boolean().optional(),
+      debug_mode: z.boolean().optional(),
+      log_level: z.enum(['trace', 'debug', 'info', 'warn', 'error']).optional(),
+      enable_cors_all: z.boolean().optional(),
+      enable_stack_traces: z.boolean().optional(),
     });
 
     const parsed = Schema.safeParse(req.body);

@@ -105,7 +105,30 @@ export async function buildApp() {
     systemService.recordRequestMetrics(bytesIn, bytesOut, durationMs, isError);
   });
 
-  // Health endpoint
+  // Error handler supporting Debug Mode with stack traces
+  app.setErrorHandler((error: any, req, reply) => {
+    const settings = systemService.getSettings();
+    const statusCode = error.statusCode || 500;
+    const isDebug = settings.debug_mode || !config.isProduction;
+
+    logger.error({
+      err: error,
+      reqId: req.id,
+      method: req.method,
+      url: req.url,
+      statusCode,
+    }, `API Request error: ${error.message}`);
+
+    reply.status(statusCode).send({
+      success: false,
+      error: {
+        code: error.code || 'INTERNAL_SERVER_ERROR',
+        message: error.message || 'An internal server error occurred',
+        requestId: req.id,
+        ...(isDebug && settings.enable_stack_traces ? { stack: error.stack } : {}),
+      },
+    });
+  });
   app.get('/health', async (req, reply) => {
     const metaDb = getMetadataDb();
     const sqliteVer = metaDb.prepare('SELECT sqlite_version() as version').get() as { version: string };
