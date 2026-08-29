@@ -10,8 +10,20 @@ import { storageService } from './storage.js';
 import type { DatabaseRecord, DatabaseOverviewStats, BackupRecord } from '../../../shared/index.js';
 
 export class DatabaseService {
-  public createDatabase(name: string, description?: string | null): DatabaseRecord {
+  public createDatabase(name: string, description?: string | null, ownerId?: string | null): DatabaseRecord {
     const metaDb = getMetadataDb();
+
+    // Check user database quota if ownerId is specified
+    if (ownerId) {
+      const user = metaDb.prepare('SELECT role, max_databases FROM users WHERE id = ?').get(ownerId) as { role: string; max_databases: number } | undefined;
+      if (user && user.role !== 'super_admin') {
+        const countRow = metaDb.prepare('SELECT COUNT(*) as count FROM databases WHERE owner_id = ?').get(ownerId) as { count: number };
+        if (countRow.count >= user.max_databases) {
+          throw new Error(`Database creation limit reached. Max allowed databases for your account is ${user.max_databases}.`);
+        }
+      }
+    }
+
     const id = `db_${nanoid(16)}`;
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `db-${nanoid(6)}`;
 
@@ -24,9 +36,9 @@ export class DatabaseService {
 
     const now = Date.now();
     metaDb.prepare(`
-      INSERT INTO databases (id, name, slug, description, filename, created_at, updated_at, last_accessed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, name, slug, description || null, filename, now, now, now);
+      INSERT INTO databases (id, name, slug, description, filename, owner_id, created_at, updated_at, last_accessed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, name, slug, description || null, filename, ownerId || null, now, now, now);
 
     // Initialize the SQLite database file with WAL and Pragmas
     const db = dbManager.get(id);
@@ -44,21 +56,26 @@ export class DatabaseService {
       slug,
       description: description || null,
       filename,
+      owner_id: ownerId || null,
       created_at: now,
       updated_at: now,
       last_accessed_at: now,
     };
   }
 
-  public listDatabases(): DatabaseRecord[] {
+  public listDatabases(userId?: string, role?: string): DatabaseRecord[] {
     const metaDb = getMetadataDb();
-    const rows = metaDb.prepare('SELECT id, name, slug, description, filename, created_at, updated_at, last_accessed_at FROM databases ORDER BY created_at DESC').all() as any[];
+    if (userId && role === 'user') {
+      const rows = metaDb.prepare('SELECT id, name, slug, description, filename, owner_id, created_at, updated_at, last_accessed_at FROM databases WHERE owner_id = ? ORDER BY created_at DESC').all(userId) as any[];
+      return rows;
+    }
+    const rows = metaDb.prepare('SELECT id, name, slug, description, filename, owner_id, created_at, updated_at, last_accessed_at FROM databases ORDER BY created_at DESC').all() as any[];
     return rows;
   }
 
   public getDatabase(databaseId: string): DatabaseRecord | null {
     const metaDb = getMetadataDb();
-    const row = metaDb.prepare('SELECT id, name, slug, description, filename, created_at, updated_at, last_accessed_at FROM databases WHERE id = ?').get(databaseId) as any;
+    const row = metaDb.prepare('SELECT id, name, slug, description, filename, owner_id, created_at, updated_at, last_accessed_at FROM databases WHERE id = ?').get(databaseId) as any;
     return row || null;
   }
 

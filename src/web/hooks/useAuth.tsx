@@ -1,11 +1,18 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../api/client.js';
+import type { UserRole } from '@shared/index.js';
+
+interface AuthUser {
+  userId: string;
+  username: string;
+  role?: UserRole;
+}
 
 interface AuthContextType {
   initialized: boolean;
   authenticated: boolean;
-  user: { userId: string; username: string } | null;
+  user: AuthUser | null;
   isLoading: boolean;
   isOffline: boolean;
   logout: () => void;

@@ -4,6 +4,8 @@ import { AuthPage } from './pages/AuthPage.js';
 import { ErrorPage } from './pages/ErrorPage.js';
 import { DashboardLayout } from './layouts/DashboardLayout.js';
 import { OverviewPage } from './pages/OverviewPage.js';
+import { TelemetryPage } from './pages/TelemetryPage.js';
+import { UsersPage } from './pages/UsersPage.js';
 import { DatabasesPage } from './pages/DatabasesPage.js';
 import { DatabaseDetailPage } from './pages/DatabaseDetailPage.js';
 import { ActivityPage } from './pages/ActivityPage.js';
@@ -14,7 +16,7 @@ import { CreateTokenModal } from './components/CreateTokenModal.js';
 export const App: React.FC = () => {
   const { authenticated, isLoading, isOffline, refetchStatus } = useAuth();
 
-  // URL Hash routing: #/overview, #/databases, #/databases/:id, #/databases/:id/:tab, #/activity, #/settings
+  // URL Hash routing: #/overview, #/telemetry, #/users, #/databases, #/databases/:id, #/databases/:id/:tab, #/activity, #/settings
   const parseHash = () => {
     const hash = window.location.hash.replace(/^#\/?/, '') || 'overview';
     const parts = hash.split('/').filter(Boolean);
@@ -72,7 +74,7 @@ export const App: React.FC = () => {
     return <AuthPage />;
   }
 
-  const validTabs = ['overview', 'databases', 'activity', 'settings'];
+  const validTabs = ['overview', 'telemetry', 'users', 'databases', 'activity', 'settings'];
   const isInvalidTab = !route.databaseId && !validTabs.includes(route.tab);
 
   return (
@@ -98,7 +100,12 @@ export const App: React.FC = () => {
         <OverviewPage
           onSelectDatabase={(id) => navigateTo('databases', id)}
           onOpenCreateModal={() => setIsCreateDbOpen(true)}
+          onNavigateToTelemetry={() => navigateTo('telemetry')}
         />
+      ) : route.tab === 'telemetry' ? (
+        <TelemetryPage />
+      ) : route.tab === 'users' ? (
+        <UsersPage />
       ) : route.tab === 'databases' ? (
         <DatabasesPage
           onSelectDatabase={(id) => navigateTo('databases', id)}

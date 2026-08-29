@@ -533,5 +533,74 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
       databaseService.deleteDatabase(clonedDb.id);
     } catch {}
   });
+
+  // 12. Multi-User RBAC & Quotas Test
+  it('should create sub-account with DB and rate limit quotas, and enforce caps', async () => {
+    // 1. Create sub-user with max 1 database quota
+    const createUserRes = await app.inject({
+      method: 'POST',
+      url: '/api/admin/users',
+      headers: { cookie: adminCookie },
+      payload: {
+        username: `subuser_${Date.now()}`,
+        password: 'Password123!',
+        role: 'user',
+        maxDatabases: 1,
+        rateLimitPerMinute: 30,
+      },
+    });
+
+    expect(createUserRes.statusCode).toBe(201);
+    const subUser = createUserRes.json().data;
+    expect(subUser.role).toBe('user');
+    expect(subUser.max_databases).toBe(1);
+
+    // 2. Login as sub-user
+    const subLoginRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: {
+        username: subUser.username,
+        password: 'Password123!',
+      },
+    });
+    expect(subLoginRes.statusCode).toBe(200);
+    const subSessionCookie = `vdb_session=${subLoginRes.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+
+    // 3. Sub-user creates 1st database -> Should succeed
+    const createDb1Res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/databases',
+      headers: { cookie: subSessionCookie },
+      payload: { name: 'Sub User DB 1' },
+    });
+    expect(createDb1Res.statusCode).toBe(201);
+    const subDb1Id = createDb1Res.json().data.id;
+
+    // 4. Sub-user tries to create 2nd database -> Should be rejected with quota error
+    const createDb2Res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/databases',
+      headers: { cookie: subSessionCookie },
+      payload: { name: 'Sub User DB 2' },
+    });
+    expect(createDb2Res.statusCode).toBe(400);
+    expect(createDb2Res.json().error.message).toContain('Database creation limit reached');
+
+    // 5. Sub-user tries to access /api/admin/users -> Should be rejected (403 Forbidden)
+    const listUsersForbidden = await app.inject({
+      method: 'GET',
+      url: '/api/admin/users',
+      headers: { cookie: subSessionCookie },
+    });
+    expect(listUsersForbidden.statusCode).toBe(403);
+
+    // Cleanup sub DB & user
+    try {
+      databaseService.deleteDatabase(subDb1Id);
+      const { authService } = await import('../src/server/services/auth.js');
+      authService.deleteUser(subUser.id);
+    } catch {}
+  });
 });
 

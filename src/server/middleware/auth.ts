@@ -1,16 +1,19 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { authService } from '../services/auth.js';
+import { authService, type SessionUser } from '../services/auth.js';
 import { tokenService } from '../services/tokens.js';
 import { config } from '../config/index.js';
-import type { ApiTokenRecord, TokenPermission } from '../../../shared/index.js';
+import type { ApiTokenRecord, TokenPermission, UserRole } from '../../../shared/index.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
-    adminUser?: { userId: string; username: string };
+    adminUser?: SessionUser;
     apiToken?: ApiTokenRecord;
     databaseId?: string;
   }
 }
+
+// In-memory rate limiting map for authenticated user sessions: userId -> { count, resetAt }
+const userRateLimits = new Map<string, { count: number; resetAt: number }>();
 
 export async function requireAdminAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const sessionCookie = request.cookies?.vdb_session;
@@ -31,7 +34,61 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
     return;
   }
 
+  // Check per-user rate limit (if user has quota configured > 0)
+  const fullUser = authService.getUserById(user.userId);
+  if (fullUser && fullUser.status === 'disabled') {
+    reply.status(403).send({
+      success: false,
+      error: { code: 'USER_DISABLED', message: 'User account has been disabled by administrator' },
+    });
+    return;
+  }
+
+  if (fullUser && fullUser.rate_limit_per_minute > 0 && fullUser.role !== 'super_admin') {
+    const now = Date.now();
+    const tracker = userRateLimits.get(user.userId) || { count: 0, resetAt: now + 60000 };
+    if (now > tracker.resetAt) {
+      tracker.count = 0;
+      tracker.resetAt = now + 60000;
+    }
+    tracker.count++;
+    userRateLimits.set(user.userId, tracker);
+
+    if (tracker.count > fullUser.rate_limit_per_minute) {
+      reply.status(429).send({
+        success: false,
+        error: {
+          code: 'RATE_LIMIT_EXCEEDED',
+          message: `User request quota (${fullUser.rate_limit_per_minute} req/min) exceeded. Try again in ${Math.ceil((tracker.resetAt - now) / 1000)}s.`,
+        },
+      });
+      return;
+    }
+  }
+
   request.adminUser = user;
+}
+
+export function requireRole(allowedRoles: UserRole[]) {
+  return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    // Fastify preHandler hook array executes sequentially, requireAdminAuth may run before or inside here
+    if (!request.adminUser) {
+      await requireAdminAuth(request, reply);
+      if (reply.sent) return;
+    }
+    if (!request.adminUser) return;
+
+    if (!allowedRoles.includes(request.adminUser.role)) {
+      reply.status(403).send({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: `Access denied. Requires one of roles: [${allowedRoles.join(', ')}]`,
+        },
+      });
+      return;
+    }
+  };
 }
 
 export function requireTokenPermission(permission: TokenPermission) {

@@ -9,10 +9,18 @@ export const TokenPermissionSchema = z.enum([
   'database:admin'
 ]);
 
+export type UserRole = 'super_admin' | 'admin' | 'user';
+
 export interface UserRecord {
   id: string;
   username: string;
+  role: UserRole;
+  max_databases: number;
+  rate_limit_per_minute: number;
+  status: 'active' | 'disabled';
+  database_count?: number;
   created_at: number;
+  updated_at?: number;
 }
 
 export interface DatabaseRecord {
@@ -21,6 +29,7 @@ export interface DatabaseRecord {
   slug: string;
   description: string | null;
   filename: string;
+  owner_id?: string | null;
   created_at: number;
   updated_at: number;
   last_accessed_at: number | null;

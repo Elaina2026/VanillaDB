@@ -11,7 +11,8 @@ import { storageService } from '../services/storage.js';
 import { webhookService } from '../services/webhook.js';
 import { realtimeService } from '../services/realtime.js';
 import { activityService } from '../services/activity.js';
-import { requireAdminAuth } from '../middleware/auth.js';
+import { authService } from '../services/auth.js';
+import { requireAdminAuth, requireRole } from '../middleware/auth.js';
 import { SqlTranslator } from '../utils/sqlTranslator.js';
 import { TokenPermissionSchema } from '../../../shared/index.js';
 
@@ -20,7 +21,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Databases CRUD
   fastify.get('/databases', async (req, reply) => {
-    const list = databaseService.listDatabases();
+    const list = databaseService.listDatabases(req.adminUser?.userId, req.adminUser?.role);
     return reply.send({ success: true, data: list });
   });
 
@@ -38,17 +39,24 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const record = databaseService.createDatabase(parsed.data.name, parsed.data.description);
-    activityService.recordAudit({
-      user: req.adminUser!.username,
-      action: 'database.create',
-      resource: record.id,
-      result: 'success',
-      requestId: req.id,
-      details: JSON.stringify({ name: record.name }),
-    });
+    try {
+      const record = databaseService.createDatabase(parsed.data.name, parsed.data.description, req.adminUser?.userId);
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'database.create',
+        resource: record.id,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ name: record.name, ownerId: req.adminUser?.userId }),
+      });
 
-    return reply.status(201).send({ success: true, data: record });
+      return reply.status(201).send({ success: true, data: record });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'DATABASE_CREATE_ERROR', message: err.message },
+      });
+    }
   });
 
   fastify.get('/databases/:id', async (req, reply) => {
@@ -1304,6 +1312,122 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(201).send({ success: true, data: record, message: 'Database created and initialized from file successfully' });
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: { code: 'IMPORT_INIT_FAILED', message: `Database created but initialization failed: ${err.message}` } });
+    }
+  });
+
+  // User Management & RBAC APIs (Super Admin / Admin only)
+  fastify.get('/users', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
+    const users = authService.listUsers();
+    return reply.send({ success: true, data: users });
+  });
+
+  fastify.post('/users', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+    const Schema = z.object({
+      username: z.string().min(3).max(50),
+      password: z.string().min(6).max(128),
+      role: z.enum(['super_admin', 'admin', 'user']).default('user'),
+      maxDatabases: z.number().int().min(0).default(5),
+      rateLimitPerMinute: z.number().int().min(0).default(60),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid user payload' },
+      });
+    }
+
+    try {
+      const newUser = await authService.createUser({
+        username: parsed.data.username,
+        password: parsed.data.password,
+        role: parsed.data.role as any,
+        maxDatabases: parsed.data.maxDatabases,
+        rateLimitPerMinute: parsed.data.rateLimitPerMinute,
+      });
+
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'user.create',
+        resource: newUser.id,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ username: newUser.username, role: newUser.role, maxDatabases: newUser.max_databases, rateLimit: newUser.rate_limit_per_minute }),
+      });
+
+      return reply.status(201).send({ success: true, data: newUser });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'USER_CREATE_ERROR', message: err.message },
+      });
+    }
+  });
+
+  fastify.patch('/users/:userId', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+    const { userId } = req.params as { userId: string };
+    const Schema = z.object({
+      password: z.string().min(6).max(128).optional(),
+      role: z.enum(['super_admin', 'admin', 'user']).optional(),
+      maxDatabases: z.number().int().min(0).optional(),
+      rateLimitPerMinute: z.number().int().min(0).optional(),
+      status: z.enum(['active', 'disabled']).optional(),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid user update payload' },
+      });
+    }
+
+    try {
+      const updated = await authService.updateUser(userId, parsed.data as any);
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'user.update',
+        resource: userId,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify(parsed.data),
+      });
+
+      return reply.send({ success: true, data: updated });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'USER_UPDATE_ERROR', message: err.message },
+      });
+    }
+  });
+
+  fastify.delete('/users/:userId', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+    const { userId } = req.params as { userId: string };
+    if (req.adminUser?.userId === userId) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'CANNOT_DELETE_SELF', message: 'You cannot delete your own account' },
+      });
+    }
+
+    try {
+      authService.deleteUser(userId);
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'user.delete',
+        resource: userId,
+        result: 'success',
+        requestId: req.id,
+      });
+
+      return reply.send({ success: true });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'USER_DELETE_ERROR', message: err.message },
+      });
     }
   });
 };

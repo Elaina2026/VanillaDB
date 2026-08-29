@@ -26,6 +26,8 @@ import {
   Sliders,
   BarChart3,
   ArrowUpDown,
+  TrendingUp,
+  Users,
   Menu,
   X
 } from 'lucide-react';
@@ -232,6 +234,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <button
                 onClick={() => {
                   setSelectedDatabaseId(null);
+                  setCurrentTab('telemetry');
+                  closeMobileMenu();
+                }}
+                className={cn(
+                  'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
+                  currentTab === 'telemetry'
+                    ? 'bg-blue-600 text-white font-semibold'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                )}
+              >
+                <TrendingUp className="w-4 h-4" />
+                Live Telemetry
+              </button>
+
+              <button
+                onClick={() => {
+                  setSelectedDatabaseId(null);
                   setCurrentTab('databases');
                   closeMobileMenu();
                 }}
@@ -271,6 +290,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               >
                 <Activity className="w-4 h-4" />
                 Activity Logs
+              </button>
+
+              <button
+                onClick={() => {
+                  setSelectedDatabaseId(null);
+                  setCurrentTab('users');
+                  closeMobileMenu();
+                }}
+                className={cn(
+                  'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
+                  currentTab === 'users'
+                    ? 'bg-blue-600 text-white font-semibold'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                )}
+              >
+                <Users className="w-4 h-4" />
+                User Management
               </button>
 
               <button

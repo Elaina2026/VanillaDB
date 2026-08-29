@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Server,
@@ -11,34 +11,23 @@ import {
   Activity,
   Layers,
   ArrowRight,
-  Wifi,
-  BarChart3,
-  Timer,
+  TrendingUp,
+  ShieldCheck,
   Zap
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatDate } from '../lib/utils.js';
 import type { SystemStatus, DatabaseRecord } from '@shared/index.js';
-import {
-  NetworkChart,
-  CpuRamChart,
-  StorageBreakdownChart,
-  RequestVolumeChart,
-  QueryLatencyChart,
-  type TimeRange
-} from '../components/MetricsCharts.js';
 
 export const OverviewPage: React.FC<{
   onSelectDatabase: (id: string) => void;
   onOpenCreateModal: () => void;
-}> = ({ onSelectDatabase, onOpenCreateModal }) => {
-  const [timeRange, setTimeRange] = useState<TimeRange>('1h');
-  const [refreshInterval, setRefreshInterval] = useState<number>(10000);
-
+  onNavigateToTelemetry: () => void;
+}> = ({ onSelectDatabase, onOpenCreateModal, onNavigateToTelemetry }) => {
   const { data: status, isLoading: isStatusLoading, refetch: refetchStatus } = useQuery<SystemStatus>({
     queryKey: ['systemStatus'],
     queryFn: () => apiRequest('/api/system/status'),
-    refetchInterval: refreshInterval > 0 ? refreshInterval : false,
+    refetchInterval: 10000,
   });
 
   const { data: databases = [] } = useQuery<DatabaseRecord[]>({
@@ -58,7 +47,7 @@ export const OverviewPage: React.FC<{
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6 select-none">
-      {/* Header & Telemetry Controls */}
+      {/* Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
           <div className="flex items-center gap-2">
@@ -69,40 +58,18 @@ export const OverviewPage: React.FC<{
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Host hardware telemetry, SQLite multi-tenant nodes, storage breakdown, and query throughput.
+            Overview of SQLite multi-tenant nodes, host system resources, storage breakdown, and engine status.
           </p>
         </div>
 
-        {/* Interactive Controls: Range Toggle & Auto Refresh */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Time Range Selector */}
-          <div className="bg-muted/60 p-0.5 rounded-lg border border-border flex items-center gap-0.5 text-xs">
-            {(['10m', '1h', '24h'] as TimeRange[]).map((range) => (
-              <button
-                key={range}
-                onClick={() => setTimeRange(range)}
-                className={`px-2.5 py-1 rounded-md font-medium transition-all text-xs ${
-                  timeRange === range
-                    ? 'bg-card text-foreground shadow-sm font-semibold'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {range === '10m' ? 'Live 10m' : range}
-              </button>
-            ))}
-          </div>
-
-          {/* Refresh Interval Selector */}
-          <select
-            value={refreshInterval}
-            onChange={(e) => setRefreshInterval(Number(e.target.value))}
-            className="bg-card border border-border text-foreground text-xs rounded-md px-2.5 py-1.5 font-medium shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onNavigateToTelemetry}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-semibold shadow-sm transition-colors"
           >
-            <option value={3000}>Refresh: 3s</option>
-            <option value={10000}>Refresh: 10s</option>
-            <option value={30000}>Refresh: 30s</option>
-            <option value={0}>Manual Pause</option>
-          </select>
+            <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
+            <span>Live Charts</span>
+          </button>
 
           <button
             onClick={() => refetchStatus()}
@@ -175,88 +142,6 @@ export const OverviewPage: React.FC<{
             <span>VanillaDB v{status?.version}</span>
           </div>
         </div>
-      </div>
-
-      {/* Primary Telemetry SVG Interactive Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Realtime CPU & RAM Dual Area Trend Chart */}
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3 flex flex-col">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-indigo-500" />
-              Realtime CPU & RAM Dual Area Trend
-            </h2>
-            <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">
-              {timeRange} window
-            </span>
-          </div>
-          <div className="flex-1 min-h-[200px]">
-            <CpuRamChart timeRange={timeRange} status={status} />
-          </div>
-        </div>
-
-        {/* Network In/Out Speed Area Chart */}
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3 flex flex-col">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Wifi className="w-4 h-4 text-emerald-500" />
-              Network Traffic Throughput (In / Out)
-            </h2>
-            <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">
-              {timeRange} window
-            </span>
-          </div>
-          <div className="flex-1 min-h-[200px]">
-            <NetworkChart timeRange={timeRange} status={status} />
-          </div>
-        </div>
-
-        {/* Request Volume & Error Rate Timeline */}
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3 flex flex-col">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-blue-500" />
-              Request Volume & Error Rate Timeline
-            </h2>
-            <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">
-              QPS / Error %
-            </span>
-          </div>
-          <div className="flex-1 min-h-[200px]">
-            <RequestVolumeChart timeRange={timeRange} status={status} />
-          </div>
-        </div>
-
-        {/* Query Latency Distribution (Avg vs P95) */}
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3 flex flex-col">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Timer className="w-4 h-4 text-cyan-500" />
-              Query Latency Distribution
-            </h2>
-            <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">
-              Avg vs P95 (ms)
-            </span>
-          </div>
-          <div className="flex-1 min-h-[200px]">
-            <QueryLatencyChart timeRange={timeRange} status={status} />
-          </div>
-        </div>
-      </div>
-
-      {/* Storage Breakdown Interactive Donut Section */}
-      <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-            <HardDrive className="w-4 h-4 text-purple-500" />
-            Storage Allocation Breakdown
-          </h2>
-          <span className="text-xs font-mono font-semibold text-muted-foreground">
-            Total Used: {formatBytes(totalStorage)}
-          </span>
-        </div>
-
-        <StorageBreakdownChart status={status} />
       </div>
 
       {/* Host Hardware Telemetry & Runtime Specs */}

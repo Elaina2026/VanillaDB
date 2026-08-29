@@ -50,7 +50,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const user = await authService.createAdminUser(parsed.data.username, parsed.data.password);
+    const user = await authService.createAdminUser(parsed.data.username, parsed.data.password, 'super_admin', 1000, 0);
     const { cookieValue, expires } = authService.generateSessionCookie(user, config.sessionSecret);
 
     reply.setCookie('vdb_session', cookieValue, {
@@ -72,7 +72,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(201).send({
       success: true,
       data: {
-        user: { id: user.id, username: user.username, created_at: user.created_at },
+        user: { id: user.id, username: user.username, role: user.role, created_at: user.created_at },
       },
     });
   });

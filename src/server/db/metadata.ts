@@ -44,6 +44,10 @@ function runMigrations(db: DatabaseSync): void {
           id TEXT PRIMARY KEY,
           username TEXT NOT NULL UNIQUE,
           password_hash TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'admin',
+          max_databases INTEGER NOT NULL DEFAULT 100,
+          rate_limit_per_minute INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'active',
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         );
@@ -176,6 +180,19 @@ function runMigrations(db: DatabaseSync): void {
       name: 'add_rate_limit_to_tokens',
       sql: `
         ALTER TABLE api_tokens ADD COLUMN rate_limit INTEGER;
+      `
+    },
+    {
+      version: 6,
+      name: 'multi_user_rbac_and_quotas',
+      sql: `
+        ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'super_admin';
+        ALTER TABLE users ADD COLUMN max_databases INTEGER NOT NULL DEFAULT 1000;
+        ALTER TABLE users ADD COLUMN rate_limit_per_minute INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
+        ALTER TABLE databases ADD COLUMN owner_id TEXT;
+        CREATE INDEX IF NOT EXISTS idx_databases_owner ON databases(owner_id);
+        UPDATE users SET role = 'super_admin', max_databases = 1000, rate_limit_per_minute = 0;
       `
     }
   ];

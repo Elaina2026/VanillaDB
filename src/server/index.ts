@@ -164,7 +164,7 @@ export async function buildApp() {
   if (config.bootstrapAdminUsername && config.bootstrapAdminPassword) {
     if (!authService.hasAdminUser()) {
       logger.info({ username: config.bootstrapAdminUsername }, 'Bootstrapping administrator user from environment variables');
-      await authService.createAdminUser(config.bootstrapAdminUsername, config.bootstrapAdminPassword);
+      await authService.createAdminUser(config.bootstrapAdminUsername, config.bootstrapAdminPassword, 'super_admin', 1000, 0);
     }
   }
 
