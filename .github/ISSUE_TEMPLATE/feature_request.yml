@@ -1,0 +1,30 @@
+name: 'Feature Request'
+description: 'Propose a new capability, enhancement, or architectural improvement'
+title: '[FEAT]: '
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve VanillaDatabase. Please describe the problem statement and the proposed technical implementation.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What limitation or use case is currently unsupported?
+      placeholder: Currently VanillaDB does not support... which makes it difficult to...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Implementation
+      description: Describe your proposed approach (endpoint design, payload schema, configuration flags, or SDK methods).
+      placeholder: Add new endpoint or config option...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Considered Alternatives
+      placeholder: A workaround exists using... but it requires...

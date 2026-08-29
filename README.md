@@ -57,18 +57,20 @@
 ## ✨ Key Features
 
 - 🚀 **Multi-Tenant SQLite Engine**: Isolated SQLite database per tenant (`WAL Mode`, `5000ms Busy Timeout`, `Foreign Keys ON`).
+- 🔐 **Data-at-Rest Encryption (AES-256-GCM)**: Automatic authenticated encryption for backups and media storage with PBKDF2 derived keys, plus SQL helper functions (`encrypt_aes`, `decrypt_aes`, `hash_sha256`, `hash_hmac`).
+- 👥 **Multi-User RBAC & Quotas**: Role-based access control (`super_admin`, `admin`, `user`), per-user database quotas, and request rate limiting.
 - 🔄 **Multi-Database Importer & Converter**: Auto-translates dumps from **MySQL**, **PostgreSQL**, **MongoDB (JSON/NDJSON)**, **CSV**, and **SQLite (.db)** into SQLite schemas and transactions.
 - ⚡ **Realtime Event Stream (SSE)**: Live event feed (`insert`, `update`, `delete`, `schema`) over standard HTTP at `/v1/databases/:id/realtime`.
-- 📁 **Database-Scoped Media Storage**: Direct file storage with **HTTP 206 Partial Content Range Streaming** for audio and video playback.
-- 🛠️ **Database Maintenance**: Run `VACUUM`, `PRAGMA wal_checkpoint(TRUNCATE)`, `PRAGMA integrity_check`, and `REINDEX` directly from the dashboard.
+- 📁 **Database-Scoped Media Storage**: Direct file storage with **HTTP 206 Partial Content Range Streaming** (with transparent decryption) for audio and video playback.
+- 🛠️ **Database Maintenance**: Run `VACUUM`, `PRAGMA wal_checkpoint(TRUNCATE)`, `PRAGMA integrity_check`, and `REINDEX` directly from dashboard.
 - 🔀 **1-Click Database Branching / Cloning**: Duplicate databases instantly for dev or staging testing.
-- 📊 **Visual Query Profiler**: Analyze `EXPLAIN QUERY PLAN` outputs with automatic full table scan detection.
+- 📊 **Visual Query Profiler & Telemetry**: Analyze `EXPLAIN QUERY PLAN` outputs and inspect real-time interactive charts (CPU, RAM, Disk, QPS, Latency, Network I/O).
 - 🔔 **Webhooks Subsystem**: HMAC-SHA256 signed HTTP POST notifications dispatched upon data mutations.
 - 🛡️ **Granular Bearer Tokens & Rate Limiting**: Scoped permissions (`read`, `write`, `ddl`, `admin`), table whitelisting/blacklisting, and token rate limiting.
 - 🧠 **AI Vector Search & Embeddings**: Native `vec_cosine_similarity` and `vec_cosine_distance` SQL functions for RAG / AI agents.
 - 🔍 **Full-Text Search (FTS5)**: Fast keyword search across Vietnamese and English Unicode text.
-- ⏰ **Automated Scheduled Backups**: Hourly, daily, and weekly snapshots with retention cleanup.
-- 💻 **Modern Web Dashboard**: Monaco SQL Editor, Table Data Grid Browser, Storage Explorer, and System Telemetry.
+- ⏰ **Automated Scheduled Backups**: Hourly, daily, and weekly encrypted snapshots with retention cleanup.
+- 💻 **Modern Web Dashboard**: Monaco SQL Editor, Table Data Grid Browser, User Management, Storage Explorer, and System Telemetry.
 
 ---
 

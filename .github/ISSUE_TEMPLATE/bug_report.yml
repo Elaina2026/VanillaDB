@@ -1,0 +1,59 @@
+name: 'Bug Report'
+description: 'Report a defect, crash, or unexpected behavior in VanillaDatabase'
+title: '[BUG]: '
+labels: ['bug', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please provide a concise description of the issue, environment details, and clear steps to reproduce.
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem Description
+      description: Provide a clear and concise summary of the issue.
+      placeholder: Describe what failed and under what conditions...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to trigger the behavior.
+      value: |
+        1. Start VanillaDB server with configuration...
+        2. Send request to endpoint `POST /v1/databases/:id/...`
+        3. Observe the response code or server log...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      placeholder: What should have happened (expected status code, response body, etc.)...
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      placeholder: What actually happened (HTTP 500, connection hang, invalid error code)...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server Logs / Stack Trace
+      description: Paste terminal output, error logs, or response headers (if applicable).
+      render: shell
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Deployment Environment
+      options:
+        - 'Docker / Docker Compose'
+        - 'Bare Node.js (systemd / PM2)'
+        - 'Nginx / Caddy Reverse Proxy'
+        - 'Windows Service / Local Development'
+    validations:
+      required: true

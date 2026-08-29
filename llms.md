@@ -131,6 +131,24 @@ LIMIT 5;
 
 ---
 
+### 3.4. Native SQL Crypto Functions (AES-256-GCM & Hashing)
+VanillaDatabase provides native crypto functions for in-query encryption and hashing:
+- `encrypt_aes(data, [custom_passphrase])`: Encrypts plaintext string/buffer to hex string using server master key or optional custom passphrase.
+- `decrypt_aes(hex_cipher, [custom_passphrase])`: Decrypts hex-encoded cipher back to plaintext UTF-8 string.
+- `hash_sha256(data)`: Computes SHA-256 hex digest.
+- `hash_hmac(data, secret)`: Computes HMAC-SHA256 hex signature.
+
+Example SQL Crypto:
+```sql
+-- Encrypt column with master key
+INSERT INTO credentials (service, secret_data) VALUES ('api_service', encrypt_aes('super_secret_token'));
+
+-- Decrypt on select
+SELECT service, decrypt_aes(secret_data) as decrypted_token FROM credentials;
+```
+
+---
+
 ### 3.4. Multi-Database Converter & Ingestion
 VanillaDatabase automatically transforms external formats into SQLite:
 - **MySQL**: Translates backticks, converts `AUTO_INCREMENT` -> `AUTOINCREMENT`, strips `ENGINE=InnoDB` and comments, converts inline `KEY` -> `CREATE INDEX`.

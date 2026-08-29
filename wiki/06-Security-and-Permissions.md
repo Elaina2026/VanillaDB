@@ -4,16 +4,24 @@ Security model, granular Bearer token scopes, rate limiting, and server hardenin
 
 ---
 
-## 1. Dual Authentication Layers
+## 1. Multi-Tier Security Architecture
 
 1. **Control Plane (Admin Dashboard & Management API)**:
    - Session Cookies (`vdb_session`) signed via `VDB_SESSION_SECRET`.
    - Administrative passwords hashed with **Argon2id**.
-   - Audit trail records every administrative mutation to `metadata.db`.
+   - Role-Based Access Control (RBAC): `super_admin`, `admin`, `user`.
+   - Per-user database limits and request rate limits.
+   - Audit trail records administrative actions in `metadata.db`.
 
 2. **Data Plane (Client SDKs, Bots, External Applications)**:
    - Bearer Tokens (`vdb_live_...` or `vdb_test_...`).
    - Plaintext tokens shown once at creation; stored hashed with **SHA-256**.
+   - Per-token rate limiting and table whitelisting/blacklisting.
+
+3. **Data-at-Rest Encryption (AES-256-GCM)**:
+   - Master encryption key (`VDB_MASTER_KEY` / `VDB_ENCRYPTION_KEY`) with PBKDF2 derivation (100,000 iterations).
+   - Backup snapshots (`.snap`) and media storage files automatically encrypted on disk with custom binary envelope `[VENC][SALT][IV][TAG][CIPHERTEXT]`.
+   - Native SQL functions for column-level encryption: `encrypt_aes()`, `decrypt_aes()`, `hash_sha256()`, `hash_hmac()`.
 
 ---
 

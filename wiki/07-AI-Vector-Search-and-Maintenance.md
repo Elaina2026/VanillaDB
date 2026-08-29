@@ -34,7 +34,25 @@ SELECT * FROM articles_fts WHERE articles_fts MATCH 'SQLite OR VanillaDatabase';
 
 ---
 
-## 3. Database Maintenance
+## 3. Native SQL Crypto Functions
+
+VanillaDatabase exposes built-in cryptography functions inside SQL statements:
+- `encrypt_aes(data, [passphrase])`: Encrypts value using AES-256-GCM. Returns hex cipher string.
+- `decrypt_aes(hexCipher, [passphrase])`: Decrypts hex cipher string back to UTF-8 text.
+- `hash_sha256(data)`: Generates SHA-256 hex digest.
+- `hash_hmac(data, secret)`: Generates HMAC-SHA256 signature.
+
+```sql
+-- Encrypt confidential data
+INSERT INTO user_secrets (user_id, token_data) VALUES (1, encrypt_aes('ghp_secretTokenHere'));
+
+-- Decrypt on read
+SELECT user_id, decrypt_aes(token_data) AS token_plain FROM user_secrets;
+```
+
+---
+
+## 4. Database Maintenance
 
 Execute maintenance commands from the Web UI or API:
 
