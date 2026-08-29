@@ -171,6 +171,17 @@ export const DatabaseDetailPage: React.FC<{
     },
   });
 
+  const toggleWebhookMutation = useMutation({
+    mutationFn: ({ webhookId, active }: { webhookId: string; active: boolean }) =>
+      apiRequest(`/api/admin/webhooks/${webhookId}/toggle`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active }),
+      }),
+    onSuccess: () => {
+      refetchWebhooks();
+    },
+  });
+
   // Realtime Live Event Stream state
   const [realtimeEvents, setRealtimeEvents] = useState<any[]>([]);
   const [isRealtimeListening, setIsRealtimeListening] = useState(false);
@@ -403,7 +414,12 @@ export const DatabaseDetailPage: React.FC<{
     setQueryError(null);
     setExplainResult(null);
     try {
-      const res = await apiRequest(`/api/admin/databases/${databaseId}/query`, {
+      const isMultiStatement = sqlText.includes(';') && sqlText.trim().split(';').filter(s => s.trim()).length > 1;
+      const endpoint = isMultiStatement
+        ? `/api/admin/databases/${databaseId}/exec`
+        : `/api/admin/databases/${databaseId}/query`;
+
+      const res = await apiRequest(endpoint, {
         method: 'POST',
         body: JSON.stringify({ sql: sqlText }),
       });
@@ -501,6 +517,35 @@ export const DatabaseDetailPage: React.FC<{
       setIsCloneModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['databases'] });
       setNotificationMessage(`Database cloned to "${newDb.name}" (${newDb.id})`);
+      setTimeout(() => setNotificationMessage(null), 4000);
+    },
+  });
+
+  // Update Database Info (Name & Description)
+  const [editDbName, setEditDbName] = useState('');
+  const [editDbDescription, setEditDbDescription] = useState('');
+
+  useEffect(() => {
+    if (stats?.database) {
+      setEditDbName(stats.database.name);
+      setEditDbDescription(stats.database.description || '');
+    }
+  }, [stats?.database]);
+
+  const updateDbInfoMutation = useMutation({
+    mutationFn: (payload: { name: string; description: string | null }) =>
+      apiRequest(`/api/admin/databases/${databaseId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ['dbStats', databaseId] });
+      queryClient.invalidateQueries({ queryKey: ['databases'] });
+      setNotificationMessage(`Database properties updated successfully.`);
+      setTimeout(() => setNotificationMessage(null), 4000);
+    },
+    onError: (err: any) => {
+      setNotificationMessage(err.message || 'Failed to update database info');
       setTimeout(() => setNotificationMessage(null), 4000);
     },
   });
@@ -2165,6 +2210,18 @@ export const DatabaseDetailPage: React.FC<{
 
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => toggleWebhookMutation.mutate({ webhookId: wh.id, active: !wh.active })}
+                        disabled={toggleWebhookMutation.isPending}
+                        className={`px-2 py-1 text-xs border border-border hover:bg-accent rounded font-medium transition-colors flex items-center gap-1 ${
+                          wh.active ? 'text-emerald-500' : 'text-muted-foreground'
+                        }`}
+                        title={wh.active ? 'Disable webhook' : 'Enable webhook'}
+                      >
+                        {wh.active ? <ToggleRight className="w-4 h-4 text-emerald-500" /> : <ToggleLeft className="w-4 h-4 text-muted-foreground" />}
+                        <span>{wh.active ? 'Active' : 'Paused'}</span>
+                      </button>
+
+                      <button
                         onClick={async () => {
                           try {
                             await apiRequest(`/api/admin/webhooks/${wh.id}/test`, { method: 'POST' });
@@ -2723,6 +2780,65 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
         {/* SETTINGS, MAINTENANCE & DANGER ZONE TAB */}
         {activeTab === 'settings' && (
           <div className="max-w-4xl mx-auto space-y-6">
+            {/* 0. Database Information & Metadata Settings */}
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <Edit2 className="w-4 h-4 text-blue-500" />
+                    Database Properties & Metadata
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Update the instance display name and description.
+                  </p>
+                </div>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!editDbName.trim()) return;
+                  updateDbInfoMutation.mutate({
+                    name: editDbName.trim(),
+                    description: editDbDescription.trim() || null,
+                  });
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Database Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={editDbName}
+                    onChange={(e) => setEditDbName(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Description (Optional)</label>
+                  <textarea
+                    rows={2}
+                    value={editDbDescription}
+                    onChange={(e) => setEditDbDescription(e.target.value)}
+                    placeholder="Provide context or instructions for this database instance..."
+                    className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={updateDbInfoMutation.isPending || !editDbName.trim()}
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                  >
+                    {updateDbInfoMutation.isPending ? 'Saving...' : 'Save Properties'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
             {/* 1. Database Maintenance & Optimization Card */}
             <div className="bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
               <div className="flex items-center justify-between border-b border-border pb-3">
@@ -2820,6 +2936,40 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
                   >
                     Run REINDEX
+                  </button>
+                </div>
+
+                {/* ANALYZE */}
+                <div className="p-3.5 border border-border rounded-lg bg-muted/20 flex flex-col justify-between space-y-3">
+                  <div>
+                    <strong className="text-xs text-foreground">ANALYZE (Query Planner Stats)</strong>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Computes table and index distributions to help query optimizer choose the fastest execution paths.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => maintenanceMutation.mutate('analyze')}
+                    disabled={maintenanceMutation.isPending}
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
+                  >
+                    Run ANALYZE
+                  </button>
+                </div>
+
+                {/* OPTIMIZE */}
+                <div className="p-3.5 border border-border rounded-lg bg-muted/20 flex flex-col justify-between space-y-3">
+                  <div>
+                    <strong className="text-xs text-foreground">PRAGMA optimize</strong>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Runs automatic low-overhead maintenance checks on SQLite database files.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => maintenanceMutation.mutate('optimize')}
+                    disabled={maintenanceMutation.isPending}
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
+                  >
+                    Run PRAGMA optimize
                   </button>
                 </div>
               </div>
