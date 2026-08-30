@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2026-08-30
+
+### Changed
+- Bumped core platform engine version to `1.3.0` across server health endpoints, web UI telemetry headers, and packages.
+- Synchronized client SDK versions for npm (`@nullex/vanilladb`) and PyPI (`vanilladb`).
+
 ## [1.0.0] - 2026-08-30
 
 ### Added

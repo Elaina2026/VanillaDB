@@ -319,7 +319,7 @@ export class SystemService {
     const freeMem = os.freemem();
 
     return {
-      version: '1.0.0',
+      version: '1.3.0',
       nodeVersion: process.version,
       sqliteVersion: sqliteVersionRow.version,
       platform: `${os.type()} ${os.release()} (${os.arch()})`,

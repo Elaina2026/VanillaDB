@@ -207,6 +207,12 @@ export const OverviewPage: React.FC<{
 
           <div className="space-y-2 text-xs divide-y divide-border">
             <div className="flex justify-between py-2">
+              <span className="text-muted-foreground">VanillaDatabase Version</span>
+              <span className="font-mono font-semibold text-emerald-500">
+                v{status?.version || '1.3.0'}
+              </span>
+            </div>
+            <div className="flex justify-between py-2">
               <span className="text-muted-foreground">SQLite Core Engine</span>
               <span className="font-mono font-semibold text-foreground">
                 {status?.sqliteVersion || 'SQLite 3.x'} (WAL Mode)

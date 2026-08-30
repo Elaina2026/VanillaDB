@@ -135,7 +135,7 @@ export async function buildApp() {
     return reply.send({
       status: 'ok',
       service: 'VanillaDatabase',
-      version: '1.0.0',
+      version: '1.3.0',
       sqlite: sqliteVer.version,
       uptime: Math.floor(process.uptime()),
     });

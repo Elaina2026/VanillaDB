@@ -100,7 +100,7 @@ curl http://localhost:3000/health
 {
   "status": "ok",
   "service": "VanillaDatabase",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "sqlite": "3.46.1",
   "uptime": 12
 }
