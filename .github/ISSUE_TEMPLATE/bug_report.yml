@@ -1,59 +1,68 @@
-name: 'Bug Report'
-description: 'Report a defect, crash, or unexpected behavior in VanillaDatabase'
-title: '[BUG]: '
-labels: ['bug', 'triage']
+name: Bug Report
+description: Create a report to help us identify and fix an issue
+labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Please provide a concise description of the issue, environment details, and clear steps to reproduce.
+        Thanks for taking the time to fill out this bug report!
+        Please ensure you do **NOT** post sensitive credentials, API keys, private passwords, or private database contents.
+
   - type: textarea
     id: description
     attributes:
-      label: Problem Description
-      description: Provide a clear and concise summary of the issue.
-      placeholder: Describe what failed and under what conditions...
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
     validations:
       required: true
+
   - type: textarea
-    id: repro
+    id: reproduction
     attributes:
       label: Steps to Reproduce
-      description: Step-by-step instructions to trigger the behavior.
-      value: |
-        1. Start VanillaDB server with configuration...
-        2. Send request to endpoint `POST /v1/databases/:id/...`
-        3. Observe the response code or server log...
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Start VanillaDatabase with `npm start`
+        2. Execute POST request to /v1/databases/db_123/query
+        3. Observe error...
     validations:
       required: true
+
   - type: textarea
     id: expected
     attributes:
       label: Expected Behavior
-      placeholder: What should have happened (expected status code, response body, etc.)...
+      description: A clear description of what you expected to happen.
     validations:
       required: true
+
   - type: textarea
     id: actual
     attributes:
       label: Actual Behavior
-      placeholder: What actually happened (HTTP 500, connection hang, invalid error code)...
+      description: What actually happened instead.
     validations:
       required: true
+
+  - type: input
+    id: node_version
+    attributes:
+      label: Node.js Version
+      placeholder: "e.g. v22.13.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "e.g. Ubuntu 24.04 / macOS 15 / Windows 10"
+    validations:
+      required: true
+
   - type: textarea
     id: logs
     attributes:
-      label: Server Logs / Stack Trace
-      description: Paste terminal output, error logs, or response headers (if applicable).
+      label: Relevant Server Logs
+      description: Copy relevant logs from terminal output. (Sanitize any private database data first).
       render: shell
-  - type: dropdown
-    id: environment
-    attributes:
-      label: Deployment Environment
-      options:
-        - 'Docker / Docker Compose'
-        - 'Bare Node.js (systemd / PM2)'
-        - 'Nginx / Caddy Reverse Proxy'
-        - 'Windows Service / Local Development'
-    validations:
-      required: true

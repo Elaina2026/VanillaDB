@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Discussions & Questions
+    url: https://github.com/Elaina2026/VanillaDB/discussions
+    about: Ask questions, share setups, or discuss features.
+  - name: Documentation Wiki
+    url: https://github.com/Elaina2026/VanillaDB/blob/main/docs/wiki/Home.md
+    about: Read the full VanillaDatabase technical documentation.
