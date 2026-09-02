@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.1] - 2026-08-30
+
+### Fixed
+- Fixed Cross-Origin-Opener-Policy (COOP) and Origin-Agent-Cluster browser console warnings when hosting VanillaDatabase directly on IP addresses / non-HTTPS origins.
+- Configured Helmet security headers with `crossOriginOpenerPolicy: false` and `originAgentCluster: false` to allow seamless HTTP/IP dashboard access without browser isolation conflicts.
+
 ## [1.3.0] - 2026-08-30
 
 ### Changed

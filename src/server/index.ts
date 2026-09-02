@@ -45,10 +45,12 @@ export async function buildApp() {
     }
   });
 
-  // Security headers (Helmet) - configured not to break Monaco editor CDN/assets
+  // Security headers (Helmet) - configured for compatibility with Monaco Editor CDN & plain HTTP / IP hostnames
   await app.register(helmet, {
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+    originAgentCluster: false,
   });
 
   // Cookie parsing
@@ -135,7 +137,7 @@ export async function buildApp() {
     return reply.send({
       status: 'ok',
       service: 'VanillaDatabase',
-      version: '1.3.0',
+      version: '1.3.1',
       sqlite: sqliteVer.version,
       uptime: Math.floor(process.uptime()),
     });

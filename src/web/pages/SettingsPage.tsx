@@ -648,7 +648,7 @@ export const SettingsPage: React.FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
               <div className="p-2.5 bg-muted/40 rounded border border-border">
                 <span className="text-[10px] text-muted-foreground uppercase font-semibold block">VanillaDB</span>
-                <span className="font-mono font-bold text-emerald-500 block mt-0.5">v{status?.version || '1.3.0'}</span>
+                <span className="font-mono font-bold text-emerald-500 block mt-0.5">v{status?.version || '1.3.1'}</span>
               </div>
 
               <div className="p-2.5 bg-muted/40 rounded border border-border">

@@ -79,7 +79,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           <div>
             <div className="flex items-center gap-1">
               <span className="font-semibold text-xs tracking-tight block">VanillaDatabase</span>
-              <span className="text-[8px] px-1 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-mono font-bold">v1.3.0</span>
+              <span className="text-[8px] px-1 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-mono font-bold">v1.3.1</span>
             </div>
             <span className="text-[9px] text-muted-foreground block -mt-0.5">SQLite Cloud</span>
           </div>
@@ -135,7 +135,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="font-semibold text-sm tracking-tight block">VanillaDatabase</span>
-                  <span className="text-[9px] px-1 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-mono font-bold">v1.3.0</span>
+                  <span className="text-[9px] px-1 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-mono font-bold">v1.3.1</span>
                 </div>
                 <span className="text-[10px] text-muted-foreground block -mt-0.5">SQLite Platform</span>
               </div>
