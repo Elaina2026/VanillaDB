@@ -241,14 +241,13 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     const orderBy = query.orderBy ? String(query.orderBy).replace(/[^a-zA-Z0-9_]/g, '') : null;
     const order = query.order?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
 
-    // Validate table name exists in schema
-    const schema = dbManager.getSchema(databaseId);
-    const tableExists = schema.some(t => t.name === table);
-    if (!tableExists) {
+    // Validate table name exists in schema (fast single-query check)
+    const tableInfo = dbManager.getTableInfo(databaseId, table);
+    if (!tableInfo) {
       return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
     }
 
-    let sql = `SELECT * FROM "${table}"`;
+    let sql = `SELECT * FROM "${table.replace(/"/g, '""')}"`;
     if (orderBy) {
       sql += ` ORDER BY "${orderBy}" ${order}`;
     }
@@ -256,7 +255,11 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
     try {
       const startTime = performance.now();
-      const result = dbManager.executeSql(databaseId, sql, [limit, offset]);
+      const result = dbManager.executeSql(databaseId, sql, [limit, offset], {
+        readonly: true,
+        allowedTables: req.apiToken?.allowed_tables,
+        deniedTables: req.apiToken?.denied_tables,
+      });
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
 
       activityService.recordActivity({
@@ -284,9 +287,8 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     const databaseId = req.databaseId!;
     const { table } = req.params as { table: string };
 
-    const schema = dbManager.getSchema(databaseId);
-    const tableExists = schema.some(t => t.name === table);
-    if (!tableExists) {
+    const tableInfo = dbManager.getTableInfo(databaseId, table);
+    if (!tableInfo) {
       return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
     }
 
@@ -304,11 +306,14 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     const placeholders = keys.map(() => '?').join(', ');
     const values = Object.values(row);
 
-    const sql = `INSERT INTO "${table}" (${cols}) VALUES (${placeholders})`;
+    const sql = `INSERT INTO "${table.replace(/"/g, '""')}" (${cols}) VALUES (${placeholders})`;
 
     try {
       const startTime = performance.now();
-      const result = dbManager.executeSql(databaseId, sql, values);
+      const result = dbManager.executeSql(databaseId, sql, values, {
+        allowedTables: req.apiToken?.allowed_tables,
+        deniedTables: req.apiToken?.denied_tables,
+      });
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
 
       activityService.recordActivity({
@@ -343,9 +348,8 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     const databaseId = req.databaseId!;
     const { table } = req.params as { table: string };
 
-    const schema = dbManager.getSchema(databaseId);
-    const tableObj = schema.find(t => t.name === table);
-    if (!tableObj) {
+    const tableInfo = dbManager.getTableInfo(databaseId, table);
+    if (!tableInfo) {
       return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
     }
 
@@ -375,12 +379,15 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
     const setClauses = updateKeys.map(k => `"${k.replace(/"/g, '""')}" = ?`).join(', ');
     const whereClauses = whereKeys.map(k => `"${k.replace(/"/g, '""')}" = ?`).join(' AND ');
-    const sql = `UPDATE "${table}" SET ${setClauses} WHERE ${whereClauses}`;
+    const sql = `UPDATE "${table.replace(/"/g, '""')}" SET ${setClauses} WHERE ${whereClauses}`;
     const params = [...Object.values(values), ...Object.values(where)];
 
     try {
       const startTime = performance.now();
-      const result = dbManager.executeSql(databaseId, sql, params);
+      const result = dbManager.executeSql(databaseId, sql, params, {
+        allowedTables: req.apiToken?.allowed_tables,
+        deniedTables: req.apiToken?.denied_tables,
+      });
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
 
       activityService.recordActivity({
@@ -417,23 +424,25 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     const { table } = req.params as { table: string };
     const query = req.query as any;
 
-    const schema = dbManager.getSchema(databaseId);
-    const tableObj = schema.find(t => t.name === table);
-    if (!tableObj) {
+    const tableInfo = dbManager.getTableInfo(databaseId, table);
+    if (!tableInfo) {
       return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
     }
 
-    const pkCol = tableObj.columns.find(c => c.pk === 1)?.name || 'id';
+    const pkCol = tableInfo.pkCol;
     const pkVal = query[pkCol] || query.id;
 
     if (!pkVal) {
       return reply.status(400).send({ success: false, error: { code: 'MISSING_KEY', message: `Query parameter "${pkCol}" is required for delete` } });
     }
 
-    const sql = `DELETE FROM "${table}" WHERE "${pkCol}" = ?`;
+    const sql = `DELETE FROM "${table.replace(/"/g, '""')}" WHERE "${pkCol.replace(/"/g, '""')}" = ?`;
     try {
       const startTime = performance.now();
-      const result = dbManager.executeSql(databaseId, sql, [pkVal]);
+      const result = dbManager.executeSql(databaseId, sql, [pkVal], {
+        allowedTables: req.apiToken?.allowed_tables,
+        deniedTables: req.apiToken?.denied_tables,
+      });
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
 
       activityService.recordActivity({

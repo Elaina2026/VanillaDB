@@ -25,12 +25,13 @@ export class WebhookService {
   }
 
   public init(): void {
-    // Wildcard subscriber for all database events
+    // Subscriber for base database events (avoids duplicate dispatch from table-scoped emission)
     const originalEmit = realtimeService.emit.bind(realtimeService);
     realtimeService.emit = (event: string | symbol, ...args: any[]): boolean => {
       if (typeof event === 'string' && event.startsWith('db:')) {
         const payload = args[0] as RealtimeEventPayload;
-        if (payload && payload.databaseId) {
+        // Match only the base event `db:${payload.databaseId}` so each mutation triggers dispatch exactly once
+        if (payload && payload.databaseId && event === `db:${payload.databaseId}`) {
           this.dispatch(payload).catch((err) => {
             logger.warn({ err }, 'Async webhook dispatch error');
           });
@@ -204,8 +205,13 @@ export class WebhookService {
         const events: string[] = JSON.parse(hook.events || '[]');
         if (!events.includes('*') && !events.includes(payload.type)) return;
 
-        const isDiscord = hook.url.includes('discord.com/api/webhooks') || hook.url.includes('discordapp.com/api/webhooks');
-        const isSlack = hook.url.includes('hooks.slack.com');
+        let isDiscord = false;
+        let isSlack = false;
+        try {
+          const parsedUrl = new URL(hook.url);
+          isDiscord = (parsedUrl.hostname === 'discord.com' || parsedUrl.hostname === 'discordapp.com') && parsedUrl.pathname.includes('/api/webhooks');
+          isSlack = (parsedUrl.hostname === 'hooks.slack.com') && parsedUrl.pathname.includes('/services/');
+        } catch {}
 
         let postPayload: any;
         if (isDiscord) {

@@ -670,6 +670,7 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     const { getMetadataDb } = await import('../src/server/db/metadata.js');
     const metaDb = getMetadataDb();
     metaDb.prepare('UPDATE databases SET max_size_mb = 0.0001 WHERE id = ?').run(quotaDbId);
+    dbManager.updateCachedQuota(quotaDbId, 0.0001);
 
     // 5. Attempt INSERT -> should be rejected with 413 DISK_QUOTA_EXCEEDED
     const insertRes = await app.inject({

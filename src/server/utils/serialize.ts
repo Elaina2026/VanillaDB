@@ -14,11 +14,14 @@ export function serializeSqlValue(val: any): any {
 }
 
 export function serializeSqlRow(row: Record<string, any>): Record<string, any> {
-  const serialized: Record<string, any> = {};
-  for (const [key, val] of Object.entries(row)) {
-    serialized[key] = serializeSqlValue(val);
+  // Fast in-place mutation to eliminate millions of intermediate Object.entries tuple allocations
+  for (const key in row) {
+    const val = row[key];
+    if (typeof val === 'bigint' || (val !== null && typeof val === 'object' && (val instanceof Uint8Array || Buffer.isBuffer(val)))) {
+      row[key] = serializeSqlValue(val);
+    }
   }
-  return serialized;
+  return row;
 }
 
 export function deserializeSqlParam(val: any): any {

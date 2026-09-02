@@ -84,6 +84,7 @@ export const config = {
   trustProxy: getEnvBool('VDB_TRUST_PROXY', false),
   corsOrigins: process.env.VDB_CORS_ORIGINS ? process.env.VDB_CORS_ORIGINS.split(',').map(s => s.trim()) : [],
   sqlBusyTimeoutMs: getEnvInt('VDB_SQL_BUSY_TIMEOUT_MS', 5000),
+  maxOpenHandles: getEnvInt('VDB_MAX_OPEN_HANDLES', 100),
   maxRequestBodyMb: getEnvInt('VDB_MAX_REQUEST_BODY_MB', 10),
   maxImportMb: getEnvInt('VDB_MAX_IMPORT_MB', 1024),
   maxQueryRows: getEnvInt('VDB_MAX_QUERY_ROWS', 100000),

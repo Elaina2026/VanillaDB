@@ -177,9 +177,17 @@ export class DatabaseService {
     const sourcePath = dbManager.resolveDatabasePath(sourceDatabaseId);
     const targetPath = dbManager.resolveDatabasePath(newRecord.id);
 
-    // Safely copy using SQLite checkpoint or file copy
+    // Clean up newly created target WAL and SHM files to prevent WAL header salt mismatch
+    const targetWal = `${targetPath}-wal`;
+    const targetShm = `${targetPath}-shm`;
+    if (fs.existsSync(targetWal)) fs.unlinkSync(targetWal);
+    if (fs.existsSync(targetShm)) fs.unlinkSync(targetShm);
+
+    // Checkpoint source database to ensure main .sqlite file is current
     const sourceDb = dbManager.get(sourceDatabaseId);
-    sourceDb.exec('PRAGMA wal_checkpoint(FULL);');
+    try {
+      sourceDb.exec('PRAGMA wal_checkpoint(FULL);');
+    } catch {}
 
     fs.copyFileSync(sourcePath, targetPath);
 
@@ -624,19 +632,36 @@ export class DatabaseService {
       throw new Error(`Source table "${params.sourceTable}" not found`);
     }
 
+    // Validate that requested columns exist in source table
+    const validColNames = new Set(sourceTableObj.columns.map(c => c.name));
+    for (const col of params.columns) {
+      if (!validColNames.has(col)) {
+        throw new Error(`Column "${col}" does not exist on table "${params.sourceTable}"`);
+      }
+    }
+
     const cleanSource = params.sourceTable.replace(/"/g, '""');
+    const ftsContentSource = params.sourceTable.replace(/'/g, "''");
     const ftsTable = params.ftsTable || `${params.sourceTable}_fts`;
     const cleanFts = ftsTable.replace(/"/g, '""');
     const tokenizer = params.tokenizer || 'unicode61';
     const cols = params.columns.map(c => `"${c.replace(/"/g, '""')}"`).join(', ');
 
-    const pkCol = sourceTableObj.columns.find(c => c.pk === 1)?.name || 'id';
-    const cleanPk = pkCol.replace(/"/g, '""');
+    // Determine PK column safely: explicit PK -> column named 'id' -> standard SQLite 'rowid'
+    const explicitPk = sourceTableObj.columns.find(c => c.pk === 1)?.name;
+    const hasIdCol = sourceTableObj.columns.some(c => c.name.toLowerCase() === 'id');
+    const pkCol = explicitPk || (hasIdCol ? 'id' : 'rowid');
+    const isExplicitColumn = sourceTableObj.columns.some(c => c.name === pkCol);
+
+    const cleanPk = isExplicitColumn ? `"${pkCol.replace(/"/g, '""')}"` : 'rowid';
+    const ftsContentPk = pkCol.replace(/'/g, "''");
+    const newPkExpr = isExplicitColumn ? `new."${pkCol.replace(/"/g, '""')}"` : 'new.rowid';
+    const oldPkExpr = isExplicitColumn ? `old."${pkCol.replace(/"/g, '""')}"` : 'old.rowid';
 
     const ddlStatements: string[] = [];
 
-    // 1. Create Virtual FTS5 Table
-    const createFtsSql = `CREATE VIRTUAL TABLE IF NOT EXISTS "${cleanFts}" USING fts5(${cols}, content='${cleanSource}', content_rowid='${cleanPk}', tokenize='${tokenizer}');`;
+    // 1. Create Virtual FTS5 Table (safely escaping single quotes for content/content_rowid options)
+    const createFtsSql = `CREATE VIRTUAL TABLE IF NOT EXISTS "${cleanFts}" USING fts5(${cols}, content='${ftsContentSource}', content_rowid='${ftsContentPk}', tokenize='${tokenizer}');`;
     ddlStatements.push(createFtsSql);
 
     // 2. Triggers for Automatic Sync
@@ -648,22 +673,22 @@ export class DatabaseService {
       // Insert trigger
       const insertTrigger = `
         CREATE TRIGGER IF NOT EXISTS "trg_${cleanSource}_fts_ai" AFTER INSERT ON "${cleanSource}" BEGIN
-          INSERT INTO "${cleanFts}"(rowid, ${colNames.join(', ')}) VALUES (new."${cleanPk}", ${newCols});
+          INSERT INTO "${cleanFts}"(rowid, ${colNames.join(', ')}) VALUES (${newPkExpr}, ${newCols});
         END;
       `.trim();
 
       // Delete trigger
       const deleteTrigger = `
         CREATE TRIGGER IF NOT EXISTS "trg_${cleanSource}_fts_ad" AFTER DELETE ON "${cleanSource}" BEGIN
-          INSERT INTO "${cleanFts}"("${cleanFts}", rowid, ${colNames.join(', ')}) VALUES('delete', old."${cleanPk}", ${oldCols});
+          INSERT INTO "${cleanFts}"("${cleanFts}", rowid, ${colNames.join(', ')}) VALUES('delete', ${oldPkExpr}, ${oldCols});
         END;
       `.trim();
 
       // Update trigger
       const updateTrigger = `
         CREATE TRIGGER IF NOT EXISTS "trg_${cleanSource}_fts_au" AFTER UPDATE ON "${cleanSource}" BEGIN
-          INSERT INTO "${cleanFts}"("${cleanFts}", rowid, ${colNames.join(', ')}) VALUES('delete', old."${cleanPk}", ${oldCols});
-          INSERT INTO "${cleanFts}"(rowid, ${colNames.join(', ')}) VALUES (new."${cleanPk}", ${newCols});
+          INSERT INTO "${cleanFts}"("${cleanFts}", rowid, ${colNames.join(', ')}) VALUES('delete', ${oldPkExpr}, ${oldCols});
+          INSERT INTO "${cleanFts}"(rowid, ${colNames.join(', ')}) VALUES (${newPkExpr}, ${newCols});
         END;
       `.trim();
 
@@ -677,7 +702,7 @@ export class DatabaseService {
         db.exec(stmt);
       }
       // Populate existing rows into FTS5
-      const populateSql = `INSERT INTO "${cleanFts}"(rowid, ${cols}) SELECT "${cleanPk}", ${cols} FROM "${cleanSource}";`;
+      const populateSql = `INSERT INTO "${cleanFts}"(rowid, ${cols}) SELECT ${cleanPk}, ${cols} FROM "${cleanSource}";`;
       try {
         db.exec(populateSql);
       } catch {

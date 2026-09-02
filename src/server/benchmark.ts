@@ -17,20 +17,14 @@ async function runBenchmark() {
     permissions: ['database:read', 'database:write', 'database:ddl'],
   });
 
-  // Setup schema
-  await app.inject({
-    method: 'POST',
-    url: `/api/admin/databases/${db.id}/query`,
-    payload: {
-      sql: `
-        CREATE TABLE bench_items (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT,
-          val INTEGER
-        );
-      `,
-    },
-  });
+  // Setup schema directly via dbManager (no admin session needed)
+  dbManager.executeSql(db.id, `
+    CREATE TABLE bench_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      val INTEGER
+    );
+  `);
 
   const runPhase = async (name: string, count: number, fn: (i: number) => Promise<any>, concurrency = 1) => {
     const latencies: number[] = [];
@@ -110,6 +104,28 @@ async function runBenchmark() {
       url: `/v1/databases/${db.id}/batch`,
       headers: { authorization: `Bearer ${token}` },
       payload: { transaction: true, statements: stmts },
+    });
+  });
+
+  // 4. REST Table API CRUD (Optimized table info introspection)
+  await runPhase('REST API Table SELECT (/rows)', 1000, async () => {
+    await app.inject({
+      method: 'GET',
+      url: `/v1/databases/${db.id}/tables/bench_items/rows?limit=20`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+  }, 10);
+
+  // 5. Disk Quota High-Throughput Write Check
+  await runPhase('Writes with Active Disk Quota Enabled', 500, async (i) => {
+    await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${db.id}/query`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        sql: 'INSERT INTO bench_items (name, val) VALUES (?, ?)',
+        params: [`quota_bench_${i}`, i],
+      },
     });
   });
 

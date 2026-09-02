@@ -199,6 +199,22 @@ export class TokenService {
   }
 
   private flushLastUsed(): void {
+    const now = Date.now();
+
+    // Prune expired rate limit buckets
+    for (const [id, bucket] of this.rateLimitBuckets.entries()) {
+      if (now > bucket.resetAt) {
+        this.rateLimitBuckets.delete(id);
+      }
+    }
+
+    // Prune expired token cache entries
+    for (const [hash, entry] of this.tokenCache.entries()) {
+      if (now > entry.expiresAt) {
+        this.tokenCache.delete(hash);
+      }
+    }
+
     if (this.lastUsedBuffer.size === 0) return;
     const metaDb = getMetadataDb();
     const entries = Array.from(this.lastUsedBuffer.entries());

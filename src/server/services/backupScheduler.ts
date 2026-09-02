@@ -6,14 +6,17 @@ import { logger } from '../utils/logger.js';
 export class BackupScheduler {
   private timer: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private isStopped = true;
 
   public start(): void {
-    if (this.timer) return;
+    if (this.timer && !this.isStopped) return;
+    this.isStopped = false;
     logger.info('Starting Automated Backup Scheduler');
     this.scheduleNextRun(60 * 1000); // initial check after 1 minute
   }
 
   public stop(): void {
+    this.isStopped = true;
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
@@ -21,9 +24,15 @@ export class BackupScheduler {
   }
 
   private scheduleNextRun(delayMs: number): void {
+    if (this.isStopped) return;
     this.timer = setTimeout(async () => {
-      await this.runBackupCycle();
-      this.scheduleNextRun(30 * 60 * 1000); // check every 30 minutes
+      try {
+        await this.runBackupCycle();
+      } finally {
+        if (!this.isStopped) {
+          this.scheduleNextRun(30 * 60 * 1000); // check every 30 minutes
+        }
+      }
     }, delayMs);
   }
 

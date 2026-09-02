@@ -20,6 +20,21 @@ import { TokenPermissionSchema } from '../../../shared/index.js';
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', requireAdminAuth);
 
+  // Helper to enforce BOLA / IDOR ownership validation on tenant database routes
+  const requireDatabaseAccess = (req: any, reply: any, databaseId: string) => {
+    const db = databaseService.getDatabase(databaseId);
+    if (!db) {
+      reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: `Database "${databaseId}" not found` } });
+      return null;
+    }
+    const user = req.adminUser;
+    if (user && user.role === 'user' && db.owner_id && db.owner_id !== user.userId) {
+      reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied: database belongs to another user' } });
+      return null;
+    }
+    return db;
+  };
+
   // Databases CRUD
   fastify.get('/databases', async (req, reply) => {
     const list = databaseService.listDatabases(req.adminUser?.userId, req.adminUser?.role);
@@ -63,36 +78,33 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/databases/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const db = databaseService.getDatabase(id);
-    if (!db) {
-      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Database not found' } });
-    }
+    const db = requireDatabaseAccess(req, reply, id);
+    if (!db) return;
     const stats = databaseService.getDatabaseOverviewStats(id);
     return reply.send({ success: true, data: stats });
   });
 
   fastify.get('/databases/:id/storage-stats', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const db = databaseService.getDatabase(id);
-    if (!db) {
-      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Database not found' } });
-    }
+    const db = requireDatabaseAccess(req, reply, id);
+    if (!db) return;
     const stats = databaseService.getDatabaseStorageStats(id);
     return reply.send({ success: true, data: stats });
   });
 
   fastify.get('/databases/:id/metrics', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const db = databaseService.getDatabase(id);
-    if (!db) {
-      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Database not found' } });
-    }
+    const db = requireDatabaseAccess(req, reply, id);
+    if (!db) return;
     const metrics = databaseService.getDatabaseMetricsStats(id);
     return reply.send({ success: true, data: metrics });
   });
 
   fastify.patch('/databases/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const db = requireDatabaseAccess(req, reply, id);
+    if (!db) return;
+
     const Schema = z.object({
       name: z.string().min(1).max(100).optional(),
       description: z.string().max(500).optional().nullable(),
@@ -109,15 +121,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       description: parsed.data.description,
       max_size_mb: parsed.data.maxSizeMb,
     });
+    dbManager.updateCachedQuota(id, parsed.data.maxSizeMb ?? null);
     return reply.send({ success: true, data: updated });
   });
 
   fastify.delete('/databases/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const db = databaseService.getDatabase(id);
-    if (!db) {
-      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Database not found' } });
-    }
+    const db = requireDatabaseAccess(req, reply, id);
+    if (!db) return;
 
     databaseService.deleteDatabase(id);
     activityService.recordAudit({
@@ -134,6 +145,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/databases/:id/clone', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const db = requireDatabaseAccess(req, reply, id);
+    if (!db) return;
+
     const Schema = z.object({
       name: z.string().min(1).max(100),
     });
@@ -158,13 +172,18 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Schema introspection & Table explorer
   fastify.get('/databases/:id/schema', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const schema = dbManager.getSchema(id);
+    const db = requireDatabaseAccess(req, reply, id);
+    if (!db) return;
+    const schema = dbManager.getSchema(id, true);
     return reply.send({ success: true, data: schema });
   });
 
   // Setup FTS5 Full-Text Search Virtual Table with Auto-Sync Triggers
   fastify.post('/databases/:id/fts5-setup', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const db = requireDatabaseAccess(req, reply, id);
+    if (!db) return;
+
     const Schema = z.object({
       sourceTable: z.string().min(1),
       ftsTable: z.string().optional(),
@@ -1123,6 +1142,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Import Data (.sql, .sqlite/.db, .csv, .json, .ndjson, .dump) with Multi-Dialect Auto Translation
   fastify.post('/databases/:id/import', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id);
+    if (!dbRecord) return;
+
     const data = await req.file();
     if (!data) {
       return reply.status(400).send({ success: false, error: { code: 'NO_FILE', message: 'File is required' } });
@@ -1134,6 +1156,20 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const targetTable = (data.fields?.tableName as any)?.value;
     const explicitDialect = (data.fields?.dialect as any)?.value;
 
+    // Check disk quota on raw uploaded file
+    if (dbRecord.max_size_mb && dbRecord.max_size_mb > 0) {
+      const maxBytes = dbRecord.max_size_mb * 1024 * 1024;
+      if (buffer.length > maxBytes) {
+        return reply.status(413).send({
+          success: false,
+          error: {
+            code: 'DISK_QUOTA_EXCEEDED',
+            message: `Uploaded file (${(buffer.length / (1024 * 1024)).toFixed(2)}MB) exceeds database disk quota (${dbRecord.max_size_mb}MB)`,
+          },
+        });
+      }
+    }
+
     // 1. SQLite Binary Replacement (.sqlite, .db)
     if (ext === 'sqlite' || ext === 'db') {
       const header = buffer.subarray(0, 16).toString('utf-8');
@@ -1143,6 +1179,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
       dbManager.close(id);
       const dbPath = dbManager.resolveDatabasePath(id);
+      const walPath = `${dbPath}-wal`;
+      const shmPath = `${dbPath}-shm`;
+      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+
       fs.writeFileSync(dbPath, buffer);
       dbManager.get(id); // Reopen handle
 
@@ -1405,6 +1446,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.status(201).send({ success: true, data: record, message: 'Database created and initialized from file successfully' });
     } catch (err: any) {
+      try {
+        databaseService.deleteDatabase(id);
+      } catch {}
       return reply.status(400).send({ success: false, error: { code: 'IMPORT_INIT_FAILED', message: `Database created but initialization failed: ${err.message}` } });
     }
   });

@@ -52,6 +52,7 @@ export class SystemService {
 
   private refreshStorageCache(): void {
     try {
+      const metaDb = getMetadataDb();
       const dbs = databaseService.listDatabases();
       let databaseStorageBytes = 0;
       let walStorageBytes = 0;
@@ -63,20 +64,12 @@ export class SystemService {
         if (fs.existsSync(walPath)) walStorageBytes += fs.statSync(walPath).size;
       }
 
-      const calculateDirSize = (dirPath: string): number => {
-        let size = 0;
-        if (!fs.existsSync(dirPath)) return 0;
-        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dirPath, entry.name);
-          if (entry.isDirectory()) size += calculateDirSize(fullPath);
-          else size += fs.statSync(fullPath).size;
-        }
-        return size;
-      };
+      // Aggregate backup and media file sizes from SQLite metadata tables (fast, non-blocking)
+      const backupRow = metaDb.prepare('SELECT COALESCE(SUM(size_bytes), 0) as total FROM database_backups').get() as { total: number };
+      const mediaRow = metaDb.prepare('SELECT COALESCE(SUM(size_bytes), 0) as total FROM files').get() as { total: number };
 
-      const backupStorageBytes = calculateDirSize(config.backupsDir);
-      const mediaStorageBytes = calculateDirSize(config.storageDir);
+      const backupStorageBytes = backupRow?.total || 0;
+      const mediaStorageBytes = mediaRow?.total || 0;
       const totalStorageBytes = databaseStorageBytes + walStorageBytes + backupStorageBytes + mediaStorageBytes;
 
       this.cachedStorage = {

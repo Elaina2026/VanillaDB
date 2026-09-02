@@ -15,6 +15,16 @@ declare module 'fastify' {
 // In-memory rate limiting map for authenticated user sessions: userId -> { count, resetAt }
 const userRateLimits = new Map<string, { count: number; resetAt: number }>();
 
+// Periodically clean up expired user rate limit entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, tracker] of userRateLimits.entries()) {
+    if (now > tracker.resetAt) {
+      userRateLimits.delete(userId);
+    }
+  }
+}, 60 * 1000).unref();
+
 export async function requireAdminAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const sessionCookie = request.cookies?.vdb_session;
   if (!sessionCookie) {

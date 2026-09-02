@@ -11,6 +11,9 @@ import type { SqlQueryResult, SqlWriteResult, TableSchemaDetail, TableColumnInfo
 
 interface CachedHandle {
   db: DatabaseSync;
+  resolvedPath: string;
+  maxSizeMb?: number | null;
+  lastQuotaCheck?: number;
   lastUsed: number;
 }
 
@@ -18,12 +21,16 @@ export class DatabaseManager {
   private handles: Map<string, CachedHandle> = new Map();
   private cleanupInterval: NodeJS.Timeout | null = null;
   private readonly IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+  private readonly QUOTA_CHECK_INTERVAL_MS = 2 * 1000; // Throttle statSync to at most once per 2s per DB
 
   constructor() {
     this.cleanupInterval = setInterval(() => this.cleanupIdleHandles(), 60 * 1000);
   }
 
   public resolveDatabasePath(databaseId: string): string {
+    const cached = this.handles.get(databaseId);
+    if (cached?.resolvedPath) return cached.resolvedPath;
+
     const metaDb = getMetadataDb();
     const row = metaDb.prepare('SELECT filename FROM databases WHERE id = ?').get(databaseId) as { filename: string } | undefined;
     if (!row || !row.filename) {
@@ -44,7 +51,18 @@ export class DatabaseManager {
     const cached = this.handles.get(databaseId);
     if (cached) {
       cached.lastUsed = Date.now();
+      // Re-insert to maintain LRU order in Map
+      this.handles.delete(databaseId);
+      this.handles.set(databaseId, cached);
       return cached.db;
+    }
+
+    // Enforce LRU Max Open Handles limit
+    if (this.handles.size >= (config.maxOpenHandles || 100)) {
+      const oldestKey = this.handles.keys().next().value;
+      if (oldestKey) {
+        this.close(oldestKey);
+      }
     }
 
     const dbPath = this.resolveDatabasePath(databaseId);
@@ -144,7 +162,20 @@ export class DatabaseManager {
       // Ignore function registration if not supported in runtime
     }
 
-    this.handles.set(databaseId, { db, lastUsed: Date.now() });
+    // Fetch max_size_mb for quota caching
+    let maxSizeMb: number | null = null;
+    try {
+      const metaRow = getMetadataDb().prepare('SELECT max_size_mb FROM databases WHERE id = ?').get(databaseId) as { max_size_mb: number | null } | undefined;
+      maxSizeMb = metaRow?.max_size_mb ?? null;
+    } catch {}
+
+    this.handles.set(databaseId, {
+      db,
+      resolvedPath: dbPath,
+      maxSizeMb,
+      lastQuotaCheck: 0,
+      lastUsed: Date.now(),
+    });
 
     try {
       getMetadataDb().prepare('UPDATE databases SET last_accessed_at = ? WHERE id = ?').run(Date.now(), databaseId);
@@ -205,7 +236,9 @@ export class DatabaseManager {
     const trimmed = sqlText.trim();
     const startTime = performance.now();
 
-    const isSelect = /^(SELECT|WITH|EXPLAIN|PRAGMA)\b/i.test(trimmed);
+    // Accurately distinguish read vs write, including mutating CTEs (WITH ... INSERT/UPDATE/DELETE)
+    const isMutatingCte = /^WITH\b/i.test(trimmed) && /\b(INSERT\s+INTO|UPDATE\s+|DELETE\s+FROM|REPLACE\s+INTO)\b/i.test(trimmed);
+    const isSelect = (/^(SELECT|EXPLAIN|PRAGMA)\b/i.test(trimmed) || /^WITH\b/i.test(trimmed)) && !isMutatingCte;
 
     let params: any[] | Record<string, any> = [];
     if (Array.isArray(paramsInput)) {
@@ -327,22 +360,60 @@ export class DatabaseManager {
     return { results, totalDurationMs };
   }
 
-  public checkDiskQuota(databaseId: string): void {
-    const metaDb = getMetadataDb();
-    const row = metaDb.prepare('SELECT filename, max_size_mb FROM databases WHERE id = ?').get(databaseId) as { filename: string; max_size_mb: number | null } | undefined;
-    if (!row || !row.max_size_mb || row.max_size_mb <= 0) return;
+  public updateCachedQuota(databaseId: string, maxSizeMb: number | null): void {
+    const cached = this.handles.get(databaseId);
+    if (cached) {
+      cached.maxSizeMb = maxSizeMb;
+      cached.lastQuotaCheck = 0;
+    }
+  }
+
+  public checkDiskQuota(databaseId: string, force = false): void {
+    const cached = this.handles.get(databaseId);
+    const now = Date.now();
+
+    if (!force && cached && cached.lastQuotaCheck && (now - cached.lastQuotaCheck < this.QUOTA_CHECK_INTERVAL_MS)) {
+      return;
+    }
+
+    let maxSizeMb = cached?.maxSizeMb;
+    let dbPath = cached?.resolvedPath;
+
+    if (maxSizeMb === undefined || !dbPath) {
+      const metaDb = getMetadataDb();
+      const row = metaDb.prepare('SELECT filename, max_size_mb FROM databases WHERE id = ?').get(databaseId) as { filename: string; max_size_mb: number | null } | undefined;
+      if (!row || !row.max_size_mb || row.max_size_mb <= 0) {
+        if (cached) {
+          cached.maxSizeMb = null;
+          cached.lastQuotaCheck = now;
+        }
+        return;
+      }
+      maxSizeMb = row.max_size_mb;
+      dbPath = this.resolveDatabasePath(databaseId);
+      if (cached) {
+        cached.maxSizeMb = maxSizeMb;
+        cached.resolvedPath = dbPath;
+      }
+    }
+
+    if (!maxSizeMb || maxSizeMb <= 0) {
+      if (cached) cached.lastQuotaCheck = now;
+      return;
+    }
 
     try {
-      const dbPath = this.resolveDatabasePath(databaseId);
       const walPath = `${dbPath}-wal`;
       let totalBytes = 0;
       if (fs.existsSync(dbPath)) totalBytes += fs.statSync(dbPath).size;
       if (fs.existsSync(walPath)) totalBytes += fs.statSync(walPath).size;
 
-      const maxBytes = row.max_size_mb * 1024 * 1024;
+      if (cached) cached.lastQuotaCheck = now;
+
+      const maxBytes = maxSizeMb * 1024 * 1024;
       if (totalBytes >= maxBytes) {
         const currentMb = (totalBytes / (1024 * 1024)).toFixed(2);
-        const err: any = new Error(`Database disk quota exceeded. Current size: ${currentMb}MB, Max allowed: ${row.max_size_mb}MB.`);
+        const err: any = new Error(`Database disk quota exceeded. Current size: ${currentMb}MB, Max allowed: ${maxSizeMb}MB.`);
         err.code = 'DISK_QUOTA_EXCEEDED';
         err.statusCode = 413;
         throw err;
@@ -353,47 +424,50 @@ export class DatabaseManager {
   }
 
   public validateSqlSafety(sql: string, options?: { readonly?: boolean; allowedTables?: string[] | null; deniedTables?: string[] | null }): void {
-    if (/\bATTACH(\s+DATABASE)?\b/i.test(sql)) {
+    // Strip SQL comments to prevent comment-based filter evasion (/* ... */ and -- ...)
+    const stripped = sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\r\n]*/g, ' ');
+
+    if (/\bATTACH(\s+DATABASE)?\b/i.test(stripped)) {
       throw new Error('ATTACH DATABASE is forbidden for security reasons.');
     }
-    if (/\bDETACH(\s+DATABASE)?\b/i.test(sql)) {
+    if (/\bDETACH(\s+DATABASE)?\b/i.test(stripped)) {
       throw new Error('DETACH DATABASE is forbidden for security reasons.');
     }
-    if (/\bVACUUM\s+INTO\b/i.test(sql)) {
+    if (/\bVACUUM\s+INTO\b/i.test(stripped)) {
       throw new Error('VACUUM INTO is forbidden for security reasons.');
     }
-    if (/\bload_extension\b/i.test(sql)) {
+    if (/\bload_extension\b/i.test(stripped)) {
       throw new Error('load_extension() is disabled for security reasons.');
     }
-    if (/\bwritable_schema\b/i.test(sql)) {
+    if (/\bwritable_schema\b/i.test(stripped)) {
       throw new Error('PRAGMA writable_schema is forbidden for security reasons.');
     }
 
-    if (/^\s*PRAGMA\s+/i.test(sql)) {
-      const pragmaMatch = sql.match(/^\s*PRAGMA\s+([a-zA-Z0-9_]+)/i);
-      if (pragmaMatch) {
-        const pragmaName = pragmaMatch[1].toLowerCase();
-        const safePragmas = [
-          'table_info',
-          'table_xinfo',
-          'index_list',
-          'index_info',
-          'index_xinfo',
-          'foreign_key_list',
-          'database_list',
-          'journal_mode',
-          'page_count',
-          'page_size',
-          'freelist_count',
-          'quick_check',
-          'integrity_check',
-          'user_version',
-          'schema_version',
-          'busy_timeout',
-          'synchronous',
-          'wal_checkpoint',
-          'optimize',
-        ];
+    if (/\bPRAGMA\b/i.test(stripped)) {
+      const pragmaMatches = stripped.matchAll(/\bPRAGMA\s+([a-zA-Z0-9_]+)/gi);
+      const safePragmas = [
+        'table_info',
+        'table_xinfo',
+        'index_list',
+        'index_info',
+        'index_xinfo',
+        'foreign_key_list',
+        'database_list',
+        'journal_mode',
+        'page_count',
+        'page_size',
+        'freelist_count',
+        'quick_check',
+        'integrity_check',
+        'user_version',
+        'schema_version',
+        'busy_timeout',
+        'synchronous',
+        'wal_checkpoint',
+        'optimize',
+      ];
+      for (const match of pragmaMatches) {
+        const pragmaName = match[1].toLowerCase();
         if (!safePragmas.includes(pragmaName)) {
           throw new Error(`PRAGMA ${pragmaName} is not permitted through this API.`);
         }
@@ -403,14 +477,30 @@ export class DatabaseManager {
     if (options?.deniedTables && options.deniedTables.length > 0) {
       for (const table of options.deniedTables) {
         const regex = new RegExp(`\\b${table}\\b`, 'i');
-        if (regex.test(sql)) {
+        if (regex.test(stripped)) {
           throw new Error(`Access to table "${table}" is denied for this token.`);
         }
       }
     }
   }
 
-  public getSchema(databaseId: string): TableSchemaDetail[] {
+  public getTableInfo(databaseId: string, tableName: string): { exists: boolean; pkCol: string; columns: TableColumnInfo[] } | null {
+    const db = this.get(databaseId);
+    const tableRow = db.prepare(`SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') AND (name = ? OR LOWER(name) = LOWER(?)) LIMIT 1`).get(tableName, tableName) as { name: string } | undefined;
+    if (!tableRow) return null;
+
+    const actualName = tableRow.name;
+    const cols = db.prepare(`PRAGMA table_info("${actualName.replace(/"/g, '""')}")`).all() as unknown as TableColumnInfo[];
+    const pkCol = cols.find(c => c.pk === 1)?.name || cols.find(c => c.name.toLowerCase() === 'id')?.name || 'rowid';
+
+    return {
+      exists: true,
+      pkCol,
+      columns: cols,
+    };
+  }
+
+  public getSchema(databaseId: string, includeRowCounts = false): TableSchemaDetail[] {
     const db = this.get(databaseId);
     const schemaObjects = db.prepare(`
       SELECT type, name, tbl_name, sql
@@ -427,12 +517,13 @@ export class DatabaseManager {
 
     for (const item of [...tables, ...views]) {
       const isView = item.type === 'view';
-      const cols = db.prepare(`PRAGMA table_info("${item.name}")`).all() as unknown as TableColumnInfo[];
-      const indexes = isView ? [] : (db.prepare(`PRAGMA index_list("${item.name}")`).all() as any[]);
-      const fks = isView ? [] : (db.prepare(`PRAGMA foreign_key_list("${item.name}")`).all() as unknown as TableForeignKeyInfo[]);
+      const cleanItemName = item.name.replace(/"/g, '""');
+      const cols = db.prepare(`PRAGMA table_info("${cleanItemName}")`).all() as unknown as TableColumnInfo[];
+      const indexes = isView ? [] : (db.prepare(`PRAGMA index_list("${cleanItemName}")`).all() as any[]);
+      const fks = isView ? [] : (db.prepare(`PRAGMA foreign_key_list("${cleanItemName}")`).all() as unknown as TableForeignKeyInfo[]);
 
       const detailedIndexes: TableIndexInfo[] = indexes.map((idx: any) => {
-        const idxCols = db.prepare(`PRAGMA index_info("${idx.name}")`).all() as Array<{ name: string }>;
+        const idxCols = db.prepare(`PRAGMA index_info("${String(idx.name).replace(/"/g, '""')}")`).all() as Array<{ name: string }>;
         return {
           seq: idx.seq,
           name: idx.name,
@@ -448,9 +539,9 @@ export class DatabaseManager {
         .map(t => ({ name: t.name, tbl_name: t.tbl_name, sql: t.sql || '' }));
 
       let rowCountEstimate = 0;
-      if (!isView) {
+      if (!isView && includeRowCounts) {
         try {
-          const countRow = db.prepare(`SELECT COUNT(*) as count FROM "${item.name}"`).get() as { count: number };
+          const countRow = db.prepare(`SELECT COUNT(*) as count FROM "${cleanItemName}"`).get() as { count: number };
           rowCountEstimate = countRow.count;
         } catch {
           // Ignore table count error
