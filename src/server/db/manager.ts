@@ -243,6 +243,8 @@ export class DatabaseManager {
           throw new Error('Database write operation not permitted with read-only permissions');
         }
 
+        this.checkDiskQuota(databaseId);
+
         const stmt = db.prepare(trimmed);
         let result: { changes: number | bigint; lastInsertRowid: number | bigint };
         if (Array.isArray(params)) {
@@ -266,6 +268,11 @@ export class DatabaseManager {
   public executeMultiStatements(databaseId: string, sqlScript: string): { changes: number; durationMs: number } {
     const db = this.get(databaseId);
     this.validateSqlSafety(sqlScript);
+
+    // If script contains write actions, enforce disk quota
+    if (!/^\s*(SELECT|WITH|EXPLAIN|PRAGMA)\b/i.test(sqlScript.trim())) {
+      this.checkDiskQuota(databaseId);
+    }
 
     const startTime = performance.now();
     try {
@@ -318,6 +325,31 @@ export class DatabaseManager {
 
     const totalDurationMs = Math.round((performance.now() - startTime) * 100) / 100;
     return { results, totalDurationMs };
+  }
+
+  public checkDiskQuota(databaseId: string): void {
+    const metaDb = getMetadataDb();
+    const row = metaDb.prepare('SELECT filename, max_size_mb FROM databases WHERE id = ?').get(databaseId) as { filename: string; max_size_mb: number | null } | undefined;
+    if (!row || !row.max_size_mb || row.max_size_mb <= 0) return;
+
+    try {
+      const dbPath = this.resolveDatabasePath(databaseId);
+      const walPath = `${dbPath}-wal`;
+      let totalBytes = 0;
+      if (fs.existsSync(dbPath)) totalBytes += fs.statSync(dbPath).size;
+      if (fs.existsSync(walPath)) totalBytes += fs.statSync(walPath).size;
+
+      const maxBytes = row.max_size_mb * 1024 * 1024;
+      if (totalBytes >= maxBytes) {
+        const currentMb = (totalBytes / (1024 * 1024)).toFixed(2);
+        const err: any = new Error(`Database disk quota exceeded. Current size: ${currentMb}MB, Max allowed: ${row.max_size_mb}MB.`);
+        err.code = 'DISK_QUOTA_EXCEEDED';
+        err.statusCode = 413;
+        throw err;
+      }
+    } catch (e: any) {
+      if (e.code === 'DISK_QUOTA_EXCEEDED') throw e;
+    }
   }
 
   public validateSqlSafety(sql: string, options?: { readonly?: boolean; allowedTables?: string[] | null; deniedTables?: string[] | null }): void {

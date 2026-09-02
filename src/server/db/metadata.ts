@@ -196,6 +196,13 @@ function runMigrations(db: DatabaseSync): void {
         CREATE INDEX IF NOT EXISTS idx_databases_owner ON databases(owner_id);
         UPDATE users SET role = 'super_admin', max_databases = 1000, rate_limit_per_minute = 0;
       `
+    },
+    {
+      version: 7,
+      name: 'add_disk_quota_to_databases',
+      sql: `
+        ALTER TABLE databases ADD COLUMN max_size_mb INTEGER;
+      `
     }
   ];
 

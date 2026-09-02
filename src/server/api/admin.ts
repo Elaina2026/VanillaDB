@@ -30,6 +30,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const Schema = z.object({
       name: z.string().min(1).max(100),
       description: z.string().max(500).optional().nullable(),
+      maxSizeMb: z.number().int().positive().optional().nullable(),
     });
 
     const parsed = Schema.safeParse(req.body);
@@ -41,7 +42,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      const record = databaseService.createDatabase(parsed.data.name, parsed.data.description, req.adminUser?.userId);
+      const record = databaseService.createDatabase(parsed.data.name, parsed.data.description, req.adminUser?.userId, parsed.data.maxSizeMb);
       activityService.recordAudit({
         user: req.adminUser!.username,
         action: 'database.create',
@@ -95,6 +96,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const Schema = z.object({
       name: z.string().min(1).max(100).optional(),
       description: z.string().max(500).optional().nullable(),
+      maxSizeMb: z.number().int().positive().optional().nullable(),
     });
 
     const parsed = Schema.safeParse(req.body);
@@ -102,7 +104,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid payload' } });
     }
 
-    const updated = databaseService.updateDatabase(id, parsed.data);
+    const updated = databaseService.updateDatabase(id, {
+      name: parsed.data.name,
+      description: parsed.data.description,
+      max_size_mb: parsed.data.maxSizeMb,
+    });
     return reply.send({ success: true, data: updated });
   });
 
@@ -154,6 +160,53 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = req.params as { id: string };
     const schema = dbManager.getSchema(id);
     return reply.send({ success: true, data: schema });
+  });
+
+  // Setup FTS5 Full-Text Search Virtual Table with Auto-Sync Triggers
+  fastify.post('/databases/:id/fts5-setup', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const Schema = z.object({
+      sourceTable: z.string().min(1),
+      ftsTable: z.string().optional(),
+      columns: z.array(z.string()).min(1),
+      tokenizer: z.enum(['unicode61', 'porter', 'ascii', 'trigram']).optional(),
+      createTriggers: z.boolean().optional(),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid FTS5 parameters' },
+      });
+    }
+
+    try {
+      const result = databaseService.setupFts5Index(id, parsed.data);
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'database.fts5_setup',
+        resource: id,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ sourceTable: parsed.data.sourceTable, ftsTable: result.ftsTable }),
+      });
+
+      realtimeService.emitEvent({
+        databaseId: id,
+        type: 'schema',
+        table: result.ftsTable,
+        data: { action: 'fts5_setup', ...result },
+        timestamp: Date.now(),
+      });
+
+      return reply.status(201).send({ success: true, data: result, message: `FTS5 virtual table "${result.ftsTable}" created successfully with sync triggers` });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'FTS5_SETUP_ERROR', message: err.message },
+      });
+    }
   });
 
   // Admin Table Browser rows

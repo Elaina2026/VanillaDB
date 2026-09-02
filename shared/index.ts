@@ -29,6 +29,7 @@ export interface DatabaseRecord {
   slug: string;
   description: string | null;
   filename: string;
+  max_size_mb?: number | null; // Max disk quota in MB (null = unlimited)
   owner_id?: string | null;
   owner_username?: string | null;
   created_at: number;

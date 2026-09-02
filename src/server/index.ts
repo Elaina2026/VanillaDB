@@ -210,6 +210,7 @@ export async function startServer() {
     logger.info({ signal }, 'Graceful shutdown initiated');
     try {
       backupScheduler.stop();
+      webhookService.destroy();
       tokenService.destroy();
       activityService.destroy();
       systemService.destroy();

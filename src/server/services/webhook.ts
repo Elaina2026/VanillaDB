@@ -6,9 +6,22 @@ import { realtimeService } from './realtime.js';
 import type { RealtimeEventPayload, WebhookRecord } from '../../../shared/index.js';
 
 export class WebhookService {
+  private retryQueue: Array<{
+    hookId: string;
+    url: string;
+    secret: string;
+    eventType: string;
+    body: string;
+    attempt: number;
+    maxAttempts: number;
+    nextRetryAt: number;
+  }> = [];
+  private retryInterval: NodeJS.Timeout | null = null;
+
   constructor() {
     // Listen to all realtime events and dispatch active webhooks asynchronously
     realtimeService.on('db:*', () => {});
+    this.retryInterval = setInterval(() => this.processRetryQueue(), 3000);
   }
 
   public init(): void {
@@ -25,6 +38,90 @@ export class WebhookService {
       }
       return originalEmit(event, ...args);
     };
+  }
+
+  private async processRetryQueue(): Promise<void> {
+    if (this.retryQueue.length === 0) return;
+    const now = Date.now();
+    const readyItems = this.retryQueue.filter((item) => item.nextRetryAt <= now);
+    this.retryQueue = this.retryQueue.filter((item) => item.nextRetryAt > now);
+
+    for (const item of readyItems) {
+      await this.executePost(item.hookId, item.url, item.secret, item.eventType, item.body, item.attempt + 1, item.maxAttempts);
+    }
+  }
+
+  private async executePost(
+    hookId: string,
+    url: string,
+    secret: string,
+    eventType: string,
+    body: string,
+    attempt = 1,
+    maxAttempts = 3
+  ): Promise<boolean> {
+    const metaDb = getMetadataDb();
+    const signature = crypto.createHmac('sha256', secret).update(body).digest('hex');
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Vanilla-Signature': signature,
+          'X-Vanilla-Event': eventType,
+          'X-Vanilla-Delivery-Attempt': String(attempt),
+          'User-Agent': 'VanillaDatabase-Webhook/1.3',
+        },
+        body,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+      const now = Date.now();
+
+      if (res.ok) {
+        metaDb.prepare('UPDATE webhooks SET last_triggered_at = ?, failure_count = 0 WHERE id = ?').run(now, hookId);
+        return true;
+      } else {
+        metaDb.prepare('UPDATE webhooks SET last_triggered_at = ?, failure_count = failure_count + 1 WHERE id = ?').run(now, hookId);
+        this.scheduleRetry(hookId, url, secret, eventType, body, attempt, maxAttempts);
+        return false;
+      }
+    } catch (err) {
+      clearTimeout(timeout);
+      metaDb.prepare('UPDATE webhooks SET failure_count = failure_count + 1 WHERE id = ?').run(hookId);
+      this.scheduleRetry(hookId, url, secret, eventType, body, attempt, maxAttempts);
+      return false;
+    }
+  }
+
+  private scheduleRetry(
+    hookId: string,
+    url: string,
+    secret: string,
+    eventType: string,
+    body: string,
+    attempt: number,
+    maxAttempts: number
+  ): void {
+    if (attempt >= maxAttempts) return; // Exhausted retries
+
+    // Exponential backoff delays: Attempt 1 -> 5s, Attempt 2 -> 15s, Attempt 3 -> 45s
+    const delayMs = Math.pow(3, attempt) * 1500;
+    this.retryQueue.push({
+      hookId,
+      url,
+      secret,
+      eventType,
+      body,
+      attempt,
+      maxAttempts,
+      nextRetryAt: Date.now() + delayMs,
+    });
   }
 
   public listWebhooks(databaseId: string): WebhookRecord[] {
@@ -153,38 +250,16 @@ export class WebhookService {
         }
 
         const body = JSON.stringify(postPayload);
-        const signature = crypto.createHmac('sha256', hook.secret).update(body).digest('hex');
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 6000);
-
-        try {
-          const res = await fetch(hook.url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Vanilla-Signature': signature,
-              'X-Vanilla-Event': payload.type,
-              'User-Agent': 'VanillaDatabase-Webhook/1.0',
-            },
-            body,
-            signal: controller.signal,
-          });
-
-          clearTimeout(timeout);
-          const now = Date.now();
-
-          if (res.ok) {
-            metaDb.prepare('UPDATE webhooks SET last_triggered_at = ?, failure_count = 0 WHERE id = ?').run(now, hook.id);
-          } else {
-            metaDb.prepare('UPDATE webhooks SET last_triggered_at = ?, failure_count = failure_count + 1 WHERE id = ?').run(now, hook.id);
-          }
-        } catch (err) {
-          clearTimeout(timeout);
-          metaDb.prepare('UPDATE webhooks SET failure_count = failure_count + 1 WHERE id = ?').run(hook.id);
-        }
+        await this.executePost(hook.id, hook.url, hook.secret, payload.type, body, 1, 3);
       })
     );
+  }
+
+  public destroy(): void {
+    if (this.retryInterval) {
+      clearInterval(this.retryInterval);
+      this.retryInterval = null;
+    }
   }
 }
 

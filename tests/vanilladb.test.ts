@@ -626,6 +626,194 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
       const { authService } = await import('../src/server/services/auth.js');
       authService.deleteUser(subUser.id);
     } catch {}
+  }, 15000);
+
+  // 13. Disk Quota per Database (max_size_mb)
+  it('should enforce hard disk quota per tenant database and reject write operations when exceeded', async () => {
+    // 1. Create a database with 1MB quota
+    const quotaDbRes = await app.inject({
+      method: 'POST',
+      url: '/api/admin/databases',
+      headers: { cookie: adminCookie },
+      payload: {
+        name: `Quota Test DB ${Date.now()}`,
+        maxSizeMb: 1, // 1 MB quota
+      },
+    });
+
+    expect(quotaDbRes.statusCode).toBe(201);
+    const quotaDbId = quotaDbRes.json().data.id;
+
+    // 2. Create RW token
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${quotaDbId}/tokens`,
+      headers: { cookie: adminCookie },
+      payload: {
+        name: 'Quota RW Token',
+        permissions: ['database:read', 'database:write', 'database:ddl'],
+      },
+    });
+    const quotaToken = tokenRes.json().data.plainSecret;
+
+    // 3. Create table
+    await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${quotaDbId}/query`,
+      headers: { authorization: `Bearer ${quotaToken}` },
+      payload: {
+        sql: 'CREATE TABLE items (id INTEGER PRIMARY KEY, content TEXT);',
+      },
+    });
+
+    // 4. Update max_size_mb to a very small amount (e.g. 0.0001 MB / simulate full disk)
+    const { getMetadataDb } = await import('../src/server/db/metadata.js');
+    const metaDb = getMetadataDb();
+    metaDb.prepare('UPDATE databases SET max_size_mb = 0.0001 WHERE id = ?').run(quotaDbId);
+
+    // 5. Attempt INSERT -> should be rejected with 413 DISK_QUOTA_EXCEEDED
+    const insertRes = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${quotaDbId}/query`,
+      headers: { authorization: `Bearer ${quotaToken}` },
+      payload: {
+        sql: 'INSERT INTO items (content) VALUES (?)',
+        params: ['Sample heavy data payload exceeding disk limit'],
+      },
+    });
+
+    expect(insertRes.statusCode).toBe(413);
+    expect(insertRes.json().error.code).toBe('DISK_QUOTA_EXCEEDED');
+
+    // 6. Read operation (SELECT) should still be allowed
+    const selectRes = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${quotaDbId}/query`,
+      headers: { authorization: `Bearer ${quotaToken}` },
+      payload: {
+        sql: 'SELECT COUNT(*) as c FROM items;',
+      },
+    });
+    expect(selectRes.statusCode).toBe(200);
+
+    // Cleanup
+    try {
+      databaseService.deleteDatabase(quotaDbId);
+    } catch {}
+  }, 15000);
+
+  // 14. FTS5 Virtual Table & Auto-Sync Triggers Generator
+  it('should generate FTS5 virtual table with auto-sync triggers and support full-text search', async () => {
+    // 1. Create table and insert initial rows
+    await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/query`,
+      headers: { cookie: adminCookie },
+      payload: {
+        sql: 'CREATE TABLE articles (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, content TEXT NOT NULL);',
+      },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/batch`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: {
+        transaction: true,
+        statements: [
+          { sql: 'INSERT INTO articles (title, content) VALUES (?, ?)', params: ['SQLite Speed', 'SQLite is a C-language library that implements a small, fast, self-contained, high-reliability SQL engine.'] },
+          { sql: 'INSERT INTO articles (title, content) VALUES (?, ?)', params: ['VanillaDatabase Cloud', 'VanillaDatabase brings modern cloud features, multi-tenancy and encryption to SQLite.'] },
+          { sql: 'INSERT INTO articles (title, content) VALUES (?, ?)', params: ['Vietnamese Search', 'Tim kiem tieng Viet voi bo ma unicode61 va tokenizer toi uu.'] },
+        ],
+      },
+    });
+
+    // 2. Setup FTS5 index via Admin API
+    const ftsRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/fts5-setup`,
+      headers: { cookie: adminCookie },
+      payload: {
+        sourceTable: 'articles',
+        columns: ['title', 'content'],
+        tokenizer: 'unicode61',
+        createTriggers: true,
+      },
+    });
+
+    expect(ftsRes.statusCode).toBe(201);
+    expect(ftsRes.json().success).toBe(true);
+    expect(ftsRes.json().data.ftsTable).toBe('articles_fts');
+
+    // 3. Query FTS5 table
+    const searchRes = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readOnlyToken}` },
+      payload: {
+        sql: "SELECT rowid, title, content FROM articles_fts WHERE articles_fts MATCH 'VanillaDatabase'",
+      },
+    });
+
+    expect(searchRes.statusCode).toBe(200);
+    const searchData = searchRes.json().data;
+    expect(searchData.rowCount).toBe(1);
+    expect(searchData.rows[0].title).toBe('VanillaDatabase Cloud');
+
+    // 4. Test Auto-Sync Triggers on INSERT
+    await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: {
+        sql: "INSERT INTO articles (title, content) VALUES ('Realtime Subsystems', 'Event-driven architecture with zero latency');",
+      },
+    });
+
+    const triggerSyncSearch = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readOnlyToken}` },
+      payload: {
+        sql: "SELECT rowid, title FROM articles_fts WHERE articles_fts MATCH 'Realtime'",
+      },
+    });
+    expect(triggerSyncSearch.statusCode).toBe(200);
+    expect(triggerSyncSearch.json().data.rowCount).toBe(1);
+    expect(triggerSyncSearch.json().data.rows[0].title).toBe('Realtime Subsystems');
+  }, 15000);
+
+  // 15. Webhook Retry Queue with Exponential Backoff
+  it('should queue failed webhooks and track failure metrics', async () => {
+    const { webhookService } = await import('../src/server/services/webhook.js');
+    const metaDb = (await import('../src/server/db/metadata.js')).getMetadataDb();
+
+    // 1. Create a webhook pointing to a non-existent port (guaranteed connection failure)
+    const deadPort = 49151;
+    const deadHook = webhookService.createWebhook({
+      databaseId: testDbId,
+      name: 'Unreachable Endpoint',
+      url: `http://127.0.0.1:${deadPort}/webhook`,
+      events: ['insert'],
+    });
+
+    expect(deadHook.id).toBeDefined();
+
+    // 2. Dispatch realtime event
+    await webhookService.dispatch({
+      type: 'insert',
+      databaseId: testDbId,
+      table: 'articles',
+      data: { id: 999, title: 'Retry Test' },
+      timestamp: Date.now(),
+    });
+
+    // 3. Verify failure count incremented
+    const updatedHook = metaDb.prepare('SELECT failure_count FROM webhooks WHERE id = ?').get(deadHook.id) as { failure_count: number };
+    expect(updatedHook.failure_count).toBeGreaterThanOrEqual(1);
+
+    // 4. Cleanup
+    webhookService.deleteWebhook(deadHook.id);
   });
 });
 

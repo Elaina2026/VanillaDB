@@ -10,7 +10,7 @@ import { storageService } from './storage.js';
 import type { DatabaseRecord, DatabaseOverviewStats, BackupRecord, DatabaseStorageStats, DatabaseMetricsStats } from '../../../shared/index.js';
 
 export class DatabaseService {
-  public createDatabase(name: string, description?: string | null, ownerId?: string | null): DatabaseRecord {
+  public createDatabase(name: string, description?: string | null, ownerId?: string | null, maxSizeMb?: number | null): DatabaseRecord {
     const metaDb = getMetadataDb();
 
     // Check user database quota if ownerId is specified
@@ -43,9 +43,9 @@ export class DatabaseService {
 
     const now = Date.now();
     metaDb.prepare(`
-      INSERT INTO databases (id, name, slug, description, filename, owner_id, created_at, updated_at, last_accessed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, name, slug, description || null, filename, ownerId || null, now, now, now);
+      INSERT INTO databases (id, name, slug, description, filename, max_size_mb, owner_id, created_at, updated_at, last_accessed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, name, slug, description || null, filename, maxSizeMb || null, ownerId || null, now, now, now);
 
     // Initialize the SQLite database file with WAL and Pragmas
     const db = dbManager.get(id);
@@ -63,6 +63,7 @@ export class DatabaseService {
       slug,
       description: description || null,
       filename,
+      max_size_mb: maxSizeMb || null,
       owner_id: ownerId || null,
       created_at: now,
       updated_at: now,
@@ -73,7 +74,7 @@ export class DatabaseService {
   public listDatabases(userId?: string, role?: string): DatabaseRecord[] {
     const metaDb = getMetadataDb();
     const queryBase = `
-      SELECT d.id, d.name, d.slug, d.description, d.filename, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
+      SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
              u.username as owner_username
       FROM databases d
       LEFT JOIN users u ON d.owner_id = u.id
@@ -89,7 +90,7 @@ export class DatabaseService {
   public getDatabase(databaseId: string): DatabaseRecord | null {
     const metaDb = getMetadataDb();
     const row = metaDb.prepare(`
-      SELECT d.id, d.name, d.slug, d.description, d.filename, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
+      SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
              u.username as owner_username
       FROM databases d
       LEFT JOIN users u ON d.owner_id = u.id
@@ -98,18 +99,20 @@ export class DatabaseService {
     return row || null;
   }
 
-  public updateDatabase(databaseId: string, updates: { name?: string; description?: string | null }): DatabaseRecord {
+  public updateDatabase(databaseId: string, updates: { name?: string; description?: string | null; max_size_mb?: number | null }): DatabaseRecord {
     const metaDb = getMetadataDb();
     const current = this.getDatabase(databaseId);
     if (!current) throw new Error(`Database not found: ${databaseId}`);
 
     const name = updates.name !== undefined ? updates.name : current.name;
     const description = updates.description !== undefined ? updates.description : current.description;
+    const maxSizeMb = updates.max_size_mb !== undefined ? updates.max_size_mb : current.max_size_mb;
     const now = Date.now();
 
-    metaDb.prepare('UPDATE databases SET name = ?, description = ?, updated_at = ? WHERE id = ?').run(
+    metaDb.prepare('UPDATE databases SET name = ?, description = ?, max_size_mb = ?, updated_at = ? WHERE id = ?').run(
       name,
       description,
+      maxSizeMb || null,
       now,
       databaseId
     );
@@ -118,6 +121,7 @@ export class DatabaseService {
       ...current,
       name,
       description,
+      max_size_mb: maxSizeMb || null,
       updated_at: now,
     };
   }
@@ -601,6 +605,91 @@ export class DatabaseService {
       p95LatencyMs,
       timeline,
     };
+  }
+
+  public setupFts5Index(
+    databaseId: string,
+    params: {
+      sourceTable: string;
+      ftsTable?: string;
+      columns: string[];
+      tokenizer?: 'unicode61' | 'porter' | 'ascii' | 'trigram';
+      createTriggers?: boolean;
+    }
+  ): { ftsTable: string; ddlStatements: string[] } {
+    const db = dbManager.get(databaseId);
+    const schema = dbManager.getSchema(databaseId);
+    const sourceTableObj = schema.find(t => t.name === params.sourceTable);
+    if (!sourceTableObj) {
+      throw new Error(`Source table "${params.sourceTable}" not found`);
+    }
+
+    const cleanSource = params.sourceTable.replace(/"/g, '""');
+    const ftsTable = params.ftsTable || `${params.sourceTable}_fts`;
+    const cleanFts = ftsTable.replace(/"/g, '""');
+    const tokenizer = params.tokenizer || 'unicode61';
+    const cols = params.columns.map(c => `"${c.replace(/"/g, '""')}"`).join(', ');
+
+    const pkCol = sourceTableObj.columns.find(c => c.pk === 1)?.name || 'id';
+    const cleanPk = pkCol.replace(/"/g, '""');
+
+    const ddlStatements: string[] = [];
+
+    // 1. Create Virtual FTS5 Table
+    const createFtsSql = `CREATE VIRTUAL TABLE IF NOT EXISTS "${cleanFts}" USING fts5(${cols}, content='${cleanSource}', content_rowid='${cleanPk}', tokenize='${tokenizer}');`;
+    ddlStatements.push(createFtsSql);
+
+    // 2. Triggers for Automatic Sync
+    if (params.createTriggers !== false) {
+      const colNames = params.columns.map(c => `"${c.replace(/"/g, '""')}"`);
+      const newCols = params.columns.map(c => `new."${c.replace(/"/g, '""')}"`).join(', ');
+      const oldCols = params.columns.map(c => `old."${c.replace(/"/g, '""')}"`).join(', ');
+
+      // Insert trigger
+      const insertTrigger = `
+        CREATE TRIGGER IF NOT EXISTS "trg_${cleanSource}_fts_ai" AFTER INSERT ON "${cleanSource}" BEGIN
+          INSERT INTO "${cleanFts}"(rowid, ${colNames.join(', ')}) VALUES (new."${cleanPk}", ${newCols});
+        END;
+      `.trim();
+
+      // Delete trigger
+      const deleteTrigger = `
+        CREATE TRIGGER IF NOT EXISTS "trg_${cleanSource}_fts_ad" AFTER DELETE ON "${cleanSource}" BEGIN
+          INSERT INTO "${cleanFts}"("${cleanFts}", rowid, ${colNames.join(', ')}) VALUES('delete', old."${cleanPk}", ${oldCols});
+        END;
+      `.trim();
+
+      // Update trigger
+      const updateTrigger = `
+        CREATE TRIGGER IF NOT EXISTS "trg_${cleanSource}_fts_au" AFTER UPDATE ON "${cleanSource}" BEGIN
+          INSERT INTO "${cleanFts}"("${cleanFts}", rowid, ${colNames.join(', ')}) VALUES('delete', old."${cleanPk}", ${oldCols});
+          INSERT INTO "${cleanFts}"(rowid, ${colNames.join(', ')}) VALUES (new."${cleanPk}", ${newCols});
+        END;
+      `.trim();
+
+      ddlStatements.push(insertTrigger, deleteTrigger, updateTrigger);
+    }
+
+    // Execute setup
+    db.exec('BEGIN TRANSACTION;');
+    try {
+      for (const stmt of ddlStatements) {
+        db.exec(stmt);
+      }
+      // Populate existing rows into FTS5
+      const populateSql = `INSERT INTO "${cleanFts}"(rowid, ${cols}) SELECT "${cleanPk}", ${cols} FROM "${cleanSource}";`;
+      try {
+        db.exec(populateSql);
+      } catch {
+        // Ignore duplicate if already populated
+      }
+      db.exec('COMMIT;');
+    } catch (err: any) {
+      db.exec('ROLLBACK;');
+      throw err;
+    }
+
+    return { ftsTable, ddlStatements };
   }
 }
 

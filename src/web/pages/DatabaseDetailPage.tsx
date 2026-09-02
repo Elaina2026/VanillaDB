@@ -522,19 +522,21 @@ export const DatabaseDetailPage: React.FC<{
     },
   });
 
-  // Update Database Info (Name & Description)
+  // Update Database Info (Name, Description & Max Size Quota)
   const [editDbName, setEditDbName] = useState('');
   const [editDbDescription, setEditDbDescription] = useState('');
+  const [editDbMaxSizeMb, setEditDbMaxSizeMb] = useState<string>('');
 
   useEffect(() => {
     if (stats?.database) {
       setEditDbName(stats.database.name);
       setEditDbDescription(stats.database.description || '');
+      setEditDbMaxSizeMb(stats.database.max_size_mb ? String(stats.database.max_size_mb) : '');
     }
   }, [stats?.database]);
 
   const updateDbInfoMutation = useMutation({
-    mutationFn: (payload: { name: string; description: string | null }) =>
+    mutationFn: (payload: { name: string; description: string | null; maxSizeMb: number | null }) =>
       apiRequest(`/api/admin/databases/${databaseId}`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
@@ -547,6 +549,31 @@ export const DatabaseDetailPage: React.FC<{
     },
     onError: (err: any) => {
       setNotificationMessage(err.message || 'Failed to update database info');
+      setTimeout(() => setNotificationMessage(null), 4000);
+    },
+  });
+
+  // FTS5 Index Generator Modal State
+  const [isFtsModalOpen, setIsFtsModalOpen] = useState(false);
+  const [ftsSourceTable, setFtsSourceTable] = useState('');
+  const [ftsColumns, setFtsColumns] = useState<string[]>([]);
+  const [ftsTokenizer, setFtsTokenizer] = useState<'unicode61' | 'porter' | 'ascii' | 'trigram'>('unicode61');
+  const [ftsWithTriggers, setFtsWithTriggers] = useState(true);
+
+  const setupFtsMutation = useMutation({
+    mutationFn: (payload: { sourceTable: string; columns: string[]; tokenizer: string; createTriggers: boolean }) =>
+      apiRequest(`/api/admin/databases/${databaseId}/fts5-setup`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: (data) => {
+      setIsFtsModalOpen(false);
+      refetchSchema();
+      setNotificationMessage(`FTS5 virtual table "${data.data.ftsTable}" created with sync triggers!`);
+      setTimeout(() => setNotificationMessage(null), 4000);
+    },
+    onError: (err: any) => {
+      setNotificationMessage(err.message || 'Failed to setup FTS5 index');
       setTimeout(() => setNotificationMessage(null), 4000);
     },
   });
@@ -614,6 +641,11 @@ export const DatabaseDetailPage: React.FC<{
         </div>
 
         <div className="flex items-center gap-2 text-xs">
+          {stats?.database.max_size_mb ? (
+            <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded font-mono font-medium">
+              Quota: {stats.database.max_size_mb} MB
+            </span>
+          ) : null}
           <span className="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-medium">
             WAL Active
           </span>
@@ -2279,6 +2311,36 @@ export const DatabaseDetailPage: React.FC<{
         {/* SCHEMA VIEWER TAB */}
         {activeTab === 'schema' && (
           <div className="max-w-5xl mx-auto space-y-4">
+            <div className="flex items-center justify-between pb-1">
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Schema Browser</h3>
+                <p className="text-xs text-muted-foreground">Inspect tables, columns, indexes, foreign keys, and full-text search indexes.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const firstTable = schema.find(s => s.type === 'table');
+                    if (firstTable) {
+                      setFtsSourceTable(firstTable.name);
+                      setFtsColumns(firstTable.columns.filter(c => c.type.toUpperCase().includes('TEXT') || c.type.toUpperCase().includes('CHAR')).map(c => c.name));
+                    }
+                    setIsFtsModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded text-xs font-semibold shadow-sm transition-colors"
+                >
+                  <FileText className="w-3.5 h-3.5 text-purple-500" />
+                  <span>Setup FTS5 Search</span>
+                </button>
+                <button
+                  onClick={() => setIsCreateTableOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create Table</span>
+                </button>
+              </div>
+            </div>
+
             {isSchemaLoading ? (
               <div className="flex flex-col items-center justify-center p-12 bg-card border border-border rounded-lg text-muted-foreground">
                 <RefreshCw className="w-6 h-6 animate-spin mb-2 text-blue-500" />
@@ -2802,6 +2864,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   updateDbInfoMutation.mutate({
                     name: editDbName.trim(),
                     description: editDbDescription.trim() || null,
+                    maxSizeMb: editDbMaxSizeMb.trim() ? parseInt(editDbMaxSizeMb.trim(), 10) : null,
                   });
                 }}
                 className="space-y-4"
@@ -2826,6 +2889,19 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     placeholder="Provide context or instructions for this database instance..."
                     className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-blue-500"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Disk Storage Quota (MB)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={editDbMaxSizeMb}
+                    onChange={(e) => setEditDbMaxSizeMb(e.target.value)}
+                    placeholder="Leave empty for unlimited size"
+                    className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground font-mono focus:ring-1 focus:ring-blue-500"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Limits maximum SQLite database and WAL file size.</p>
                 </div>
 
                 <div className="flex justify-end pt-1">
@@ -3169,6 +3245,127 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
           refetchStats();
         }}
       />
+
+      {/* FTS5 Setup Modal */}
+      {isFtsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-xl p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-purple-500" />
+                <h3 className="text-sm font-bold text-foreground">Setup FTS5 Full-Text Search</h3>
+              </div>
+              <button onClick={() => setIsFtsModalOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground">
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!ftsSourceTable || ftsColumns.length === 0) return;
+                setupFtsMutation.mutate({
+                  sourceTable: ftsSourceTable,
+                  columns: ftsColumns,
+                  tokenizer: ftsTokenizer,
+                  createTriggers: ftsWithTriggers,
+                });
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Source Table</label>
+                <select
+                  value={ftsSourceTable}
+                  onChange={(e) => {
+                    const tbl = e.target.value;
+                    setFtsSourceTable(tbl);
+                    const found = schema.find(s => s.name === tbl);
+                    if (found) {
+                      setFtsColumns(found.columns.filter(c => c.type.toUpperCase().includes('TEXT') || c.type.toUpperCase().includes('CHAR')).map(c => c.name));
+                    }
+                  }}
+                  className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-blue-500"
+                >
+                  {schema.filter(s => s.type === 'table').map(s => (
+                    <option key={s.name} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Indexable Text Columns</label>
+                <div className="max-h-32 overflow-y-auto space-y-1.5 p-2 bg-muted/20 border border-border rounded-md">
+                  {schema.find(s => s.name === ftsSourceTable)?.columns.map(c => {
+                    const isChecked = ftsColumns.includes(c.name);
+                    return (
+                      <label key={c.name} className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) setFtsColumns([...ftsColumns, c.name]);
+                            else setFtsColumns(ftsColumns.filter(col => col !== c.name));
+                          }}
+                          className="rounded border-border text-purple-600 focus:ring-purple-500 bg-background"
+                        />
+                        <span className="font-mono">{c.name}</span>
+                        <span className="text-[10px] text-muted-foreground">({c.type || 'TEXT'})</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Tokenizer</label>
+                  <select
+                    value={ftsTokenizer}
+                    onChange={(e) => setFtsTokenizer(e.target.value as any)}
+                    className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value="unicode61">unicode61 (Multi-language/VN)</option>
+                    <option value="porter">porter (English Stemming)</option>
+                    <option value="ascii">ascii (Basic ASCII)</option>
+                    <option value="trigram">trigram (Substring search)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Auto-Sync Triggers</label>
+                  <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer pt-2">
+                    <input
+                      type="checkbox"
+                      checked={ftsWithTriggers}
+                      onChange={(e) => setFtsWithTriggers(e.target.checked)}
+                      className="rounded border-border text-purple-600 focus:ring-purple-500 bg-background"
+                    />
+                    <span>Sync on INSERT/UPDATE/DELETE</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsFtsModalOpen(false)}
+                  className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={setupFtsMutation.isPending || ftsColumns.length === 0}
+                  className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                >
+                  {setupFtsMutation.isPending ? 'Generating...' : 'Create FTS5 Index'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Generic Confirmation Modal */}
       <ConfirmModal

@@ -11,12 +11,13 @@ export const CreateDatabaseModal: React.FC<{
 }> = ({ isOpen, onClose, onSuccess }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [maxSizeMb, setMaxSizeMb] = useState<string>('');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const createMutation = useMutation({
-    mutationFn: async (payload: { name: string; description?: string; file?: File | null }) => {
+    mutationFn: async (payload: { name: string; description?: string; maxSizeMb?: number | null; file?: File | null }) => {
       if (payload.file) {
         const formData = new FormData();
         formData.append('file', payload.file);
@@ -36,13 +37,18 @@ export const CreateDatabaseModal: React.FC<{
 
       return apiRequest('/api/admin/databases', {
         method: 'POST',
-        body: JSON.stringify({ name: payload.name, description: payload.description }),
+        body: JSON.stringify({
+          name: payload.name,
+          description: payload.description,
+          maxSizeMb: payload.maxSizeMb,
+        }),
       });
     },
     onSuccess: (db: DatabaseRecord) => {
       queryClient.invalidateQueries({ queryKey: ['databases'] });
       setName('');
       setDescription('');
+      setMaxSizeMb('');
       setImportFile(null);
       onSuccess(db);
       onClose();
@@ -61,6 +67,7 @@ export const CreateDatabaseModal: React.FC<{
     createMutation.mutate({
       name: name.trim() || (importFile ? importFile.name.replace(/\.[^/.]+$/, '') : ''),
       description: description.trim() || undefined,
+      maxSizeMb: maxSizeMb.trim() ? parseInt(maxSizeMb.trim(), 10) : null,
       file: importFile,
     });
   };
@@ -106,6 +113,19 @@ export const CreateDatabaseModal: React.FC<{
               onChange={(e) => setDescription(e.target.value)}
               className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Disk Storage Quota (MB, Optional)</label>
+            <input
+              type="number"
+              min={1}
+              placeholder="e.g. 500 (Leave empty for unlimited)"
+              value={maxSizeMb}
+              onChange={(e) => setMaxSizeMb(e.target.value)}
+              className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500 font-mono"
+            />
+            <p className="text-[10px] text-muted-foreground mt-0.5">Maximum size limit. Rejects write statements if exceeded.</p>
           </div>
 
           <div className="pt-1">
