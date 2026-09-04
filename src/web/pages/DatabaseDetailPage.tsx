@@ -54,6 +54,7 @@ import { DatabaseOperationsTimelineChart } from '../components/MetricsCharts.js'
 import { ErdCanvas } from '../components/ErdCanvas.js';
 import { exportQueryResults } from '../lib/exportUtils.js';
 import { useAuth } from '../hooks/useAuth.js';
+import { useI18n } from '../hooks/useI18n.js';
 import type {
   DatabaseOverviewStats,
   DatabaseStorageStats,
@@ -76,6 +77,7 @@ export const DatabaseDetailPage: React.FC<{
   onOpenCreateToken: (dbId: string) => void;
 }> = ({ databaseId, initialTab = 'overview', onTabChange, onBack, onOpenCreateToken }) => {
   const { user: currentUser } = useAuth();
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'jobs' | 'backups' | 'settings'>(initialTab);
   const queryClient = useQueryClient();
 
@@ -1719,7 +1721,7 @@ export const DatabaseDetailPage: React.FC<{
                       editorMode === 'code' ? 'bg-card text-foreground font-semibold shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    SQL Code
+                    {t('editor.modeCode', 'Code')}
                   </button>
                   <button
                     onClick={() => {
@@ -1735,7 +1737,7 @@ export const DatabaseDetailPage: React.FC<{
                       editorMode === 'visual' ? 'bg-card text-foreground font-semibold shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    Visual Builder
+                    {t('editor.modeVisual', 'Visual Builder')}
                   </button>
                 </div>
 
@@ -1748,7 +1750,7 @@ export const DatabaseDetailPage: React.FC<{
                   title="Toggle Table Schema Side-by-Side Split View"
                 >
                   <Layers className="w-3.5 h-3.5" />
-                  <span>Split View</span>
+                  <span>{t('editor.splitView', 'Split View')}</span>
                 </button>
               </div>
 
@@ -1756,12 +1758,12 @@ export const DatabaseDetailPage: React.FC<{
                 <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
                   <span>
                     {queryResult.durationMs} ms
-                    {'rowCount' in queryResult ? ` • ${queryResult.rowCount} rows` : ` • ${queryResult.changes} changes`}
+                    {'rowCount' in queryResult ? ` • ${queryResult.rowCount} ${t('common.rows', 'rows')}` : ` • ${queryResult.changes} ${t('editor.changes', 'changes')}`}
                   </span>
 
                   {'rows' in queryResult && queryResult.rows.length > 0 && (
                     <div className="flex items-center gap-1.5 font-sans">
-                      <span className="text-[11px] text-muted-foreground font-medium">Export:</span>
+                      <span className="text-[11px] text-muted-foreground font-medium">{t('editor.exportResults', 'Export:')}</span>
                       <button
                         onClick={() => exportQueryResults(queryResult.rows, queryResult.columns, 'csv')}
                         className="px-2 py-0.5 bg-card hover:bg-accent text-foreground border border-border rounded text-[11px] font-semibold transition-colors"
@@ -1803,10 +1805,10 @@ export const DatabaseDetailPage: React.FC<{
 
             {/* Visual Query Builder Panel (when editorMode === 'visual') */}
             {editorMode === 'visual' ? (
-              <div className="p-4 bg-[#121214] border border-[#27272a] rounded-lg space-y-4 text-xs font-mono shrink-0">
+              <div className="p-4 bg-card border border-border rounded-lg space-y-4 text-xs font-mono shrink-0 shadow-sm">
                 <div className="flex flex-wrap items-center gap-4">
                   <div>
-                    <label className="block text-[11px] text-muted-foreground mb-1 font-sans">Target Table</label>
+                    <label className="block text-[11px] text-muted-foreground mb-1 font-sans">{t('editor.vbTargetTable', 'Target Table')}</label>
                     <select
                       value={vbTable}
                       onChange={(e) => {
@@ -1815,7 +1817,7 @@ export const DatabaseDetailPage: React.FC<{
                         const detail = schema.find(s => s.name === tbl);
                         if (detail) setVbColumns(detail.columns.map(c => c.name));
                       }}
-                      className="px-2.5 py-1.5 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs focus:outline-none"
+                      className="px-2.5 py-1.5 bg-background border border-border rounded text-foreground text-xs focus:outline-none"
                     >
                       {schema.filter(s => s.type === 'table').map(t => (
                         <option key={t.name} value={t.name}>{t.name}</option>
@@ -1824,14 +1826,14 @@ export const DatabaseDetailPage: React.FC<{
                   </div>
 
                   <div>
-                    <label className="block text-[11px] text-muted-foreground mb-1 font-sans">Sort Order</label>
+                    <label className="block text-[11px] text-muted-foreground mb-1 font-sans">{t('editor.vbSortOrder', 'Sort Order')}</label>
                     <div className="flex items-center gap-1">
                       <select
                         value={vbSortCol}
                         onChange={(e) => setVbSortCol(e.target.value)}
-                        className="px-2 py-1.5 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs focus:outline-none"
+                        className="px-2 py-1.5 bg-background border border-border rounded text-foreground text-xs focus:outline-none"
                       >
-                        <option value="">None</option>
+                        <option value="">{t('common.none', 'None')}</option>
                         {(schema.find(s => s.name === vbTable)?.columns || []).map(c => (
                           <option key={c.name} value={c.name}>{c.name}</option>
                         ))}
@@ -1839,7 +1841,7 @@ export const DatabaseDetailPage: React.FC<{
                       <select
                         value={vbSortDir}
                         onChange={(e) => setVbSortDir(e.target.value as any)}
-                        className="px-2 py-1.5 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs focus:outline-none"
+                        className="px-2 py-1.5 bg-background border border-border rounded text-foreground text-xs focus:outline-none"
                       >
                         <option value="ASC">ASC</option>
                         <option value="DESC">DESC</option>
@@ -1848,12 +1850,12 @@ export const DatabaseDetailPage: React.FC<{
                   </div>
 
                   <div>
-                    <label className="block text-[11px] text-muted-foreground mb-1 font-sans">Limit</label>
+                    <label className="block text-[11px] text-muted-foreground mb-1 font-sans">{t('editor.vbLimit', 'Limit')}</label>
                     <input
                       type="number"
                       value={vbLimit}
                       onChange={(e) => setVbLimit(e.target.value)}
-                      className="w-20 px-2 py-1.5 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs focus:outline-none"
+                      className="w-20 px-2 py-1.5 bg-background border border-border rounded text-foreground text-xs focus:outline-none"
                     />
                   </div>
 
@@ -1876,9 +1878,9 @@ export const DatabaseDetailPage: React.FC<{
                         setSqlText(genSql);
                         setEditorMode('code');
                       }}
-                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-sans text-xs font-semibold shadow-sm"
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-sans text-xs font-semibold shadow-sm transition-colors"
                     >
-                      Generate SQL & Switch to Code
+                      {t('editor.vbGenerate', 'Generate SQL & Switch to Code')}
                     </button>
                   </div>
                 </div>
@@ -1886,21 +1888,21 @@ export const DatabaseDetailPage: React.FC<{
                 {/* Columns Selection Checkboxes */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] text-muted-foreground font-sans">Columns to Select</span>
+                    <span className="text-[11px] text-muted-foreground font-sans">{t('editor.vbColumns', 'Columns to Select')}</span>
                     <button
                       type="button"
                       onClick={() => {
                         const allCols = schema.find(s => s.name === vbTable)?.columns.map(c => c.name) || [];
                         setVbColumns(vbColumns.length === allCols.length ? [] : allCols);
                       }}
-                      className="text-[10px] text-blue-400 hover:underline font-sans"
+                      className="text-[10px] text-blue-500 hover:underline font-sans"
                     >
-                      {vbColumns.length === (schema.find(s => s.name === vbTable)?.columns.length || 0) ? 'Deselect All' : 'Select All (*)'}
+                      {vbColumns.length === (schema.find(s => s.name === vbTable)?.columns.length || 0) ? t('editor.vbDeselectAll', 'Deselect All') : t('editor.vbSelectAll', 'Select All (*)')}
                     </button>
                   </div>
-                  <div className="flex flex-wrap gap-2 p-2 bg-[#18181b] border border-[#27272a] rounded max-h-28 overflow-y-auto">
+                  <div className="flex flex-wrap gap-2 p-2 bg-background border border-border rounded max-h-28 overflow-y-auto">
                     {(schema.find(s => s.name === vbTable)?.columns || []).map(c => (
-                      <label key={c.name} className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer px-1.5 py-0.5 rounded hover:bg-[#27272a]">
+                      <label key={c.name} className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer px-1.5 py-0.5 rounded hover:bg-muted">
                         <input
                           type="checkbox"
                           checked={vbColumns.includes(c.name)}
@@ -1908,24 +1910,24 @@ export const DatabaseDetailPage: React.FC<{
                             if (e.target.checked) setVbColumns([...vbColumns, c.name]);
                             else setVbColumns(vbColumns.filter(col => col !== c.name));
                           }}
-                          className="rounded border-[#3f3f46] text-blue-600 bg-[#27272a]"
+                          className="rounded border-border text-blue-600 bg-background"
                         />
                         <span>{c.name}</span>
-                        {c.pk ? <span className="text-[9px] text-amber-400 font-bold">PK</span> : null}
+                        {c.pk ? <span className="text-[9px] text-amber-500 font-bold">PK</span> : null}
                       </label>
                     ))}
                   </div>
                 </div>
 
                 {/* Filter Condition Builder */}
-                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#27272a]">
-                  <span className="text-[11px] text-muted-foreground font-sans">Filter (WHERE):</span>
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border">
+                  <span className="text-[11px] text-muted-foreground font-sans">{t('editor.vbFilter', 'Filter (WHERE):')}</span>
                   <select
                     value={vbFilterCol}
                     onChange={(e) => setVbFilterCol(e.target.value)}
-                    className="px-2 py-1 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs"
+                    className="px-2 py-1 bg-background border border-border rounded text-foreground text-xs"
                   >
-                    <option value="">No Filter</option>
+                    <option value="">{t('editor.vbNoFilter', 'No Filter')}</option>
                     {(schema.find(s => s.name === vbTable)?.columns || []).map(c => (
                       <option key={c.name} value={c.name}>{c.name}</option>
                     ))}
@@ -1933,7 +1935,7 @@ export const DatabaseDetailPage: React.FC<{
                   <select
                     value={vbFilterOp}
                     onChange={(e) => setVbFilterOp(e.target.value)}
-                    className="px-2 py-1 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs"
+                    className="px-2 py-1 bg-background border border-border rounded text-foreground text-xs"
                   >
                     <option value="=">=</option>
                     <option value="!=">!=</option>
@@ -1946,7 +1948,7 @@ export const DatabaseDetailPage: React.FC<{
                     placeholder="Value..."
                     value={vbFilterVal}
                     onChange={(e) => setVbFilterVal(e.target.value)}
-                    className="px-2 py-1 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs"
+                    className="px-2 py-1 bg-background border border-border rounded text-foreground text-xs"
                   />
                 </div>
               </div>
@@ -1956,8 +1958,8 @@ export const DatabaseDetailPage: React.FC<{
             <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0 overflow-hidden">
               {/* Left Main Console: Editor Textarea + Results */}
               <div className="flex-1 flex flex-col space-y-3 min-h-0 overflow-hidden">
-                {/* SQL Editor Area: Pure Dark High-Contrast */}
-                <div className="h-36 md:h-44 border border-[#27272a] rounded-lg overflow-hidden shrink-0 relative bg-[#09090b] shadow-inner">
+                {/* SQL Editor Area: High-Contrast & Theme-Adaptive */}
+                <div className="h-36 md:h-44 border border-border rounded-lg overflow-hidden shrink-0 relative bg-card shadow-inner">
                   <textarea
                     value={sqlText}
                     onChange={(e) => setSqlText(e.target.value)}
@@ -1968,30 +1970,30 @@ export const DatabaseDetailPage: React.FC<{
                       }
                     }}
                     placeholder="-- Write SQLite queries here (e.g. SELECT * FROM users;)&#10;-- Press Ctrl+Enter to execute"
-                    className="w-full h-full p-3 font-mono text-xs text-[#ffffff] bg-[#09090b] resize-none focus:outline-none leading-relaxed selection:bg-blue-700"
+                    className="w-full h-full p-3 font-mono text-xs text-foreground bg-transparent resize-none focus:outline-none leading-relaxed selection:bg-blue-600/30 placeholder:text-muted-foreground/60"
                     spellCheck={false}
                   />
                 </div>
 
-                {/* Results Viewer: Pure Dark High-Contrast Background & Crisp White Text */}
-                <div className="flex-1 bg-[#09090b] border border-[#27272a] rounded-lg overflow-hidden flex flex-col shadow-sm">
-                  <div className="h-8 border-b border-[#27272a] px-3 flex items-center justify-between bg-[#18181b] text-xs font-semibold text-[#a1a1aa]">
+                {/* Results Viewer: Theme-Adaptive Background & Clean Readable Text */}
+                <div className="flex-1 bg-card border border-border rounded-lg overflow-hidden flex flex-col shadow-sm">
+                  <div className="h-8 border-b border-border px-3 flex items-center justify-between bg-muted/50 text-xs font-semibold text-muted-foreground">
                     <span className="flex items-center gap-1.5">
-                      <Terminal className="w-3.5 h-3.5 text-blue-400" />
-                      Query Results
+                      <Terminal className="w-3.5 h-3.5 text-blue-500" />
+                      {t('editor.results', 'Query Results')}
                     </span>
                     {queryResult && 'rows' in queryResult && (
-                      <span className="font-mono text-[11px] text-[#71717a]">
-                        {queryResult.rows.length} rows returned
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        {queryResult.rows.length} {t('common.rows', 'rows')}
                       </span>
                     )}
                   </div>
-                  <div className="flex-1 overflow-auto p-2 bg-[#09090b]">
+                  <div className="flex-1 overflow-auto p-2 bg-card">
                     {queryError ? (
-                      <div className="p-3 bg-red-950/50 border border-red-800/50 text-red-300 text-xs font-mono rounded flex items-start gap-2">
-                        <XCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-mono rounded flex items-start gap-2">
+                        <XCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                         <div>
-                          <div className="font-bold text-red-200">SQLite Execution Error</div>
+                          <div className="font-bold">SQLite Execution Error</div>
                           <div className="mt-0.5">{queryError}</div>
                         </div>
                       </div>
@@ -2001,19 +2003,19 @@ export const DatabaseDetailPage: React.FC<{
                         <div
                           className={`p-3 rounded-lg border ${
                             explainResult.analysis.hasFullTableScan
-                              ? 'bg-amber-950/40 border-amber-800/50 text-amber-300'
-                              : 'bg-emerald-950/40 border-emerald-800/50 text-emerald-300'
+                              ? 'bg-amber-500/10 border-amber-500/20 text-amber-500'
+                              : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
                           }`}
                         >
                           <div className="font-bold flex items-center gap-2 text-sm mb-1">
                             {explainResult.analysis.hasFullTableScan ? (
                               <>
-                                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                                <AlertTriangle className="w-4 h-4 text-amber-500" />
                                 <span>Slow Query Warning: Full Table Scan Detected</span>
                               </>
                             ) : (
                               <>
-                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                                 <span>Optimized Execution Plan</span>
                               </>
                             )}
@@ -2022,23 +2024,23 @@ export const DatabaseDetailPage: React.FC<{
                         </div>
 
                         {/* Step-by-step query execution tree */}
-                        <div className="border border-[#27272a] rounded-lg overflow-hidden">
-                          <div className="bg-[#18181b] px-3 py-1.5 border-b border-[#27272a] text-[#a1a1aa] font-semibold text-[11px]">
+                        <div className="border border-border rounded-lg overflow-hidden">
+                          <div className="bg-muted/50 px-3 py-1.5 border-b border-border text-muted-foreground font-semibold text-[11px]">
                             EXPLAIN QUERY PLAN Details
                           </div>
-                          <div className="divide-y divide-[#27272a] bg-[#09090b]">
+                          <div className="divide-y divide-border bg-card">
                             {explainResult.plan.map((step, idx) => (
                               <div key={idx} className="p-2.5 flex items-center gap-3 text-xs">
-                                <span className="px-1.5 py-0.5 bg-[#27272a] text-[#a1a1aa] rounded text-[10px]">
+                                <span className="px-1.5 py-0.5 bg-muted text-muted-foreground rounded text-[10px]">
                                   Step {step.id}
                                 </span>
                                 <span
                                   className={`font-mono ${
                                     step.detail.includes('SCAN')
-                                      ? 'text-amber-400 font-semibold'
+                                      ? 'text-amber-500 font-semibold'
                                       : step.detail.includes('INDEX')
-                                      ? 'text-emerald-400'
-                                      : 'text-zinc-200'
+                                      ? 'text-emerald-500'
+                                      : 'text-foreground'
                                   }`}
                                 >
                                   {step.detail}
@@ -2049,39 +2051,39 @@ export const DatabaseDetailPage: React.FC<{
                         </div>
                       </div>
                     ) : !queryResult ? (
-                      <div className="p-8 text-center text-xs text-[#71717a] font-mono flex flex-col items-center justify-center h-full gap-2">
+                      <div className="p-8 text-center text-xs text-muted-foreground font-mono flex flex-col items-center justify-center h-full gap-2">
                         <Terminal className="w-8 h-8 opacity-30" />
                         <span>Press "Run" or press Ctrl+Enter to execute SQL statement.</span>
                       </div>
                     ) : 'rows' in queryResult ? (
-                      <table className="w-full text-left text-xs border-collapse font-mono bg-[#09090b] text-[#f4f4f5]">
-                        <thead className="bg-[#18181b] border-b border-[#27272a] sticky top-0 z-10 text-[#a1a1aa]">
+                      <table className="w-full text-left text-xs border-collapse font-mono bg-card text-foreground">
+                        <thead className="bg-muted/50 border-b border-border sticky top-0 z-10 text-muted-foreground">
                           <tr>
                             {queryResult.columns.map((col) => (
-                              <th key={col} className="py-2 px-3 font-semibold text-[#60a5fa] border-r border-[#27272a] last:border-r-0">
+                              <th key={col} className="py-2 px-3 font-semibold text-blue-500 border-r border-border last:border-r-0">
                                 {col}
                               </th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#27272a]">
+                        <tbody className="divide-y divide-border">
                           {queryResult.rows.length === 0 ? (
                             <tr>
-                              <td colSpan={queryResult.columns.length} className="py-6 text-center text-[#71717a]">
+                              <td colSpan={queryResult.columns.length} className="py-6 text-center text-muted-foreground">
                                 (0 rows returned)
                               </td>
                             </tr>
                           ) : (
                             queryResult.rows.map((row, idx) => (
-                              <tr key={idx} className="hover:bg-[#18181b] transition-colors">
+                              <tr key={idx} className="hover:bg-muted/40 transition-colors">
                                 {queryResult.columns.map((col) => {
                                   const val = row[col];
                                   return (
-                                    <td key={col} className="py-1.5 px-3 border-r border-[#27272a] last:border-r-0 truncate max-w-sm text-[#f4f4f5]">
+                                    <td key={col} className="py-1.5 px-3 border-r border-border last:border-r-0 truncate max-w-sm text-foreground">
                                       {val === null ? (
-                                        <span className="text-[#71717a] italic">NULL</span>
+                                        <span className="text-muted-foreground italic">NULL</span>
                                       ) : typeof val === 'object' ? (
-                                        <span className="text-[#c084fc] font-semibold">{JSON.stringify(val)}</span>
+                                        <span className="text-purple-500 font-semibold">{JSON.stringify(val)}</span>
                                       ) : (
                                         String(val)
                                       )}
@@ -2094,14 +2096,14 @@ export const DatabaseDetailPage: React.FC<{
                         </tbody>
                       </table>
                     ) : (
-                      <div className="p-4 text-xs font-mono text-emerald-400 space-y-1 bg-emerald-950/20 border border-emerald-800/40 rounded">
+                      <div className="p-4 text-xs font-mono text-emerald-500 space-y-1 bg-emerald-500/10 border border-emerald-500/20 rounded">
                         <div className="font-bold flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          Query executed successfully.
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          {t('editor.success', 'Query executed successfully.')}
                         </div>
-                        <div className="text-emerald-300">Changes: {queryResult.changes}</div>
-                        <div className="text-emerald-300">Last Insert Row ID: {String(queryResult.lastInsertRowid)}</div>
-                        <div className="text-emerald-300">Duration: {queryResult.durationMs} ms</div>
+                        <div>{t('editor.changes', 'Changes:')} {queryResult.changes}</div>
+                        <div>{t('editor.lastInsertId', 'Last Insert Row ID:')} {String(queryResult.lastInsertRowid)}</div>
+                        <div>{t('editor.duration', 'Duration:')} {queryResult.durationMs} ms</div>
                       </div>
                     )}
                   </div>
@@ -2110,16 +2112,16 @@ export const DatabaseDetailPage: React.FC<{
 
               {/* Right Side: Schema & Column Inspector in Split View (Desktop only) */}
               {isSplitView && (
-                <div className="hidden lg:flex w-72 shrink-0 bg-[#09090b] border border-[#27272a] rounded-lg p-3 flex-col space-y-3">
-                  <div className="flex items-center justify-between border-b border-[#27272a] pb-2">
+                <div className="hidden lg:flex w-72 shrink-0 bg-card border border-border rounded-lg p-3 flex-col space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-border pb-2">
                     <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      <TableIcon className="w-3.5 h-3.5 text-blue-400" />
-                      Schema Inspector
+                      <TableIcon className="w-3.5 h-3.5 text-blue-500" />
+                      {t('editor.inspectorTitle', 'Schema Inspector')}
                     </span>
                     <select
                       value={splitSelectedTable || selectedTable || schema.find(s => s.type === 'table')?.name || ''}
                       onChange={(e) => setSplitSelectedTable(e.target.value)}
-                      className="px-2 py-1 bg-[#18181b] border border-[#27272a] rounded text-[11px] text-foreground font-mono focus:outline-none max-w-[140px] truncate"
+                      className="px-2 py-1 bg-background border border-border rounded text-[11px] text-foreground font-mono focus:outline-none max-w-[140px] truncate"
                     >
                       {schema.filter(s => s.type === 'table').map(t => (
                         <option key={t.name} value={t.name}>{t.name}</option>
@@ -2130,7 +2132,7 @@ export const DatabaseDetailPage: React.FC<{
                   {/* Columns list with 1-click insert */}
                   <div className="flex-1 overflow-y-auto space-y-1 pr-1 font-mono text-[11px]">
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 font-sans">
-                      Columns (Click to insert)
+                      {t('editor.inspectorSubtitle', 'Columns (Click to insert)')}
                     </div>
                     {schema
                       .find(s => s.name === (splitSelectedTable || selectedTable || schema.find(t => t.type === 'table')?.name))
@@ -2141,10 +2143,10 @@ export const DatabaseDetailPage: React.FC<{
                           onClick={() => {
                             setSqlText(prev => (prev.endsWith(' ') || prev.length === 0 ? `${prev}"${col.name}"` : `${prev} "${col.name}"`));
                           }}
-                          className="w-full flex items-center justify-between p-1.5 rounded hover:bg-[#18181b] text-left transition-colors group"
+                          className="w-full flex items-center justify-between p-1.5 rounded hover:bg-muted text-left transition-colors group"
                         >
-                          <span className="flex items-center gap-1.5 truncate text-foreground group-hover:text-blue-400">
-                            {col.pk ? <span className="text-[9px] text-amber-400 font-bold">PK</span> : <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />}
+                          <span className="flex items-center gap-1.5 truncate text-foreground group-hover:text-blue-500">
+                            {col.pk ? <span className="text-[9px] text-amber-500 font-bold">PK</span> : <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />}
                             <span className="truncate">{col.name}</span>
                           </span>
                           <span className="text-[10px] text-muted-foreground uppercase shrink-0">

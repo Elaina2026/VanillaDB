@@ -14,9 +14,13 @@ import { ShortcutsPage } from './pages/ShortcutsPage.js';
 import { CreateDatabaseModal } from './components/CreateDatabaseModal.js';
 import { CreateTokenModal } from './components/CreateTokenModal.js';
 import { CommandPalette } from './components/CommandPalette.js';
+import { useI18n } from './hooks/useI18n.js';
+import { useTheme } from './hooks/useTheme.js';
 
 export const App: React.FC = () => {
   const { authenticated, isLoading, isOffline, refetchStatus } = useAuth();
+  const { language, setLanguage } = useI18n();
+  const { theme, setTheme } = useTheme();
 
   // URL Hash routing: #/overview, #/telemetry, #/users, #/databases, #/databases/:id, #/databases/:id/:tab, #/activity, #/settings
   const parseHash = () => {
@@ -61,34 +65,61 @@ export const App: React.FC = () => {
   const [createTokenDbId, setCreateTokenDbId] = useState<string | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
-  // Global Keyboard Shortcuts listener (Ctrl + K, Ctrl + B, Shift + ?)
+  // Global Keyboard Shortcuts listener (Ctrl + K, Ctrl + B, Ctrl + Shift + L, Shift + ?, Esc, etc.)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts inside text inputs or textareas unless it's Escape or Ctrl+K
       const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName);
 
+      // Open Command Palette: Ctrl + K / Cmd + K
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsCommandPaletteOpen((prev) => !prev);
         return;
       }
 
+      // Create new Database: Ctrl + B / Cmd + B
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         setIsCreateDbOpen(true);
         return;
       }
 
+      // Toggle Language: Ctrl + Shift + L
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        setLanguage(language === 'en' ? 'vi' : 'en');
+        return;
+      }
+
+      // Toggle Theme: Ctrl + Shift + T
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        setTheme(theme === 'dark' ? 'light' : 'dark');
+        return;
+      }
+
+      // Jump to Shortcuts Reference: Shift + ?
       if (e.key === '?' && e.shiftKey && !isInput) {
         e.preventDefault();
         navigateTo('shortcuts');
         return;
       }
+
+      // Fast Navigation (when not typing in an input):
+      // Alt + 1: Overview, Alt + 2: Databases, Alt + 3: Telemetry, Alt + 4: Activity, Alt + 5: Users, Alt + 6: Settings
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (e.key === '1') { e.preventDefault(); navigateTo('overview'); return; }
+        if (e.key === '2') { e.preventDefault(); navigateTo('databases'); return; }
+        if (e.key === '3') { e.preventDefault(); navigateTo('telemetry'); return; }
+        if (e.key === '4') { e.preventDefault(); navigateTo('activity'); return; }
+        if (e.key === '5') { e.preventDefault(); navigateTo('users'); return; }
+        if (e.key === '6') { e.preventDefault(); navigateTo('settings'); return; }
+      }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, []);
+  }, [language, theme]);
 
   if (isOffline) {
     return <ErrorPage type="offline" onRetry={refetchStatus} />;
@@ -121,6 +152,7 @@ export const App: React.FC = () => {
       selectedDatabaseTab={route.dbTab}
       setSelectedDatabaseId={(id, tab = 'overview') => (id ? navigateTo('databases', id, tab) : navigateTo('databases'))}
       onOpenCreateDb={() => setIsCreateDbOpen(true)}
+      onOpenSearch={() => setIsCommandPaletteOpen(true)}
     >
       {route.databaseId ? (
         <DatabaseDetailPage

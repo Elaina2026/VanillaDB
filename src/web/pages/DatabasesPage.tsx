@@ -5,6 +5,7 @@ import { apiRequest } from '../api/client.js';
 import { formatBytes, formatTimeAgo, formatDate } from '../lib/utils.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
 import { useAuth } from '../hooks/useAuth.js';
+import { useI18n } from '../hooks/useI18n.js';
 import type { DatabaseRecord } from '@shared/index.js';
 
 export const DatabasesPage: React.FC<{
@@ -12,6 +13,7 @@ export const DatabasesPage: React.FC<{
   onOpenCreateModal: () => void;
 }> = ({ onSelectDatabase, onOpenCreateModal }) => {
   const { user: currentUser } = useAuth();
+  const { t } = useI18n();
   const [search, setSearch] = useState('');
   const [deletingDb, setDeletingDb] = useState<DatabaseRecord | null>(null);
   const queryClient = useQueryClient();
@@ -41,9 +43,9 @@ export const DatabasesPage: React.FC<{
       {/* Header */}
       <div className="flex items-center justify-between pb-6 border-b border-border">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">Databases</h1>
+          <h1 className="text-xl font-bold tracking-tight">{t('databases.title', 'Databases')}</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Manage your SQLite database instances and API endpoints.
+            {t('databases.desc', 'Manage your SQLite database instances and API endpoints.')}
           </p>
         </div>
         <button
@@ -51,7 +53,7 @@ export const DatabasesPage: React.FC<{
           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors shadow-sm"
         >
           <Plus className="w-3.5 h-3.5" />
-          Create Database
+          {t('databases.create', 'Create Database')}
         </button>
       </div>
 
@@ -61,7 +63,7 @@ export const DatabasesPage: React.FC<{
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search databases..."
+            placeholder={t('databases.search', 'Search databases...')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 text-xs bg-card border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -84,16 +86,16 @@ export const DatabasesPage: React.FC<{
           <div className="p-3 bg-muted rounded-full mb-3 text-muted-foreground">
             <Database className="w-6 h-6" />
           </div>
-          <h3 className="text-sm font-semibold mb-1">No databases found</h3>
+          <h3 className="text-sm font-semibold mb-1">{t('databases.noDatabases', 'No databases found')}</h3>
           <p className="text-xs text-muted-foreground max-w-sm mb-4">
-            {search ? 'Try adjusting your search query.' : 'Create your first SQLite database to get started connecting applications.'}
+            {search ? t('databases.noDatabasesSearch', 'Try adjusting your search query.') : t('databases.noDatabasesDesc', 'Create your first SQLite database to get started connecting applications.')}
           </p>
           {!search && (
             <button
               onClick={onOpenCreateModal}
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors"
             >
-              Create Database
+              {t('databases.create', 'Create Database')}
             </button>
           )}
         </div>

@@ -21,11 +21,13 @@ import {
 import { apiRequest } from '../api/client.js';
 import { formatDate } from '../lib/utils.js';
 import { useAuth } from '../hooks/useAuth.js';
+import { useI18n } from '../hooks/useI18n.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
 import type { UserRecord, UserRole } from '@shared/index.js';
 
 export const UsersPage: React.FC = () => {
   const { user: currentUser } = useAuth();
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -135,13 +137,13 @@ export const UsersPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-foreground">User Management & RBAC</h1>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">{t('users.title', 'User Management')}</h1>
             <span className="text-[10px] px-2 py-0.5 bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded font-semibold uppercase tracking-wider">
               Super Admin Control
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Manage sub-accounts, configure database creation caps, rate limiting quotas, and assign permission roles.
+            {t('users.desc', 'Manage sub-accounts, configure database creation caps, rate limiting quotas, and assign permission roles.')}
           </p>
         </div>
 
@@ -151,7 +153,7 @@ export const UsersPage: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-semibold shadow-sm transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
+            <span>{t('common.refresh', 'Refresh')}</span>
           </button>
 
           <button
@@ -162,7 +164,7 @@ export const UsersPage: React.FC = () => {
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
           >
             <UserPlus className="w-3.5 h-3.5" />
-            <span>Add New User</span>
+            <span>{t('users.create', 'Add New User')}</span>
           </button>
         </div>
       </div>

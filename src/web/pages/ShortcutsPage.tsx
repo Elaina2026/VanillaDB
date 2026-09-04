@@ -30,6 +30,8 @@ export const ShortcutsPage: React.FC<{
       shortcuts: [
         { keys: ['Ctrl', 'K'], label: isVi ? 'Mở thanh tìm kiếm lệnh nhanh (Command Palette)' : 'Open Command Palette' },
         { keys: ['Ctrl', 'B'], label: isVi ? 'Mở cửa sổ tạo cơ sở dữ liệu mới' : 'Open Create Database modal' },
+        { keys: ['Ctrl', 'Shift', 'L'], label: isVi ? 'Chuyển đổi nhanh ngôn ngữ (English / Tiếng Việt)' : 'Toggle language (English / Vietnamese)' },
+        { keys: ['Ctrl', 'Shift', 'T'], label: isVi ? 'Chuyển đổi giao diện Sáng / Tối' : 'Toggle theme (Light / Dark)' },
         { keys: ['Shift', '?'], label: isVi ? 'Mở trang tra cứu phím tắt này' : 'Navigate to Shortcuts page' },
         { keys: ['Esc'], label: isVi ? 'Đóng các modal đang mở / Đóng Command Palette' : 'Close active modals / palette' },
       ],
@@ -37,12 +39,12 @@ export const ShortcutsPage: React.FC<{
     {
       title: isVi ? 'Điều hướng trang (Navigation)' : 'Navigation Shortcuts',
       shortcuts: [
-        { keys: ['G', 'O'], label: isVi ? 'Đi đến trang Tổng quan (Overview)' : 'Go to Overview page', action: () => onNavigate('overview') },
-        { keys: ['G', 'D'], label: isVi ? 'Đi đến danh sách Cơ sở dữ liệu (Databases)' : 'Go to Databases page', action: () => onNavigate('databases') },
-        { keys: ['G', 'T'], label: isVi ? 'Đi đến Giám sát hệ thống (Telemetry Live 1s)' : 'Go to Telemetry page', action: () => onNavigate('telemetry') },
-        { keys: ['G', 'A'], label: isVi ? 'Đi đến Nhật ký hoạt động (Activity Logs)' : 'Go to Activity Logs page', action: () => onNavigate('activity') },
-        { keys: ['G', 'U'], label: isVi ? 'Đi đến Quản lý người dùng (Users)' : 'Go to Users page', action: () => onNavigate('users') },
-        { keys: ['G', 'S'], label: isVi ? 'Đi đến Cài đặt hệ thống (Settings)' : 'Go to Settings page', action: () => onNavigate('settings') },
+        { keys: ['Alt', '1'], label: isVi ? 'Đi đến trang Tổng quan (Overview)' : 'Go to Overview page', action: () => onNavigate('overview') },
+        { keys: ['Alt', '2'], label: isVi ? 'Đi đến danh sách Cơ sở dữ liệu (Databases)' : 'Go to Databases page', action: () => onNavigate('databases') },
+        { keys: ['Alt', '3'], label: isVi ? 'Đi đến Giám sát hệ thống (Telemetry Live 1s)' : 'Go to Telemetry page', action: () => onNavigate('telemetry') },
+        { keys: ['Alt', '4'], label: isVi ? 'Đi đến Nhật ký hoạt động (Activity Logs)' : 'Go to Activity Logs page', action: () => onNavigate('activity') },
+        { keys: ['Alt', '5'], label: isVi ? 'Đi đến Quản lý người dùng (Users)' : 'Go to Users page', action: () => onNavigate('users') },
+        { keys: ['Alt', '6'], label: isVi ? 'Đi đến Cài đặt hệ thống (Settings)' : 'Go to Settings page', action: () => onNavigate('settings') },
       ],
     },
     {

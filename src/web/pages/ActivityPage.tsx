@@ -3,9 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Activity, Shield, Filter, RefreshCw, CheckCircle, XCircle, Terminal, Search, Database, Clock, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatDate } from '../lib/utils.js';
+import { useI18n } from '../hooks/useI18n.js';
 import type { ActivityRecord, AuditRecord } from '@shared/index.js';
 
 export const ActivityPage: React.FC = () => {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<'activity' | 'audit'>('activity');
   const [filterSearch, setFilterSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -65,10 +67,10 @@ export const ActivityPage: React.FC = () => {
         <div>
           <h1 className="text-lg md:text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Activity className="w-5 h-5 text-blue-500" />
-            System & Security Logs
+            {t('activity.title', 'System & Security Logs')}
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Real-time API executions, SQL queries, and administrative audit trails.
+            {t('activity.desc', 'Real-time API executions, SQL queries, and administrative audit trails.')}
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -79,7 +81,7 @@ export const ActivityPage: React.FC = () => {
                 activeTab === 'activity' ? 'bg-card text-foreground shadow-sm font-semibold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              API & SQL Activity
+              {t('activity.tabActivity', 'API & SQL Activity')}
             </button>
             <button
               onClick={() => handleTabSwitch('audit')}
@@ -87,7 +89,7 @@ export const ActivityPage: React.FC = () => {
                 activeTab === 'audit' ? 'bg-card text-foreground shadow-sm font-semibold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              Security & Audit
+              {t('activity.tabAudit', 'Security & Audit')}
             </button>
           </div>
           <button

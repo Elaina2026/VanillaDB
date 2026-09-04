@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { Lock, User, KeyRound, AlertCircle, Fingerprint } from 'lucide-react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useAuth } from '../hooks/useAuth.js';
+import { useI18n } from '../hooks/useI18n.js';
 import { apiRequest } from '../api/client.js';
 import { LogoIcon } from '../components/LogoIcon.js';
 
 export const AuthPage: React.FC = () => {
   const { initialized, refetchStatus } = useAuth();
+  const { t } = useI18n();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -73,12 +75,12 @@ export const AuthPage: React.FC = () => {
             <LogoIcon className="w-16 h-16" />
           </div>
           <h1 className="text-lg font-bold tracking-tight">
-            {!initialized ? 'Welcome to VanillaDatabase' : 'Sign in to VanillaDatabase'}
+            {!initialized ? t('auth.welcome', 'Welcome to VanillaDatabase') : t('auth.signIn', 'Sign in to VanillaDatabase')}
           </h1>
           <p className="text-xs text-muted-foreground">
             {!initialized
-              ? 'Create your administrator credentials to initialize the platform.'
-              : 'Enter your credentials to access the management dashboard.'}
+              ? t('auth.setupDesc', 'Create your administrator credentials to initialize the platform.')
+              : t('auth.loginDesc', 'Enter your credentials to access the management dashboard.')}
           </p>
         </div>
 
@@ -91,7 +93,7 @@ export const AuthPage: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Username</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">{t('auth.username', 'Username')}</label>
             <div className="relative">
               <User className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
               <input
@@ -106,7 +108,7 @@ export const AuthPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Password</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">{t('auth.password', 'Password')}</label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
               <input
@@ -122,7 +124,7 @@ export const AuthPage: React.FC = () => {
 
           {!initialized && (
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Confirm Password</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">{t('auth.confirmPassword', 'Confirm Password')}</label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
                 <input
@@ -142,7 +144,7 @@ export const AuthPage: React.FC = () => {
             disabled={loading}
             className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors mt-2"
           >
-            {loading ? 'Processing...' : !initialized ? 'Initialize VanillaDatabase' : 'Sign In with Password'}
+            {loading ? t('common.loading', 'Processing...') : !initialized ? t('auth.submitSetup', 'Initialize Administrator') : t('auth.submitLogin', 'Sign In')}
           </button>
 
           {initialized && (
@@ -160,7 +162,7 @@ export const AuthPage: React.FC = () => {
                 className="w-full py-2 bg-card hover:bg-accent border border-border text-foreground rounded-md text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-2"
               >
                 <Fingerprint className="w-4 h-4 text-emerald-500" />
-                <span>Sign in with Passkey (Touch ID / Windows Hello)</span>
+                <span>{t('auth.passkeySignIn', 'Sign in with Passkey (Touch ID / Windows Hello)')}</span>
               </button>
             </div>
           )}

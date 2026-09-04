@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import { useTheme } from '../hooks/useTheme.js';
+import { useI18n } from '../hooks/useI18n.js';
 import { LogoIcon } from '../components/LogoIcon.js';
 import { cn } from '../lib/utils.js';
 
@@ -45,6 +46,7 @@ interface DashboardLayoutProps {
   setSelectedDatabaseId: (id: string | null, tab?: string) => void;
   children: React.ReactNode;
   onOpenCreateDb: () => void;
+  onOpenSearch?: () => void;
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
@@ -55,9 +57,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   setSelectedDatabaseId,
   children,
   onOpenCreateDb,
+  onOpenSearch,
 }) => {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { t } = useI18n();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
 
@@ -108,6 +112,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={onOpenSearch}
+            className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
+            title="Search (Ctrl+K)"
+          >
+            <Search className="w-4 h-4" />
+          </button>
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
@@ -182,7 +193,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors font-medium"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>All Databases</span>
+                <span>{t('nav.allDatabases', 'All Databases')}</span>
               </button>
 
               {/* Active Database Badge */}
@@ -200,23 +211,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               {/* Database Context Navigation Tabs */}
               <div className="space-y-1">
                 <span className="px-2.5 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-                  Database Menu
+                  {t('nav.menu', 'Database Menu')}
                 </span>
                 {[
-                  { id: 'overview', label: 'Overview & Stats', icon: BarChart3 },
-                  { id: 'analytics', label: 'Requests & Disk B-Tree', icon: TrendingUp },
-                  { id: 'tables', label: 'Tables Browser', icon: TableIcon },
-                  { id: 'editor', label: 'SQL Editor', icon: Terminal },
-                  { id: 'schema', label: 'Schema Viewer', icon: FileCode },
-                  { id: 'storage', label: 'Media Storage', icon: Folder },
-                  { id: 'import-export', label: 'Import & Export', icon: ArrowUpDown },
-                  { id: 'realtime', label: 'Realtime Stream', icon: Radio },
-                  { id: 'webhooks', label: 'Webhooks', icon: WebhookIcon },
-                  { id: 'api', label: 'API & Quickstart', icon: Key },
-                  { id: 'tokens', label: 'API Tokens', icon: Shield },
-                  { id: 'jobs', label: 'Scheduled Jobs', icon: Clock },
-                  { id: 'backups', label: 'Backups', icon: Archive },
-                  { id: 'settings', label: 'Danger Settings', icon: Sliders },
+                  { id: 'overview', label: t('db.overview', 'Overview & Stats'), icon: BarChart3 },
+                  { id: 'analytics', label: t('db.analytics', 'Requests & Disk B-Tree'), icon: TrendingUp },
+                  { id: 'tables', label: t('db.tables', 'Tables Browser'), icon: TableIcon },
+                  { id: 'editor', label: t('db.editor', 'SQL Editor'), icon: Terminal },
+                  { id: 'schema', label: t('db.schema', 'Schema Viewer'), icon: FileCode },
+                  { id: 'storage', label: t('db.storage', 'Media Storage'), icon: Folder },
+                  { id: 'import-export', label: t('db.importExport', 'Import & Export'), icon: ArrowUpDown },
+                  { id: 'realtime', label: t('db.realtime', 'Realtime Stream'), icon: Radio },
+                  { id: 'webhooks', label: t('db.webhooks', 'Webhooks'), icon: WebhookIcon },
+                  { id: 'api', label: t('db.api', 'API & Quickstart'), icon: Key },
+                  { id: 'tokens', label: t('db.tokens', 'API Tokens'), icon: Shield },
+                  { id: 'jobs', label: t('db.jobs', 'Scheduled Jobs'), icon: Clock },
+                  { id: 'backups', label: t('db.backups', 'Backups'), icon: Archive },
+                  { id: 'settings', label: t('db.settings', 'Danger Settings'), icon: Sliders },
                 ].map((t) => {
                   const Icon = t.icon;
                   const active = selectedDatabaseTab === t.id;
@@ -258,7 +269,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 )}
               >
                 <Server className="w-4 h-4" />
-                Overview
+                {t('nav.overview', 'Overview')}
               </button>
 
               <button
@@ -275,7 +286,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 )}
               >
                 <TrendingUp className="w-4 h-4" />
-                Live Telemetry
+                {t('nav.telemetry', 'Live Telemetry')}
               </button>
 
               <button
@@ -293,7 +304,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               >
                 <div className="flex items-center gap-2.5">
                   <Layers className="w-4 h-4" />
-                  Databases
+                  {t('nav.databases', 'Databases')}
                 </div>
                 <Plus
                   className="w-3.5 h-3.5 hover:text-white cursor-pointer"
@@ -319,7 +330,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 )}
               >
                 <Activity className="w-4 h-4" />
-                Activity Logs
+                {t('nav.activity', 'Activity Logs')}
               </button>
 
               {(user?.role === 'super_admin' || user?.role === 'admin') && (
@@ -337,7 +348,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   )}
                 >
                   <Users className="w-4 h-4" />
-                  User Management
+                  {t('nav.users', 'User Management')}
                 </button>
               )}
 
@@ -355,7 +366,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 )}
               >
                 <Settings className="w-4 h-4" />
-                Settings
+                {t('nav.settings', 'Settings')}
               </button>
 
               <button
@@ -373,7 +384,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               >
                 <div className="flex items-center gap-2.5">
                   <Terminal className="w-4 h-4" />
-                  Shortcuts
+                  {t('nav.shortcuts', 'Shortcuts')}
                 </div>
                 <kbd className="px-1.5 py-0.2 text-[9px] font-mono bg-muted/80 border border-border/80 rounded text-muted-foreground font-bold">
                   Ctrl+K
@@ -409,7 +420,43 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {children}
+        {/* Universal Top Header with Quick Search (Ctrl + K) on every route */}
+        <div className="hidden md:flex h-12 border-b border-border bg-card/60 backdrop-blur-sm px-4 items-center justify-between shrink-0 z-20">
+          <div className="flex items-center gap-3 flex-1 max-w-xl">
+            <button
+              onClick={onOpenSearch}
+              className="w-full max-w-md flex items-center justify-between px-3 py-1.5 bg-background hover:bg-muted/60 border border-border rounded-lg text-xs text-muted-foreground transition-all group cursor-pointer shadow-xs hover:border-blue-500/40"
+              title="Quick Search (Ctrl + K)"
+            >
+              <div className="flex items-center gap-2">
+                <Search className="w-3.5 h-3.5 text-muted-foreground group-hover:text-blue-500 transition-colors" />
+                <span className="font-sans">{t('nav.search', 'Quick search (Ctrl + K)')}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <kbd className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-muted border border-border rounded text-muted-foreground group-hover:text-foreground">
+                  Ctrl
+                </kbd>
+                <kbd className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-muted border border-border rounded text-muted-foreground group-hover:text-foreground">
+                  K
+                </kbd>
+              </div>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="p-1.5 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground transition-colors border border-border bg-card"
+              title="Toggle theme (Light / Dark)"
+            >
+              {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          {children}
+        </div>
       </main>
     </div>
   );

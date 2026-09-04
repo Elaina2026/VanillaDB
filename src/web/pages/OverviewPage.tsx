@@ -19,6 +19,7 @@ import {
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatDate } from '../lib/utils.js';
 import { useAuth } from '../hooks/useAuth.js';
+import { useI18n } from '../hooks/useI18n.js';
 import type { SystemStatus, DatabaseRecord } from '@shared/index.js';
 
 export const OverviewPage: React.FC<{
@@ -27,6 +28,7 @@ export const OverviewPage: React.FC<{
   onNavigateToTelemetry: () => void;
 }> = ({ onSelectDatabase, onOpenCreateModal, onNavigateToTelemetry }) => {
   const { user: currentUser } = useAuth();
+  const { t } = useI18n();
   const { data: status, isLoading: isStatusLoading, refetch: refetchStatus } = useQuery<SystemStatus>({
     queryKey: ['systemStatus'],
     queryFn: () => apiRequest('/api/system/status'),
@@ -54,14 +56,14 @@ export const OverviewPage: React.FC<{
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-foreground">System Overview</h1>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">{t('overview.title', 'System Overview')}</h1>
             <span className="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-semibold uppercase tracking-wider flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Healthy
+              {t('overview.healthy', 'Healthy')}
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Overview of SQLite multi-tenant nodes, host system resources, storage breakdown, and engine status.
+            {t('overview.desc', 'Overview of SQLite multi-tenant nodes, host system resources, storage breakdown, and engine status.')}
           </p>
         </div>
 
@@ -71,7 +73,7 @@ export const OverviewPage: React.FC<{
             className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-semibold shadow-sm transition-colors"
           >
             <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
-            <span>Live Charts</span>
+            <span>{t('overview.liveCharts', 'Live Charts')}</span>
           </button>
 
           <button
@@ -79,7 +81,7 @@ export const OverviewPage: React.FC<{
             className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-semibold shadow-sm transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isStatusLoading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Refresh</span>
+            <span className="hidden sm:inline">{t('common.refresh', 'Refresh')}</span>
           </button>
         </div>
       </div>

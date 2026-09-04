@@ -14,7 +14,14 @@ import {
   Keyboard,
   ArrowRight,
   Sparkles,
-  Command
+  Command,
+  FileCode,
+  Folder,
+  Radio,
+  Clock,
+  Archive,
+  ArrowUpDown,
+  Table as TableIcon
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../api/client.js';
@@ -38,6 +45,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const { theme, setTheme } = useTheme();
   const { language, setLanguage } = useI18n();
 
@@ -137,21 +145,47 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       id: 'action-toggle-lang',
       category: isVi ? 'Thao tác nhanh' : 'Quick Actions',
       label: isVi ? 'Chuyển sang English' : 'Chuyển sang Tiếng Việt',
-      detail: isVi ? 'EN' : 'VI',
+      detail: 'Ctrl + Shift + L',
       icon: Sparkles,
       action: () => { setLanguage(isVi ? 'en' : 'vi'); onClose(); },
     },
   ];
 
-  // Database specific commands
-  const dbCommands = (databases || []).map((db) => ({
-    id: `db-${db.id}`,
-    category: isVi ? 'Cơ sở dữ liệu' : 'Databases',
-    label: db.name,
-    detail: `${db.id}${db.description ? ` • ${db.description}` : ''}`,
-    icon: Database,
-    action: () => { onNavigate('databases', db.id, 'overview'); onClose(); },
-  }));
+  // Database specific commands (Direct jump into SQL Console, Tables, Schema, Jobs, etc.)
+  const dbCommands = (databases || []).flatMap((db) => [
+    {
+      id: `db-${db.id}`,
+      category: isVi ? 'Cơ sở dữ liệu' : 'Databases',
+      label: db.name,
+      detail: `${db.id}${db.description ? ` • ${db.description}` : ''}`,
+      icon: Database,
+      action: () => { onNavigate('databases', db.id, 'overview'); onClose(); },
+    },
+    {
+      id: `db-${db.id}-editor`,
+      category: isVi ? 'SQL Console' : 'SQL Console',
+      label: `${db.name} › ${isVi ? 'Mở SQL Editor' : 'Open SQL Editor'}`,
+      detail: `${db.id} • SQL Console`,
+      icon: Terminal,
+      action: () => { onNavigate('databases', db.id, 'editor'); onClose(); },
+    },
+    {
+      id: `db-${db.id}-tables`,
+      category: isVi ? 'Bảng dữ liệu' : 'Data Tables',
+      label: `${db.name} › ${isVi ? 'Duyệt bảng dữ liệu' : 'Browse Tables'}`,
+      detail: `${db.id} • Tables`,
+      icon: TableIcon,
+      action: () => { onNavigate('databases', db.id, 'tables'); onClose(); },
+    },
+    {
+      id: `db-${db.id}-jobs`,
+      category: isVi ? 'Tác vụ định kỳ' : 'Scheduled Jobs',
+      label: `${db.name} › ${isVi ? 'Quản lý Cron Jobs' : 'Scheduled Jobs'}`,
+      detail: `${db.id} • Cron Tasks`,
+      icon: Clock,
+      action: () => { onNavigate('databases', db.id, 'jobs'); onClose(); },
+    }
+  ]);
 
   const allItems = [...navCommands, ...dbCommands];
   const filtered = allItems.filter(item =>
@@ -159,6 +193,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     item.detail.toLowerCase().includes(query.toLowerCase()) ||
     item.category.toLowerCase().includes(query.toLowerCase())
   );
+
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  useEffect(() => {
+    if (filtered.length > 0 && itemRefs.current[selectedIndex]) {
+      itemRefs.current[selectedIndex]?.scrollIntoView({
+        block: 'nearest',
+        behavior: 'smooth',
+      });
+    }
+  }, [selectedIndex, filtered.length]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -213,6 +258,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               return (
                 <div
                   key={item.id}
+                  ref={(el) => { itemRefs.current[idx] = el; }}
                   onClick={item.action}
                   onMouseEnter={() => setSelectedIndex(idx)}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-xs cursor-pointer transition-colors ${

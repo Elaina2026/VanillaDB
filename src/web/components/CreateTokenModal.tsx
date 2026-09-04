@@ -149,8 +149,8 @@ export const CreateTokenModal: React.FC<{
 
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">TypeScript / Python Connection Snippet</label>
-              <div className="p-2.5 bg-muted/60 border border-border rounded-md text-[11px] font-mono text-muted-foreground space-y-1">
-                <div className="text-foreground">
+              <div className="p-2.5 bg-muted/60 border border-border rounded-md text-[11px] font-mono text-muted-foreground space-y-1 overflow-x-auto break-all whitespace-pre-wrap">
+                <div className="text-foreground select-all">
                   <span className="text-purple-400">new</span> VanillaDatabase&#123; url: <span className="text-emerald-400">'{window.location.origin}/v1/databases/{databaseId}'</span>, token: <span className="text-emerald-400">'{createdSecret}'</span> &#125;
                 </div>
               </div>

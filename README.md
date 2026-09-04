@@ -18,6 +18,7 @@
 
 <p align="center">
   <a href="#overview">Overview</a> •
+  <a href="README.vi.md">Tiếng Việt</a> •
   <a href="#why-this-project-exists">Why This Project Exists</a> •
   <a href="#key-features">Key Features</a> •
   <a href="#architecture">Architecture</a> •
@@ -27,7 +28,8 @@
   <a href="#api-documentation">API Documentation</a> •
   <a href="#client-sdks">Client SDKs</a> •
   <a href="#comparison">Comparison</a> •
-  <a href="docs/wiki/Home.md">Wiki Documentation</a>
+  <a href="docs/wiki/Home.md">Wiki Docs (EN)</a> •
+  <a href="docs/wiki/vi/Home.md">Wiki Docs (VI)</a>
 </p>
 
 ---
