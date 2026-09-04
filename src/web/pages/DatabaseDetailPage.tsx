@@ -41,7 +41,8 @@ import {
   ToggleRight,
   Radio,
   User,
-  TrendingUp
+  TrendingUp,
+  X
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatTimeAgo, formatDate } from '../lib/utils.js';
@@ -1534,7 +1535,7 @@ export const DatabaseDetailPage: React.FC<{
                   }}
                   className="px-2.5 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-medium transition-colors focus:outline-none"
                 >
-                  <option value="" disabled>⚡ Quick SQL Templates...</option>
+                  <option value="" disabled>Quick SQL Templates...</option>
                   <option value="select_all">SELECT * (Limit 100)</option>
                   <option value="select_count">COUNT(*) Aggregation</option>
                   <option value="insert">INSERT Template</option>
@@ -1888,8 +1889,8 @@ export const DatabaseDetailPage: React.FC<{
                 <div className="max-w-4xl max-h-[90vh] bg-card border border-border rounded-xl p-4 overflow-hidden relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-between pb-3 mb-2 border-b border-border">
                     <span className="text-xs font-bold font-mono">{selectedFileForPreview.original_name}</span>
-                    <button onClick={() => setSelectedFileForPreview(null)} className="p-1 hover:bg-accent rounded text-sm font-bold">
-                      ✕
+                    <button onClick={() => setSelectedFileForPreview(null)} className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground">
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                   <img
@@ -3218,9 +3219,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
           <div className="w-full max-w-sm bg-card border border-border rounded-xl shadow-xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-foreground">Rename Table</h3>
-              <button onClick={() => setIsRenameTableOpen(false)} className="p-1 hover:bg-accent rounded">
-                <Trash2 className="w-4 h-4 hidden" />
-                <span className="text-muted-foreground hover:text-foreground text-sm font-bold">✕</span>
+              <button onClick={() => setIsRenameTableOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
               </button>
             </div>
             <div>
@@ -3283,8 +3283,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 <FileText className="w-4 h-4 text-purple-500" />
                 <h3 className="text-sm font-bold text-foreground">Setup FTS5 Full-Text Search</h3>
               </div>
-              <button onClick={() => setIsFtsModalOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground">
-                ✕
+              <button onClick={() => setIsFtsModalOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
               </button>
             </div>
 

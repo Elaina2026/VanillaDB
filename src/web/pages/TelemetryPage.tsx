@@ -93,7 +93,7 @@ export const TelemetryPage: React.FC = () => {
             onChange={(e) => setRefreshInterval(Number(e.target.value))}
             className="bg-card border border-border text-foreground text-xs rounded-md px-2.5 py-1.5 font-medium shadow-sm focus:outline-none focus:ring-1 focus:ring-primary font-mono"
           >
-            <option value={1000}>⚡ Live Realtime: 1s</option>
+            <option value={1000}>Live Realtime: 1s</option>
             <option value={2000}>Refresh: 2s (High-Res)</option>
             <option value={5000}>Refresh: 5s (Default)</option>
             <option value={15000}>Refresh: 15s</option>

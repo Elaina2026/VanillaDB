@@ -15,7 +15,8 @@ import {
   RefreshCw,
   Search,
   Lock,
-  Gauge
+  Gauge,
+  X
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatDate } from '../lib/utils.js';
@@ -334,9 +335,9 @@ export const UsersPage: React.FC = () => {
                   setIsCreateModalOpen(false);
                   setEditingUser(null);
                 }}
-                className="text-muted-foreground hover:text-foreground text-xs"
+                className="p-1 text-muted-foreground hover:text-foreground rounded"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
