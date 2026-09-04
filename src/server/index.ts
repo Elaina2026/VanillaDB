@@ -18,6 +18,7 @@ import { activityService } from './services/activity.js';
 import { systemService } from './services/system.js';
 import { webhookService } from './services/webhook.js';
 import { backupScheduler } from './services/backupScheduler.js';
+import { jobSchedulerService } from './services/jobScheduler.js';
 
 import { authRoutes } from './api/auth.js';
 import { adminRoutes } from './api/admin.js';
@@ -203,12 +204,14 @@ export async function startServer() {
   // Initialize Webhook listener and Scheduled Backups
   webhookService.init();
   backupScheduler.start();
+  jobSchedulerService.start();
 
   const app = await buildApp();
 
   const handleShutdown = async (signal: string) => {
     logger.info({ signal }, 'Graceful shutdown initiated');
     try {
+      jobSchedulerService.stop();
       backupScheduler.stop();
       webhookService.destroy();
       tokenService.destroy();

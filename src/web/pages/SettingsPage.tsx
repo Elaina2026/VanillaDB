@@ -25,7 +25,9 @@ import {
   Zap,
   Globe,
   Radio,
-  Languages
+  Languages,
+  Fingerprint,
+  Trash2
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../hooks/useAuth.js';
@@ -75,6 +77,38 @@ export const SettingsPage: React.FC = () => {
       setSaveError(err.message || 'Lưu cài đặt thất bại');
       setTimeout(() => setSaveError(null), 4000);
     },
+  });
+
+  // Passkey credentials query
+  const { data: passkeys = [], refetch: refetchPasskeys } = useQuery<any[]>({
+    queryKey: ['webauthnCreds'],
+    queryFn: () => apiRequest('/api/auth/webauthn/credentials'),
+    enabled: activeTab === 'account',
+  });
+
+  const [passkeyStatus, setPasskeyStatus] = useState<string | null>(null);
+
+  const handleRegisterPasskey = async () => {
+    setPasskeyStatus(null);
+    try {
+      const { startRegistration } = await import('@simplewebauthn/browser');
+      const opts = await apiRequest('/api/auth/webauthn/register-options', { method: 'POST' });
+      const regResp = await startRegistration({ optionsJSON: opts.data });
+      await apiRequest('/api/auth/webauthn/register-verify', {
+        method: 'POST',
+        body: JSON.stringify(regResp),
+      });
+      refetchPasskeys();
+      setPasskeyStatus('Passkey registered successfully for this device!');
+      setTimeout(() => setPasskeyStatus(null), 4000);
+    } catch (err: any) {
+      setPasskeyStatus(`Registration error: ${err.message || String(err)}`);
+    }
+  };
+
+  const deletePasskeyMutation = useMutation({
+    mutationFn: (id: string) => apiRequest(`/api/auth/webauthn/credentials/${id}`, { method: 'DELETE' }),
+    onSuccess: () => refetchPasskeys(),
   });
 
   const changePasswordMutation = useMutation({
@@ -819,6 +853,63 @@ export const SettingsPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* WebAuthn / Passkey Hardware Device Management */}
+          <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
+              <div>
+                <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Fingerprint className="w-4 h-4 text-emerald-500" />
+                  Hardware Passkeys & Biometrics
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Sign in quickly and securely using Touch ID, Face ID, or Windows Hello.
+                </p>
+              </div>
+              <button
+                onClick={handleRegisterPasskey}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5"
+              >
+                <Fingerprint className="w-3.5 h-3.5" />
+                Register Passkey
+              </button>
+            </div>
+
+            {passkeyStatus && (
+              <div className="p-3 bg-muted/60 border border-border rounded text-xs text-foreground font-mono">
+                {passkeyStatus}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {passkeys.length === 0 ? (
+                <div className="p-6 border border-dashed border-border rounded-lg text-center text-xs text-muted-foreground">
+                  No passkeys registered on this account yet. Click "Register Passkey" to pair this device.
+                </div>
+              ) : (
+                passkeys.map((pk) => (
+                  <div key={pk.id} className="p-3 bg-muted/30 border border-border rounded-lg flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <Fingerprint className="w-4 h-4 text-emerald-500" />
+                      <div>
+                        <span className="font-bold text-foreground block font-mono">{pk.credential_id.substring(0, 16)}...</span>
+                        <span className="text-[10px] text-muted-foreground block">
+                          Registered: {new Date(pk.created_at).toLocaleDateString()} • Device: {pk.device_type || 'platform'}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => deletePasskeyMutation.mutate(pk.id)}
+                      className="p-1 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                      title="Revoke Passkey"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -5,12 +5,14 @@ import { config } from '../config/index.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { backupService } from './backup.js';
 import { databaseService } from './database.js';
+import { webhookService } from './webhook.js';
 import { logger } from '../utils/logger.js';
 import type { SystemSettings, SystemStatus, MetricHistoryPoint, SystemMetricsHistory } from '../../../shared/index.js';
 
 export class SystemService {
   private metricsInterval: NodeJS.Timeout | null = null;
   private storageCacheInterval: NodeJS.Timeout | null = null;
+  private alertCooldowns = new Map<string, number>();
 
   // Real-time telemetry rolling history
   private metricsHistory: MetricHistoryPoint[] = [];
@@ -160,12 +162,58 @@ export class SystemService {
       this.metricsHistory.shift();
     }
 
+    // Check alerting thresholds with 15-minute cooldown
+    this.checkAlertThresholds(point);
+
     // Reset interval accumulators
     this.currentIntervalInBytes = 0;
     this.currentIntervalOutBytes = 0;
     this.currentIntervalRequests = 0;
     this.currentIntervalErrors = 0;
     this.currentIntervalDurations = [];
+  }
+
+  private checkAlertThresholds(point: MetricHistoryPoint): void {
+    const now = Date.now();
+    const cooldownMs = 15 * 60 * 1000; // 15 mins
+
+    // 1. High CPU threshold (> 85%)
+    if (point.cpuPercent > 85) {
+      const nextAllowed = this.alertCooldowns.get('cpu_high') || 0;
+      if (now >= nextAllowed) {
+        this.alertCooldowns.set('cpu_high', now + cooldownMs);
+        webhookService.dispatch({
+          databaseId: 'system',
+          type: 'schema' as any,
+          data: {
+            title: 'High CPU Alert',
+            level: 'warning',
+            message: `Server CPU utilization reached ${point.cpuPercent}% (threshold: 85%)`,
+            timestamp: now,
+          },
+          timestamp: now,
+        }).catch(() => {});
+      }
+    }
+
+    // 2. High RAM threshold (> 85%)
+    if (point.ramPercent > 85) {
+      const nextAllowed = this.alertCooldowns.get('ram_high') || 0;
+      if (now >= nextAllowed) {
+        this.alertCooldowns.set('ram_high', now + cooldownMs);
+        webhookService.dispatch({
+          databaseId: 'system',
+          type: 'schema' as any,
+          data: {
+            title: 'High RAM Alert',
+            level: 'warning',
+            message: `Host RAM utilization reached ${point.ramPercent}% (threshold: 85%)`,
+            timestamp: now,
+          },
+          timestamp: now,
+        }).catch(() => {});
+      }
+    }
   }
 
   public getMetricsHistory(): SystemMetricsHistory {

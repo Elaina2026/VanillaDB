@@ -12,6 +12,7 @@ import { webhookService } from '../services/webhook.js';
 import { realtimeService } from '../services/realtime.js';
 import { activityService } from '../services/activity.js';
 import { authService } from '../services/auth.js';
+import { jobSchedulerService } from '../services/jobScheduler.js';
 import { requireAdminAuth, requireRole } from '../middleware/auth.js';
 import { SqlTranslator } from '../utils/sqlTranslator.js';
 import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
@@ -1567,5 +1568,83 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         error: { code: 'USER_DELETE_ERROR', message: err.message },
       });
     }
+  });
+
+  // Scheduled Jobs (Cron Tasks)
+  fastify.get('/databases/:id/jobs', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const db = requireDatabaseAccess(req, reply, id);
+    if (!db) return;
+
+    const jobs = jobSchedulerService.listJobs(id);
+    return reply.send({ success: true, data: jobs });
+  });
+
+  fastify.post('/databases/:id/jobs', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const db = requireDatabaseAccess(req, reply, id);
+    if (!db) return;
+
+    const Schema = z.object({
+      name: z.string().min(1).max(64),
+      cron_expression: z.string().min(1).max(64),
+      sql_query: z.string().min(1),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message } });
+    }
+
+    const job = jobSchedulerService.createJob(id, parsed.data.name, parsed.data.cron_expression, parsed.data.sql_query);
+    activityService.recordAudit({
+      user: req.adminUser!.username,
+      action: 'job.create',
+      resource: job.id,
+      result: 'success',
+      requestId: req.id,
+      details: JSON.stringify({ name: job.name, databaseId: id }),
+    });
+
+    return reply.status(201).send({ success: true, data: job });
+  });
+
+  fastify.patch('/jobs/:jobId', async (req, reply) => {
+    const { jobId } = req.params as { jobId: string };
+    const Schema = z.object({
+      name: z.string().min(1).max(64).optional(),
+      cron_expression: z.string().min(1).max(64).optional(),
+      sql_query: z.string().min(1).optional(),
+      enabled: z.boolean().optional(),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message } });
+    }
+
+    const updated = jobSchedulerService.updateJob(jobId, parsed.data);
+    if (!updated) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    return reply.send({ success: true, data: updated });
+  });
+
+  fastify.delete('/jobs/:jobId', async (req, reply) => {
+    const { jobId } = req.params as { jobId: string };
+    const ok = jobSchedulerService.deleteJob(jobId);
+    return reply.send({ success: ok });
+  });
+
+  fastify.post('/jobs/:jobId/run', async (req, reply) => {
+    const { jobId } = req.params as { jobId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const job = metaDb.prepare('SELECT * FROM scheduled_jobs WHERE id = ?').get(jobId) as any;
+    if (!job) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+
+    const result = await jobSchedulerService.runJob(job);
+    return reply.send({ success: result.success, error: result.error });
   });
 };

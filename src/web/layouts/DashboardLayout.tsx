@@ -27,6 +27,7 @@ import {
   BarChart3,
   ArrowUpDown,
   TrendingUp,
+  Clock,
   Users,
   Menu,
   X
@@ -58,11 +59,32 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    // Edge swipe from left (x < 40) opens mobile drawer
+    if (touchStartRef.current.x < 40 && dx > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      setIsMobileMenuOpen(true);
+    }
+    touchStartRef.current = null;
+  };
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground flex-col md:flex-row">
+    <div
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      className="flex h-screen w-screen overflow-hidden bg-background text-foreground flex-col md:flex-row"
+    >
       {/* Mobile Top Navigation Bar */}
       <header className="md:hidden h-14 border-b border-border bg-card px-4 flex items-center justify-between shrink-0 z-30">
         <div
@@ -192,6 +214,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   { id: 'webhooks', label: 'Webhooks', icon: WebhookIcon },
                   { id: 'api', label: 'API & Quickstart', icon: Key },
                   { id: 'tokens', label: 'API Tokens', icon: Shield },
+                  { id: 'jobs', label: 'Scheduled Jobs', icon: Clock },
                   { id: 'backups', label: 'Backups', icon: Archive },
                   { id: 'settings', label: 'Danger Settings', icon: Sliders },
                 ].map((t) => {

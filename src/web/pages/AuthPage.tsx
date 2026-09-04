@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Lock, User, KeyRound, AlertCircle } from 'lucide-react';
+import { Lock, User, KeyRound, AlertCircle, Fingerprint } from 'lucide-react';
+import { startAuthentication } from '@simplewebauthn/browser';
 import { useAuth } from '../hooks/useAuth.js';
 import { apiRequest } from '../api/client.js';
 import { LogoIcon } from '../components/LogoIcon.js';
@@ -11,6 +12,27 @@ export const AuthPage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const handlePasskeyLogin = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const optsRes = await apiRequest('/api/auth/webauthn/login-options', {
+        method: 'POST',
+        body: JSON.stringify({ username: username.trim() || undefined }),
+      });
+      const asseResp = await startAuthentication({ optionsJSON: optsRes.data });
+      await apiRequest('/api/auth/webauthn/login-verify', {
+        method: 'POST',
+        body: JSON.stringify(asseResp),
+      });
+      refetchStatus();
+    } catch (err: any) {
+      setError(err.message || 'Passkey authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,8 +142,28 @@ export const AuthPage: React.FC = () => {
             disabled={loading}
             className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors mt-2"
           >
-            {loading ? 'Processing...' : !initialized ? 'Initialize VanillaDatabase' : 'Sign In'}
+            {loading ? 'Processing...' : !initialized ? 'Initialize VanillaDatabase' : 'Sign In with Password'}
           </button>
+
+          {initialized && (
+            <div className="pt-2">
+              <div className="relative flex items-center justify-center my-3">
+                <div className="border-t border-border w-full" />
+                <span className="bg-card px-2 text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+                  Or Biometrics
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handlePasskeyLogin}
+                className="w-full py-2 bg-card hover:bg-accent border border-border text-foreground rounded-md text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-2"
+              >
+                <Fingerprint className="w-4 h-4 text-emerald-500" />
+                <span>Sign in with Passkey (Touch ID / Windows Hello)</span>
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>

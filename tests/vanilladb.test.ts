@@ -816,5 +816,67 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     // 4. Cleanup
     webhookService.deleteWebhook(deadHook.id);
   });
+
+  // 16. Scheduled SQL Jobs (Cron Tasks) & WebAuthn Options Test
+  it('should create, run, and delete scheduled SQL jobs and generate WebAuthn options', async () => {
+    // 1. Create Scheduled Job
+    const jobRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${testDbId}/jobs`,
+      headers: { cookie: adminCookie },
+      payload: {
+        name: 'Auto Vacuum Routine',
+        cron_expression: '@hourly',
+        sql_query: 'PRAGMA user_version = 42;',
+      },
+    });
+    expect(jobRes.statusCode).toBe(201);
+    const job = jobRes.json().data;
+    expect(job.name).toBe('Auto Vacuum Routine');
+
+    // 2. List Jobs
+    const listRes = await app.inject({
+      method: 'GET',
+      url: `/api/admin/databases/${testDbId}/jobs`,
+      headers: { cookie: adminCookie },
+    });
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.json().data.length).toBeGreaterThanOrEqual(1);
+
+    // 3. Trigger Job Run
+    const runRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.id}/run`,
+      headers: { cookie: adminCookie },
+    });
+    expect(runRes.statusCode).toBe(200);
+    expect(runRes.json().success).toBe(true);
+
+    // 4. Delete Job
+    const delRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/admin/jobs/${job.id}`,
+      headers: { cookie: adminCookie },
+    });
+    expect(delRes.statusCode).toBe(200);
+
+    // 5. WebAuthn Registration Options
+    const regRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/webauthn/register-options',
+      headers: { cookie: adminCookie },
+    });
+    expect(regRes.statusCode).toBe(200);
+    expect(regRes.json().data.challenge).toBeDefined();
+
+    // 6. WebAuthn Login Options
+    const authRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/webauthn/login-options',
+      payload: { username: 'admin_test' },
+    });
+    expect(authRes.statusCode).toBe(200);
+    expect(authRes.json().data.challenge).toBeDefined();
+  });
 });
 

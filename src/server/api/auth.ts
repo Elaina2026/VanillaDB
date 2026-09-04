@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { authService } from '../services/auth.js';
 import { activityService } from '../services/activity.js';
+import { webAuthnService } from '../services/webauthn.js';
 import { config } from '../config/index.js';
 import { requireAdminAuth } from '../middleware/auth.js';
 
@@ -186,5 +187,69 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         error: { code: 'CHANGE_PASSWORD_ERROR', message: err.message },
       });
     }
+  });
+
+  // WebAuthn Passkey Registration Endpoints
+  fastify.post('/webauthn/register-options', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const user = req.adminUser!;
+    const origin = req.headers.origin || req.headers.referer;
+    const options = await webAuthnService.getRegistrationOptions(user.userId, user.username, req.headers.host);
+    return reply.send({ success: true, data: options });
+  });
+
+  fastify.post('/webauthn/register-verify', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const user = req.adminUser!;
+    const origin = req.headers.origin || req.headers.referer;
+    const res = await webAuthnService.verifyRegistration(user.userId, req.body as any, req.headers.host, origin);
+    if (!res.success) {
+      return reply.status(400).send({ success: false, error: { code: 'WEBAUTHN_REGISTRATION_FAILED', message: res.error } });
+    }
+    return reply.send({ success: true });
+  });
+
+  // WebAuthn Passkey Login Endpoints
+  fastify.post('/webauthn/login-options', async (req, reply) => {
+    const { username } = (req.body as any) || {};
+    const options = await webAuthnService.getLoginOptions(username, req.headers.host);
+    return reply.send({ success: true, data: options });
+  });
+
+  fastify.post('/webauthn/login-verify', async (req, reply) => {
+    const origin = req.headers.origin || req.headers.referer;
+    const res = await webAuthnService.verifyLogin(req.body as any, req.headers.host, origin);
+    if (!res.success || !res.user) {
+      return reply.status(400).send({ success: false, error: { code: 'WEBAUTHN_LOGIN_FAILED', message: res.error } });
+    }
+
+    const { cookieValue, expires } = authService.generateSessionCookie(res.user, config.sessionSecret);
+    reply.setCookie('vdb_session', cookieValue, {
+      path: '/',
+      httpOnly: true,
+      secure: config.isProduction,
+      sameSite: 'lax',
+      expires,
+    });
+
+    activityService.recordAudit({
+      user: res.user.username,
+      action: 'login_passkey',
+      resource: 'auth',
+      result: 'success',
+      requestId: req.id,
+    });
+
+    return reply.send({ success: true, data: { user: res.user } });
+  });
+
+  // WebAuthn User Credentials List & Revoke
+  fastify.get('/webauthn/credentials', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const creds = webAuthnService.listUserCredentials(req.adminUser!.userId);
+    return reply.send({ success: true, data: creds });
+  });
+
+  fastify.delete('/webauthn/credentials/:id', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ok = webAuthnService.deleteCredential(req.adminUser!.userId, id);
+    return reply.send({ success: ok });
   });
 };

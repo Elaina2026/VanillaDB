@@ -203,6 +203,50 @@ function runMigrations(db: DatabaseSync): void {
       sql: `
         ALTER TABLE databases ADD COLUMN max_size_mb INTEGER;
       `
+    },
+    {
+      version: 8,
+      name: 'create_scheduled_jobs_table',
+      sql: `
+        CREATE TABLE IF NOT EXISTS scheduled_jobs (
+          id TEXT PRIMARY KEY,
+          database_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          cron_expression TEXT NOT NULL,
+          sql_query TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          last_run_at INTEGER,
+          next_run_at INTEGER,
+          last_status TEXT,
+          last_error TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY (database_id) REFERENCES databases(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_next ON scheduled_jobs(enabled, next_run_at);
+        CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_db ON scheduled_jobs(database_id);
+      `
+    },
+    {
+      version: 9,
+      name: 'create_webauthn_credentials_table',
+      sql: `
+        CREATE TABLE IF NOT EXISTS webauthn_credentials (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          credential_id TEXT NOT NULL UNIQUE,
+          public_key TEXT NOT NULL,
+          counter INTEGER NOT NULL DEFAULT 0,
+          device_type TEXT,
+          backed_up INTEGER NOT NULL DEFAULT 0,
+          transports TEXT,
+          created_at INTEGER NOT NULL,
+          last_used_at INTEGER,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_webauthn_user ON webauthn_credentials(user_id);
+        CREATE INDEX IF NOT EXISTS idx_webauthn_cred ON webauthn_credentials(credential_id);
+      `
     }
   ];
 

@@ -51,6 +51,8 @@ import { RowModal } from '../components/RowModal.js';
 import { ImportExportModal } from '../components/ImportExportModal.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
 import { DatabaseOperationsTimelineChart } from '../components/MetricsCharts.js';
+import { ErdCanvas } from '../components/ErdCanvas.js';
+import { exportQueryResults } from '../lib/exportUtils.js';
 import { useAuth } from '../hooks/useAuth.js';
 import type {
   DatabaseOverviewStats,
@@ -62,18 +64,19 @@ import type {
   FileRecord,
   WebhookRecord,
   SqlQueryResult,
-  SqlWriteResult
+  SqlWriteResult,
+  ScheduledJobRecord
 } from '@shared/index.js';
 
 export const DatabaseDetailPage: React.FC<{
   databaseId: string;
-  initialTab?: 'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'backups' | 'settings';
+  initialTab?: 'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'jobs' | 'backups' | 'settings';
   onTabChange?: (tab: string) => void;
   onBack: () => void;
   onOpenCreateToken: (dbId: string) => void;
 }> = ({ databaseId, initialTab = 'overview', onTabChange, onBack, onOpenCreateToken }) => {
   const { user: currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'backups' | 'settings'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'jobs' | 'backups' | 'settings'>(initialTab);
   const queryClient = useQueryClient();
 
   const [isImportExportOpen, setIsImportExportOpen] = useState(false);
@@ -283,6 +286,64 @@ export const DatabaseDetailPage: React.FC<{
   const [tableLimit, setTableLimit] = useState<number>(50);
   const [tableOffset, setTableOffset] = useState<number>(0);
   const [selectedRowIds, setSelectedRowIds] = useState<any[]>([]);
+  const [mobileDetailRow, setMobileDetailRow] = useState<Record<string, any> | null>(null);
+
+  // Desktop Split View & Visual Query Builder
+  const [isSplitView, setIsSplitView] = useState(true);
+  const [editorMode, setEditorMode] = useState<'code' | 'visual'>('code');
+  const [splitSelectedTable, setSplitSelectedTable] = useState<string>('');
+  const [schemaViewMode, setSchemaViewMode] = useState<'cards' | 'erd'>('cards');
+
+  // Visual Builder form state
+  const [vbTable, setVbTable] = useState('');
+  const [vbColumns, setVbColumns] = useState<string[]>([]);
+  const [vbFilterCol, setVbFilterCol] = useState('');
+  const [vbFilterOp, setVbFilterOp] = useState('=');
+  const [vbFilterVal, setVbFilterVal] = useState('');
+  const [vbSortCol, setVbSortCol] = useState('');
+  const [vbSortDir, setVbSortDir] = useState<'ASC' | 'DESC'>('ASC');
+  const [vbLimit, setVbLimit] = useState('50');
+
+  // Scheduled Jobs state
+  const { data: scheduledJobs = [], refetch: refetchJobs } = useQuery<ScheduledJobRecord[]>({
+    queryKey: ['dbJobs', databaseId],
+    queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/jobs`),
+    enabled: activeTab === 'jobs',
+  });
+  const [isCreateJobOpen, setIsCreateJobOpen] = useState(false);
+  const [jobName, setJobName] = useState('');
+  const [jobCron, setJobCron] = useState('@hourly');
+  const [jobSql, setJobSql] = useState('VACUUM;');
+
+  const createJobMutation = useMutation({
+    mutationFn: (payload: { name: string; cron_expression: string; sql_query: string }) =>
+      apiRequest(`/api/admin/databases/${databaseId}/jobs`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      setIsCreateJobOpen(false);
+      refetchJobs();
+      setNotificationMessage('Scheduled job created successfully');
+      setTimeout(() => setNotificationMessage(null), 3000);
+    },
+  });
+
+  const runJobMutation = useMutation({
+    mutationFn: (jobId: string) => apiRequest(`/api/admin/jobs/${jobId}/run`, { method: 'POST' }),
+    onSuccess: () => {
+      refetchJobs();
+      setNotificationMessage('Job executed successfully');
+      setTimeout(() => setNotificationMessage(null), 3000);
+    },
+  });
+
+  const deleteJobMutation = useMutation({
+    mutationFn: (jobId: string) => apiRequest(`/api/admin/jobs/${jobId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      refetchJobs();
+    },
+  });
 
   // Modals for Table tab
   const [isInsertModalOpen, setIsInsertModalOpen] = useState(false);
@@ -600,6 +661,35 @@ export const DatabaseDetailPage: React.FC<{
 
   const currentDbName = stats?.database.name || 'Database';
 
+  // Mobile Swipe Gestures between core tabs (Overview -> Tables -> Editor -> Realtime)
+  const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
+  const coreTabs: Array<typeof activeTab> = ['overview', 'tables', 'editor', 'realtime'];
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+
+    if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) {
+      const curIdx = coreTabs.indexOf(activeTab);
+      if (curIdx !== -1) {
+        if (dx < 0 && curIdx < coreTabs.length - 1) {
+          // Swipe left -> Next tab
+          handleTabChange(coreTabs[curIdx + 1]);
+        } else if (dx > 0 && curIdx > 0) {
+          // Swipe right -> Previous tab
+          handleTabChange(coreTabs[curIdx - 1]);
+        }
+      }
+    }
+  };
+
   // Calculate statistics metrics
   const totalPages = stats?.pageCount || 0;
   const freePages = stats?.freelistCount || 0;
@@ -608,7 +698,11 @@ export const DatabaseDetailPage: React.FC<{
   const totalDbStorage = (stats?.fileSizeBytes || 0) + (stats?.walSizeBytes || 0);
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
+    <div
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      className="flex-1 flex flex-col h-full overflow-hidden bg-background"
+    >
       {/* Top Header Information */}
       <div className="h-auto md:h-14 border-b border-border bg-card px-4 md:px-6 py-2.5 md:py-0 flex flex-wrap items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-3">
@@ -1359,7 +1453,15 @@ export const DatabaseDetailPage: React.FC<{
                         const pkVal = row[primaryKeyCol];
                         const isSelected = selectedRowIds.includes(pkVal);
                         return (
-                          <tr key={idx} className={`hover:bg-[#1e1e24] ${isSelected ? 'bg-blue-950/40' : ''}`}>
+                          <tr
+                            key={idx}
+                            onClick={() => {
+                              if (window.innerWidth < 1024) {
+                                setMobileDetailRow(row);
+                              }
+                            }}
+                            className={`hover:bg-[#1e1e24] cursor-pointer md:cursor-default ${isSelected ? 'bg-blue-950/40' : ''}`}
+                          >
                             {/* Checkbox */}
                             <td className="py-2 px-3 border-r border-[#27272a] text-center">
                               <input
@@ -1460,6 +1562,68 @@ export const DatabaseDetailPage: React.FC<{
                 </div>
               </div>
             </div>
+
+            {/* Mobile Bottom Sheet Drawer for Table Row Details */}
+            {mobileDetailRow && (
+              <div
+                className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-xs lg:hidden"
+                onClick={() => setMobileDetailRow(null)}
+              >
+                <div
+                  className="bg-card border-t border-border rounded-t-2xl p-4 max-h-[80vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-200"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-3" />
+                  <div className="flex items-center justify-between pb-3 border-b border-border">
+                    <span className="font-mono text-xs font-bold text-foreground truncate">
+                      PK: {String(mobileDetailRow[primaryKeyCol])}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingRow(mobileDetailRow);
+                          setMobileDetailRow(null);
+                        }}
+                        className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => {
+                          deleteBulkMutation.mutate([mobileDetailRow[primaryKeyCol]]);
+                          setMobileDetailRow(null);
+                        }}
+                        className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => setMobileDetailRow(null)}
+                        className="p-1 text-muted-foreground hover:text-foreground rounded"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto divide-y divide-border text-xs font-mono py-2">
+                    {tableRows?.columns.map((col) => (
+                      <div key={col} className="py-2 flex justify-between items-start gap-4">
+                        <span className="text-blue-400 font-semibold shrink-0">{col}</span>
+                        <span className="text-foreground text-right break-all">
+                          {mobileDetailRow[col] === null ? (
+                            <span className="text-muted-foreground italic">NULL</span>
+                          ) : typeof mobileDetailRow[col] === 'object' ? (
+                            <span className="text-purple-400">{JSON.stringify(mobileDetailRow[col])}</span>
+                          ) : (
+                            String(mobileDetailRow[col])
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1546,165 +1710,451 @@ export const DatabaseDetailPage: React.FC<{
                   <option value="pragma_integrity">PRAGMA integrity_check</option>
                   <option value="vacuum">VACUUM (Defrag)</option>
                 </select>
+
+                {/* Mode Selector: Code vs Visual Builder */}
+                <div className="flex items-center bg-muted/60 p-0.5 rounded-md border border-border text-xs">
+                  <button
+                    onClick={() => setEditorMode('code')}
+                    className={`px-2 py-1 rounded font-medium transition-all ${
+                      editorMode === 'code' ? 'bg-card text-foreground font-semibold shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    SQL Code
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditorMode('visual');
+                      if (!vbTable) {
+                        const firstTbl = selectedTable || schema.find(s => s.type === 'table')?.name || '';
+                        setVbTable(firstTbl);
+                        const tblDetail = schema.find(s => s.name === firstTbl);
+                        if (tblDetail) setVbColumns(tblDetail.columns.map(c => c.name));
+                      }
+                    }}
+                    className={`px-2 py-1 rounded font-medium transition-all ${
+                      editorMode === 'visual' ? 'bg-card text-foreground font-semibold shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Visual Builder
+                  </button>
+                </div>
+
+                {/* Desktop Split View Toggle */}
+                <button
+                  onClick={() => setIsSplitView(!isSplitView)}
+                  className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 border rounded-md text-xs font-medium transition-colors ${
+                    isSplitView ? 'bg-blue-600/10 border-blue-500/30 text-blue-500' : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                  title="Toggle Table Schema Side-by-Side Split View"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Split View</span>
+                </button>
               </div>
 
               {queryResult && (
-                <div className="text-xs text-muted-foreground font-mono">
-                  {queryResult.durationMs} ms
-                  {'rowCount' in queryResult ? ` • ${queryResult.rowCount} rows` : ` • ${queryResult.changes} changes`}
+                <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
+                  <span>
+                    {queryResult.durationMs} ms
+                    {'rowCount' in queryResult ? ` • ${queryResult.rowCount} rows` : ` • ${queryResult.changes} changes`}
+                  </span>
+
+                  {'rows' in queryResult && queryResult.rows.length > 0 && (
+                    <div className="flex items-center gap-1.5 font-sans">
+                      <span className="text-[11px] text-muted-foreground font-medium">Export:</span>
+                      <button
+                        onClick={() => exportQueryResults(queryResult.rows, queryResult.columns, 'csv')}
+                        className="px-2 py-0.5 bg-card hover:bg-accent text-foreground border border-border rounded text-[11px] font-semibold transition-colors"
+                      >
+                        CSV
+                      </button>
+                      <button
+                        onClick={() => exportQueryResults(queryResult.rows, queryResult.columns, 'jsonl')}
+                        className="px-2 py-0.5 bg-card hover:bg-accent text-foreground border border-border rounded text-[11px] font-semibold transition-colors"
+                      >
+                        JSONL
+                      </button>
+                      <button
+                        onClick={() => exportQueryResults(queryResult.rows, queryResult.columns, 'excel')}
+                        className="px-2 py-0.5 bg-card hover:bg-accent text-foreground border border-border rounded text-[11px] font-semibold transition-colors"
+                      >
+                        Excel
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* SQL Editor Area: Pure Dark High-Contrast */}
-            <div className="h-40 md:h-56 border border-[#27272a] rounded-lg overflow-hidden shrink-0 relative bg-[#09090b] shadow-inner">
-              <textarea
-                value={sqlText}
-                onChange={(e) => setSqlText(e.target.value)}
-                onKeyDown={(e) => {
-                  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                    e.preventDefault();
-                    handleExecuteSql();
-                  }
-                }}
-                placeholder="-- Write SQLite queries here (e.g. SELECT * FROM users;)&#10;-- Press Ctrl+Enter to execute"
-                className="w-full h-full p-3 font-mono text-xs text-[#ffffff] bg-[#09090b] resize-none focus:outline-none leading-relaxed selection:bg-blue-700"
-                spellCheck={false}
-              />
+            {/* Mobile Virtual Keypad & SQL Snippet Bar (Visible only on <1024px) */}
+            <div className="flex lg:hidden items-center gap-1.5 overflow-x-auto pb-1 shrink-0 scrollbar-none">
+              {['SELECT', 'FROM', 'WHERE', 'LIMIT', 'AND', '*', ';', "'", '"', 'ORDER BY', 'COUNT(*)'].map((snippet) => (
+                <button
+                  key={snippet}
+                  onClick={() => {
+                    setSqlText((prev) => (prev.endsWith(' ') || prev.length === 0 ? prev + snippet : prev + ' ' + snippet));
+                  }}
+                  className="px-2.5 py-1 bg-card hover:bg-accent border border-border rounded text-[11px] font-mono text-muted-foreground hover:text-foreground shrink-0 active:scale-95 transition-all font-semibold"
+                >
+                  {snippet}
+                </button>
+              ))}
             </div>
 
-            {/* Results Viewer: Pure Dark High-Contrast Background & Crisp White Text */}
-            <div className="flex-1 bg-[#09090b] border border-[#27272a] rounded-lg overflow-hidden flex flex-col shadow-sm">
-              <div className="h-8 border-b border-[#27272a] px-3 flex items-center justify-between bg-[#18181b] text-xs font-semibold text-[#a1a1aa]">
-                <span className="flex items-center gap-1.5">
-                  <Terminal className="w-3.5 h-3.5 text-blue-400" />
-                  Query Results
-                </span>
-                {queryResult && 'rows' in queryResult && (
-                  <span className="font-mono text-[11px] text-[#71717a]">
-                    {queryResult.rows.length} rows returned
-                  </span>
-                )}
-              </div>
-              <div className="flex-1 overflow-auto p-2 bg-[#09090b]">
-                {queryError ? (
-                  <div className="p-3 bg-red-950/50 border border-red-800/50 text-red-300 text-xs font-mono rounded flex items-start gap-2">
-                    <XCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-                    <div>
-                      <div className="font-bold text-red-200">SQLite Execution Error</div>
-                      <div className="mt-0.5">{queryError}</div>
-                    </div>
-                  </div>
-                ) : explainResult ? (
-                  <div className="p-4 space-y-4 font-mono text-xs">
-                    {/* Profiler Analysis Header */}
-                    <div
-                      className={`p-3 rounded-lg border ${
-                        explainResult.analysis.hasFullTableScan
-                          ? 'bg-amber-950/40 border-amber-800/50 text-amber-300'
-                          : 'bg-emerald-950/40 border-emerald-800/50 text-emerald-300'
-                      }`}
+            {/* Visual Query Builder Panel (when editorMode === 'visual') */}
+            {editorMode === 'visual' ? (
+              <div className="p-4 bg-[#121214] border border-[#27272a] rounded-lg space-y-4 text-xs font-mono shrink-0">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1 font-sans">Target Table</label>
+                    <select
+                      value={vbTable}
+                      onChange={(e) => {
+                        const tbl = e.target.value;
+                        setVbTable(tbl);
+                        const detail = schema.find(s => s.name === tbl);
+                        if (detail) setVbColumns(detail.columns.map(c => c.name));
+                      }}
+                      className="px-2.5 py-1.5 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs focus:outline-none"
                     >
-                      <div className="font-bold flex items-center gap-2 text-sm mb-1">
-                        {explainResult.analysis.hasFullTableScan ? (
-                          <>
-                            <AlertTriangle className="w-4 h-4 text-amber-400" />
-                            <span>Slow Query Warning: Full Table Scan Detected</span>
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                            <span>Optimized Execution Plan</span>
-                          </>
-                        )}
-                      </div>
-                      <p className="text-[11px] opacity-90">{explainResult.analysis.recommendation}</p>
-                    </div>
+                      {schema.filter(s => s.type === 'table').map(t => (
+                        <option key={t.name} value={t.name}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                    {/* Step-by-step query execution tree */}
-                    <div className="border border-[#27272a] rounded-lg overflow-hidden">
-                      <div className="bg-[#18181b] px-3 py-1.5 border-b border-[#27272a] text-[#a1a1aa] font-semibold text-[11px]">
-                        EXPLAIN QUERY PLAN Details
-                      </div>
-                      <div className="divide-y divide-[#27272a] bg-[#09090b]">
-                        {explainResult.plan.map((step, idx) => (
-                          <div key={idx} className="p-2.5 flex items-center gap-3 text-xs">
-                            <span className="px-1.5 py-0.5 bg-[#27272a] text-[#a1a1aa] rounded text-[10px]">
-                              Step {step.id}
-                            </span>
-                            <span
-                              className={`font-mono ${
-                                step.detail.includes('SCAN')
-                                  ? 'text-amber-400 font-semibold'
-                                  : step.detail.includes('INDEX')
-                                  ? 'text-emerald-400'
-                                  : 'text-zinc-200'
-                              }`}
-                            >
-                              {step.detail}
-                            </span>
-                          </div>
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1 font-sans">Sort Order</label>
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={vbSortCol}
+                        onChange={(e) => setVbSortCol(e.target.value)}
+                        className="px-2 py-1.5 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs focus:outline-none"
+                      >
+                        <option value="">None</option>
+                        {(schema.find(s => s.name === vbTable)?.columns || []).map(c => (
+                          <option key={c.name} value={c.name}>{c.name}</option>
                         ))}
-                      </div>
+                      </select>
+                      <select
+                        value={vbSortDir}
+                        onChange={(e) => setVbSortDir(e.target.value as any)}
+                        className="px-2 py-1.5 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs focus:outline-none"
+                      >
+                        <option value="ASC">ASC</option>
+                        <option value="DESC">DESC</option>
+                      </select>
                     </div>
                   </div>
-                ) : !queryResult ? (
-                  <div className="p-8 text-center text-xs text-[#71717a] font-mono flex flex-col items-center justify-center h-full gap-2">
-                    <Terminal className="w-8 h-8 opacity-30" />
-                    <span>Press "Run" or press Ctrl+Enter to execute SQL statement.</span>
+
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1 font-sans">Limit</label>
+                    <input
+                      type="number"
+                      value={vbLimit}
+                      onChange={(e) => setVbLimit(e.target.value)}
+                      className="w-20 px-2 py-1.5 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs focus:outline-none"
+                    />
                   </div>
-                ) : 'rows' in queryResult ? (
-                  <table className="w-full text-left text-xs border-collapse font-mono bg-[#09090b] text-[#f4f4f5]">
-                    <thead className="bg-[#18181b] border-b border-[#27272a] sticky top-0 z-10 text-[#a1a1aa]">
-                      <tr>
-                        {queryResult.columns.map((col) => (
-                          <th key={col} className="py-2 px-3 font-semibold text-[#60a5fa] border-r border-[#27272a] last:border-r-0">
-                            {col}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#27272a]">
-                      {queryResult.rows.length === 0 ? (
-                        <tr>
-                          <td colSpan={queryResult.columns.length} className="py-6 text-center text-[#71717a]">
-                            (0 rows returned)
-                          </td>
-                        </tr>
-                      ) : (
-                        queryResult.rows.map((row, idx) => (
-                          <tr key={idx} className="hover:bg-[#18181b] transition-colors">
-                            {queryResult.columns.map((col) => {
-                              const val = row[col];
-                              return (
-                                <td key={col} className="py-1.5 px-3 border-r border-[#27272a] last:border-r-0 truncate max-w-sm text-[#f4f4f5]">
-                                  {val === null ? (
-                                    <span className="text-[#71717a] italic">NULL</span>
-                                  ) : typeof val === 'object' ? (
-                                    <span className="text-[#c084fc] font-semibold">{JSON.stringify(val)}</span>
-                                  ) : (
-                                    String(val)
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="p-4 text-xs font-mono text-emerald-400 space-y-1 bg-emerald-950/20 border border-emerald-800/40 rounded">
-                    <div className="font-bold flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      Query executed successfully.
-                    </div>
-                    <div className="text-emerald-300">Changes: {queryResult.changes}</div>
-                    <div className="text-emerald-300">Last Insert Row ID: {String(queryResult.lastInsertRowid)}</div>
-                    <div className="text-emerald-300">Duration: {queryResult.durationMs} ms</div>
+
+                  <div className="self-end ml-auto">
+                    <button
+                      onClick={() => {
+                        const colsStr = vbColumns.length === 0 ? '*' : vbColumns.map(c => `"${c}"`).join(', ');
+                        let genSql = `SELECT ${colsStr}\nFROM "${vbTable}"`;
+                        if (vbFilterCol && vbFilterVal) {
+                          genSql += `\nWHERE "${vbFilterCol}" ${vbFilterOp} '${vbFilterVal.replace(/'/g, "''")}'`;
+                        }
+                        if (vbSortCol) {
+                          genSql += `\nORDER BY "${vbSortCol}" ${vbSortDir}`;
+                        }
+                        if (vbLimit) {
+                          genSql += `\nLIMIT ${vbLimit};`;
+                        } else {
+                          genSql += ';';
+                        }
+                        setSqlText(genSql);
+                        setEditorMode('code');
+                      }}
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-sans text-xs font-semibold shadow-sm"
+                    >
+                      Generate SQL & Switch to Code
+                    </button>
                   </div>
-                )}
+                </div>
+
+                {/* Columns Selection Checkboxes */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] text-muted-foreground font-sans">Columns to Select</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allCols = schema.find(s => s.name === vbTable)?.columns.map(c => c.name) || [];
+                        setVbColumns(vbColumns.length === allCols.length ? [] : allCols);
+                      }}
+                      className="text-[10px] text-blue-400 hover:underline font-sans"
+                    >
+                      {vbColumns.length === (schema.find(s => s.name === vbTable)?.columns.length || 0) ? 'Deselect All' : 'Select All (*)'}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 p-2 bg-[#18181b] border border-[#27272a] rounded max-h-28 overflow-y-auto">
+                    {(schema.find(s => s.name === vbTable)?.columns || []).map(c => (
+                      <label key={c.name} className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer px-1.5 py-0.5 rounded hover:bg-[#27272a]">
+                        <input
+                          type="checkbox"
+                          checked={vbColumns.includes(c.name)}
+                          onChange={(e) => {
+                            if (e.target.checked) setVbColumns([...vbColumns, c.name]);
+                            else setVbColumns(vbColumns.filter(col => col !== c.name));
+                          }}
+                          className="rounded border-[#3f3f46] text-blue-600 bg-[#27272a]"
+                        />
+                        <span>{c.name}</span>
+                        {c.pk ? <span className="text-[9px] text-amber-400 font-bold">PK</span> : null}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Filter Condition Builder */}
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#27272a]">
+                  <span className="text-[11px] text-muted-foreground font-sans">Filter (WHERE):</span>
+                  <select
+                    value={vbFilterCol}
+                    onChange={(e) => setVbFilterCol(e.target.value)}
+                    className="px-2 py-1 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs"
+                  >
+                    <option value="">No Filter</option>
+                    {(schema.find(s => s.name === vbTable)?.columns || []).map(c => (
+                      <option key={c.name} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={vbFilterOp}
+                    onChange={(e) => setVbFilterOp(e.target.value)}
+                    className="px-2 py-1 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs"
+                  >
+                    <option value="=">=</option>
+                    <option value="!=">!=</option>
+                    <option value=">">&gt;</option>
+                    <option value="<">&lt;</option>
+                    <option value="LIKE">LIKE</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Value..."
+                    value={vbFilterVal}
+                    onChange={(e) => setVbFilterVal(e.target.value)}
+                    className="px-2 py-1 bg-[#18181b] border border-[#27272a] rounded text-foreground text-xs"
+                  />
+                </div>
               </div>
+            ) : null}
+
+            {/* Split View Container (Desktop side-by-side or standard stacked) */}
+            <div className="flex-1 flex flex-col lg:flex-row gap-3 min-h-0 overflow-hidden">
+              {/* Left Main Console: Editor Textarea + Results */}
+              <div className="flex-1 flex flex-col space-y-3 min-h-0 overflow-hidden">
+                {/* SQL Editor Area: Pure Dark High-Contrast */}
+                <div className="h-36 md:h-44 border border-[#27272a] rounded-lg overflow-hidden shrink-0 relative bg-[#09090b] shadow-inner">
+                  <textarea
+                    value={sqlText}
+                    onChange={(e) => setSqlText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                        e.preventDefault();
+                        handleExecuteSql();
+                      }
+                    }}
+                    placeholder="-- Write SQLite queries here (e.g. SELECT * FROM users;)&#10;-- Press Ctrl+Enter to execute"
+                    className="w-full h-full p-3 font-mono text-xs text-[#ffffff] bg-[#09090b] resize-none focus:outline-none leading-relaxed selection:bg-blue-700"
+                    spellCheck={false}
+                  />
+                </div>
+
+                {/* Results Viewer: Pure Dark High-Contrast Background & Crisp White Text */}
+                <div className="flex-1 bg-[#09090b] border border-[#27272a] rounded-lg overflow-hidden flex flex-col shadow-sm">
+                  <div className="h-8 border-b border-[#27272a] px-3 flex items-center justify-between bg-[#18181b] text-xs font-semibold text-[#a1a1aa]">
+                    <span className="flex items-center gap-1.5">
+                      <Terminal className="w-3.5 h-3.5 text-blue-400" />
+                      Query Results
+                    </span>
+                    {queryResult && 'rows' in queryResult && (
+                      <span className="font-mono text-[11px] text-[#71717a]">
+                        {queryResult.rows.length} rows returned
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 overflow-auto p-2 bg-[#09090b]">
+                    {queryError ? (
+                      <div className="p-3 bg-red-950/50 border border-red-800/50 text-red-300 text-xs font-mono rounded flex items-start gap-2">
+                        <XCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+                        <div>
+                          <div className="font-bold text-red-200">SQLite Execution Error</div>
+                          <div className="mt-0.5">{queryError}</div>
+                        </div>
+                      </div>
+                    ) : explainResult ? (
+                      <div className="p-4 space-y-4 font-mono text-xs">
+                        {/* Profiler Analysis Header */}
+                        <div
+                          className={`p-3 rounded-lg border ${
+                            explainResult.analysis.hasFullTableScan
+                              ? 'bg-amber-950/40 border-amber-800/50 text-amber-300'
+                              : 'bg-emerald-950/40 border-emerald-800/50 text-emerald-300'
+                          }`}
+                        >
+                          <div className="font-bold flex items-center gap-2 text-sm mb-1">
+                            {explainResult.analysis.hasFullTableScan ? (
+                              <>
+                                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                                <span>Slow Query Warning: Full Table Scan Detected</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                <span>Optimized Execution Plan</span>
+                              </>
+                            )}
+                          </div>
+                          <p className="text-[11px] opacity-90">{explainResult.analysis.recommendation}</p>
+                        </div>
+
+                        {/* Step-by-step query execution tree */}
+                        <div className="border border-[#27272a] rounded-lg overflow-hidden">
+                          <div className="bg-[#18181b] px-3 py-1.5 border-b border-[#27272a] text-[#a1a1aa] font-semibold text-[11px]">
+                            EXPLAIN QUERY PLAN Details
+                          </div>
+                          <div className="divide-y divide-[#27272a] bg-[#09090b]">
+                            {explainResult.plan.map((step, idx) => (
+                              <div key={idx} className="p-2.5 flex items-center gap-3 text-xs">
+                                <span className="px-1.5 py-0.5 bg-[#27272a] text-[#a1a1aa] rounded text-[10px]">
+                                  Step {step.id}
+                                </span>
+                                <span
+                                  className={`font-mono ${
+                                    step.detail.includes('SCAN')
+                                      ? 'text-amber-400 font-semibold'
+                                      : step.detail.includes('INDEX')
+                                      ? 'text-emerald-400'
+                                      : 'text-zinc-200'
+                                  }`}
+                                >
+                                  {step.detail}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : !queryResult ? (
+                      <div className="p-8 text-center text-xs text-[#71717a] font-mono flex flex-col items-center justify-center h-full gap-2">
+                        <Terminal className="w-8 h-8 opacity-30" />
+                        <span>Press "Run" or press Ctrl+Enter to execute SQL statement.</span>
+                      </div>
+                    ) : 'rows' in queryResult ? (
+                      <table className="w-full text-left text-xs border-collapse font-mono bg-[#09090b] text-[#f4f4f5]">
+                        <thead className="bg-[#18181b] border-b border-[#27272a] sticky top-0 z-10 text-[#a1a1aa]">
+                          <tr>
+                            {queryResult.columns.map((col) => (
+                              <th key={col} className="py-2 px-3 font-semibold text-[#60a5fa] border-r border-[#27272a] last:border-r-0">
+                                {col}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#27272a]">
+                          {queryResult.rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={queryResult.columns.length} className="py-6 text-center text-[#71717a]">
+                                (0 rows returned)
+                              </td>
+                            </tr>
+                          ) : (
+                            queryResult.rows.map((row, idx) => (
+                              <tr key={idx} className="hover:bg-[#18181b] transition-colors">
+                                {queryResult.columns.map((col) => {
+                                  const val = row[col];
+                                  return (
+                                    <td key={col} className="py-1.5 px-3 border-r border-[#27272a] last:border-r-0 truncate max-w-sm text-[#f4f4f5]">
+                                      {val === null ? (
+                                        <span className="text-[#71717a] italic">NULL</span>
+                                      ) : typeof val === 'object' ? (
+                                        <span className="text-[#c084fc] font-semibold">{JSON.stringify(val)}</span>
+                                      ) : (
+                                        String(val)
+                                      )}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="p-4 text-xs font-mono text-emerald-400 space-y-1 bg-emerald-950/20 border border-emerald-800/40 rounded">
+                        <div className="font-bold flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          Query executed successfully.
+                        </div>
+                        <div className="text-emerald-300">Changes: {queryResult.changes}</div>
+                        <div className="text-emerald-300">Last Insert Row ID: {String(queryResult.lastInsertRowid)}</div>
+                        <div className="text-emerald-300">Duration: {queryResult.durationMs} ms</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Side: Schema & Column Inspector in Split View (Desktop only) */}
+              {isSplitView && (
+                <div className="hidden lg:flex w-72 shrink-0 bg-[#09090b] border border-[#27272a] rounded-lg p-3 flex-col space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#27272a] pb-2">
+                    <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <TableIcon className="w-3.5 h-3.5 text-blue-400" />
+                      Schema Inspector
+                    </span>
+                    <select
+                      value={splitSelectedTable || selectedTable || schema.find(s => s.type === 'table')?.name || ''}
+                      onChange={(e) => setSplitSelectedTable(e.target.value)}
+                      className="px-2 py-1 bg-[#18181b] border border-[#27272a] rounded text-[11px] text-foreground font-mono focus:outline-none max-w-[140px] truncate"
+                    >
+                      {schema.filter(s => s.type === 'table').map(t => (
+                        <option key={t.name} value={t.name}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Columns list with 1-click insert */}
+                  <div className="flex-1 overflow-y-auto space-y-1 pr-1 font-mono text-[11px]">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 font-sans">
+                      Columns (Click to insert)
+                    </div>
+                    {schema
+                      .find(s => s.name === (splitSelectedTable || selectedTable || schema.find(t => t.type === 'table')?.name))
+                      ?.columns.map(col => (
+                        <button
+                          key={col.name}
+                          type="button"
+                          onClick={() => {
+                            setSqlText(prev => (prev.endsWith(' ') || prev.length === 0 ? `${prev}"${col.name}"` : `${prev} "${col.name}"`));
+                          }}
+                          className="w-full flex items-center justify-between p-1.5 rounded hover:bg-[#18181b] text-left transition-colors group"
+                        >
+                          <span className="flex items-center gap-1.5 truncate text-foreground group-hover:text-blue-400">
+                            {col.pk ? <span className="text-[9px] text-amber-400 font-bold">PK</span> : <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />}
+                            <span className="truncate">{col.name}</span>
+                          </span>
+                          <span className="text-[10px] text-muted-foreground uppercase shrink-0">
+                            {col.type || 'TEXT'}
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -2346,6 +2796,26 @@ export const DatabaseDetailPage: React.FC<{
                 <p className="text-xs text-muted-foreground">Inspect tables, columns, indexes, foreign keys, and full-text search indexes.</p>
               </div>
               <div className="flex items-center gap-2">
+                {/* View Mode Toggle: Cards vs ERD */}
+                <div className="flex items-center bg-muted/60 p-0.5 rounded-md border border-border text-xs">
+                  <button
+                    onClick={() => setSchemaViewMode('cards')}
+                    className={`px-2.5 py-1 rounded font-medium transition-all ${
+                      schemaViewMode === 'cards' ? 'bg-card text-foreground font-semibold shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Table Cards
+                  </button>
+                  <button
+                    onClick={() => setSchemaViewMode('erd')}
+                    className={`px-2.5 py-1 rounded font-medium transition-all ${
+                      schemaViewMode === 'erd' ? 'bg-card text-foreground font-semibold shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    ERD Diagram
+                  </button>
+                </div>
+
                 <button
                   onClick={() => {
                     const firstTable = schema.find(s => s.type === 'table');
@@ -2393,6 +2863,19 @@ export const DatabaseDetailPage: React.FC<{
                   <Plus className="w-3.5 h-3.5" />
                   Create Table
                 </button>
+              </div>
+            ) : schemaViewMode === 'erd' ? (
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">
+                  Interactive Entity Relationship Diagram. Drag canvas to pan, scroll or click buttons to zoom.
+                </div>
+                <ErdCanvas
+                  schema={schema}
+                  onSelectTable={(tableName) => {
+                    setSelectedTable(tableName);
+                    handleTabChange('tables');
+                  }}
+                />
               </div>
             ) : (
               schema.map((item) => (
@@ -2765,6 +3248,154 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* SCHEDULED JOBS TAB */}
+        {activeTab === 'jobs' && (
+          <div className="max-w-5xl mx-auto space-y-4">
+            <div className="flex items-center justify-between pb-2">
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Scheduled SQL Jobs (Cron)</h3>
+                <p className="text-xs text-muted-foreground">Automated database routines, log purges, and maintenance tasks.</p>
+              </div>
+              <button
+                onClick={() => setIsCreateJobOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Create Job
+              </button>
+            </div>
+
+            {/* Create Job Modal */}
+            {isCreateJobOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4 animate-in fade-in zoom-in-95">
+                  <div className="flex items-center justify-between border-b border-border pb-3">
+                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-blue-500" />
+                      Configure Scheduled SQL Job
+                    </h3>
+                    <button onClick={() => setIsCreateJobOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">Job Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Daily Data Cleanup"
+                        value={jobName}
+                        onChange={(e) => setJobName(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">Cadence / Cron</label>
+                      <select
+                        value={jobCron}
+                        onChange={(e) => setJobCron(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-background border border-border rounded-md text-foreground font-mono"
+                      >
+                        <option value="@every_5m">Every 5 Minutes (*/5 * * * *)</option>
+                        <option value="@every_15m">Every 15 Minutes (*/15 * * * *)</option>
+                        <option value="@hourly">Every Hour (@hourly)</option>
+                        <option value="@daily">Daily at Midnight (@daily)</option>
+                        <option value="@weekly">Weekly on Sunday (@weekly)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">SQL Statements to Execute</label>
+                      <textarea
+                        rows={4}
+                        value={jobSql}
+                        onChange={(e) => setJobSql(e.target.value)}
+                        className="w-full p-2.5 bg-[#09090b] border border-[#27272a] rounded font-mono text-foreground text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                    <button
+                      onClick={() => setIsCreateJobOpen(false)}
+                      className="px-3 py-1.5 border border-border hover:bg-accent rounded text-muted-foreground text-xs"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      disabled={!jobName.trim() || !jobSql.trim() || createJobMutation.isPending}
+                      onClick={() => createJobMutation.mutate({ name: jobName, cron_expression: jobCron, sql_query: jobSql })}
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded font-semibold text-xs transition-colors"
+                    >
+                      {createJobMutation.isPending ? 'Saving...' : 'Save Job'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Jobs List */}
+            <div className="space-y-3">
+              {scheduledJobs.length === 0 ? (
+                <div className="p-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-lg bg-card/50">
+                  No scheduled jobs configured. Click "Create Job" to automate recurring SQL routines.
+                </div>
+              ) : (
+                scheduledJobs.map((job) => (
+                  <div key={job.id} className="bg-card border border-border rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-blue-500" />
+                        <span className="font-bold text-xs text-foreground">{job.name}</span>
+                        <span className="text-[10px] px-2 py-0.5 bg-muted font-mono rounded text-muted-foreground">
+                          {job.cron_expression}
+                        </span>
+                        {job.last_status === 'success' ? (
+                          <span className="text-[10px] px-1.5 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-semibold">
+                            Success
+                          </span>
+                        ) : job.last_status === 'failed' ? (
+                          <span className="text-[10px] px-1.5 py-0.2 bg-red-500/10 text-red-500 border border-red-500/20 rounded font-semibold">
+                            Failed
+                          </span>
+                        ) : null}
+                      </div>
+                      <pre className="text-[11px] font-mono text-muted-foreground truncate max-w-lg">
+                        {job.sql_query}
+                      </pre>
+                      <div className="text-[10px] text-muted-foreground flex items-center gap-2">
+                        <span>Last Run: {job.last_run_at ? formatDate(job.last_run_at) : 'Never'}</span>
+                        <span>•</span>
+                        <span>Next Run: {job.next_run_at ? formatDate(job.next_run_at) : '—'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => runJobMutation.mutate(job.id)}
+                        disabled={runJobMutation.isPending}
+                        className="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded font-medium transition-colors flex items-center gap-1"
+                      >
+                        <Play className="w-3 h-3 fill-current" />
+                        Run Now
+                      </button>
+                      <button
+                        onClick={() => deleteJobMutation.mutate(job.id)}
+                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                        title="Delete Job"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}

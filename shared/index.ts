@@ -337,6 +337,34 @@ export interface SystemStatus {
   };
 }
 
+export interface ScheduledJobRecord {
+  id: string;
+  database_id: string;
+  name: string;
+  cron_expression: string;
+  sql_query: string;
+  enabled: boolean;
+  last_run_at: number | null;
+  next_run_at: number | null;
+  last_status: 'success' | 'failed' | null;
+  last_error?: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface WebAuthnCredentialRecord {
+  id: string;
+  user_id: string;
+  credential_id: string;
+  public_key: string;
+  counter: number;
+  device_type?: string | null;
+  backed_up: boolean;
+  transports?: string[] | null;
+  created_at: number;
+  last_used_at?: number | null;
+}
+
 export interface MetricHistoryPoint {
   timestamp: number;
   cpuPercent: number;

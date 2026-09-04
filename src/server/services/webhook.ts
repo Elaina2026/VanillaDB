@@ -207,10 +207,12 @@ export class WebhookService {
 
         let isDiscord = false;
         let isSlack = false;
+        let isTelegram = false;
         try {
           const parsedUrl = new URL(hook.url);
           isDiscord = (parsedUrl.hostname === 'discord.com' || parsedUrl.hostname === 'discordapp.com') && parsedUrl.pathname.includes('/api/webhooks');
           isSlack = (parsedUrl.hostname === 'hooks.slack.com') && parsedUrl.pathname.includes('/services/');
+          isTelegram = parsedUrl.hostname === 'api.telegram.org' && parsedUrl.pathname.includes('/bot');
         } catch {}
 
         let postPayload: any;
@@ -220,6 +222,7 @@ export class WebhookService {
             update: 0x3b82f6,
             delete: 0xef4444,
             schema: 0x8b5cf6,
+            alert: 0xf59e0b,
           };
           const dataStr = JSON.stringify(payload.data ?? {}, null, 2);
           const truncatedData = dataStr.length > 1000 ? dataStr.slice(0, 1000) + '...' : dataStr;
@@ -228,7 +231,7 @@ export class WebhookService {
             username: 'VanillaDatabase',
             embeds: [
               {
-                title: `📦 Event: ${payload.type.toUpperCase()}`,
+                title: `Event: ${payload.type.toUpperCase()}`,
                 color: colorMap[payload.type] || 0x64748b,
                 fields: [
                   { name: 'Database', value: `\`${payload.databaseId}\``, inline: true },
@@ -250,6 +253,14 @@ export class WebhookService {
                 ts: Math.floor((payload.timestamp || Date.now()) / 1000),
               },
             ],
+          };
+        } else if (isTelegram) {
+          const chatIdMatch = hook.url.match(/chat_id=([^&]+)/);
+          const chatId = hook.secret || (chatIdMatch ? chatIdMatch[1] : '');
+          postPayload = {
+            chat_id: chatId,
+            text: `*[VanillaDB Event]*: \`${payload.type.toUpperCase()}\`\n*Database:* \`${payload.databaseId}\`\n${payload.table ? `*Table:* \`${payload.table}\`\n` : ''}\`\`\`json\n${JSON.stringify(payload.data ?? {}, null, 2).slice(0, 800)}\n\`\`\``,
+            parse_mode: 'Markdown',
           };
         } else {
           postPayload = payload;
