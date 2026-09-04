@@ -31,7 +31,7 @@ export const ShortcutsPage: React.FC<{
         { keys: ['Ctrl', 'K'], label: isVi ? 'Mở thanh tìm kiếm lệnh nhanh (Command Palette)' : 'Open Command Palette' },
         { keys: ['Ctrl', 'B'], label: isVi ? 'Mở cửa sổ tạo cơ sở dữ liệu mới' : 'Open Create Database modal' },
         { keys: ['Ctrl', 'Shift', 'L'], label: isVi ? 'Chuyển đổi nhanh ngôn ngữ (English / Tiếng Việt)' : 'Toggle language (English / Vietnamese)' },
-        { keys: ['Ctrl', 'Shift', 'T'], label: isVi ? 'Chuyển đổi giao diện Sáng / Tối' : 'Toggle theme (Light / Dark)' },
+        { keys: ['Alt', 'T'], label: isVi ? 'Chuyển đổi giao diện Sáng / Tối (hoặc Ctrl+Shift+T)' : 'Toggle theme (Light / Dark) (or Ctrl+Shift+T)' },
         { keys: ['Shift', '?'], label: isVi ? 'Mở trang tra cứu phím tắt này' : 'Navigate to Shortcuts page' },
         { keys: ['Esc'], label: isVi ? 'Đóng các modal đang mở / Đóng Command Palette' : 'Close active modals / palette' },
       ],

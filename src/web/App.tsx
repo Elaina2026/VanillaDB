@@ -20,7 +20,7 @@ import { useTheme } from './hooks/useTheme.js';
 export const App: React.FC = () => {
   const { authenticated, isLoading, isOffline, refetchStatus } = useAuth();
   const { language, toggleLanguage } = useI18n();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, toggleTheme } = useTheme();
 
   // URL Hash routing: #/overview, #/telemetry, #/users, #/databases, #/databases/:id, #/databases/:id/:tab, #/activity, #/settings
   const parseHash = () => {
@@ -91,10 +91,11 @@ export const App: React.FC = () => {
         return;
       }
 
-      // Toggle Theme: Ctrl + Shift + T
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'T' || e.key === 't' || e.code === 'KeyT')) {
+      // Toggle Theme: Alt + T or Ctrl + Shift + T
+      if ((e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 't' || e.key === 'T' || e.code === 'KeyT')) ||
+          ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'T' || e.key === 't' || e.code === 'KeyT'))) {
         e.preventDefault();
-        setTheme(theme === 'dark' ? 'light' : 'dark');
+        toggleTheme();
         return;
       }
 

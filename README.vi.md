@@ -93,7 +93,7 @@ Truy cập trình duyệt tại địa chỉ: **`http://localhost:3000`** để 
 | **`Ctrl + K`** | Mở thanh tìm kiếm lệnh và database nhanh (Command Palette) |
 | **`Ctrl + B`** | Mở nhanh cửa sổ tạo cơ sở dữ liệu mới |
 | **`Ctrl + Shift + L`** | Chuyển đổi nhanh ngôn ngữ hiển thị (English ↔ Tiếng Việt) |
-| **`Ctrl + Shift + T`** | Chuyển đổi nhanh giao diện Sáng / Tối (Light / Dark) |
+| **`Alt + T`** *(hoặc `Ctrl + Shift + T`)* | Chuyển đổi nhanh giao diện Sáng / Tối (Light / Dark) |
 | **`Alt + 1`** | Đi đến trang Tổng quan hệ thống (Overview) |
 | **`Alt + 2`** | Đi đến Giám sát thời gian thực (Live Telemetry) |
 | **`Alt + 3`** | Đi đến danh sách Cơ sở dữ liệu (Databases) |

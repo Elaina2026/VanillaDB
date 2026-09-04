@@ -87,7 +87,7 @@ Traditional managed cloud databases (such as free tiers on Supabase, Neon, or Pl
 | **`Ctrl + K`** | Open Command Palette / Universal search |
 | **`Ctrl + B`** | Open Create Database modal |
 | **`Ctrl + Shift + L`** | Toggle interface language (English / Vietnamese) |
-| **`Ctrl + Shift + T`** | Toggle theme (Light / Dark) |
+| **`Alt + T`** *(or `Ctrl + Shift + T`)* | Toggle theme (Light / Dark) |
 | **`Alt + 1`** | Navigate to Overview page |
 | **`Alt + 2`** | Navigate to Live Telemetry page |
 | **`Alt + 3`** | Navigate to Databases page |

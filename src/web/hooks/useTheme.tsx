@@ -5,6 +5,7 @@ type Theme = 'light' | 'dark' | 'system';
 interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
   isDark: boolean;
 }
 
@@ -32,8 +33,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [theme]);
 
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const isCurrentlyDark =
+        prev === 'dark' ||
+        (prev === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      return isCurrentlyDark ? 'light' : 'dark';
+    });
+  };
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, isDark }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, isDark }}>
       {children}
     </ThemeContext.Provider>
   );
