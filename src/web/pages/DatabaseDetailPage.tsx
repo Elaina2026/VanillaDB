@@ -96,6 +96,38 @@ export const DatabaseDetailPage: React.FC<{
     }
   };
 
+  // Keyboard navigation for Database Detail Tabs (Alt + Shift + 1..9 or direct digit when not typing in input)
+  useEffect(() => {
+    const detailTabsList: Array<typeof activeTab> = [
+      'overview',      // 1
+      'analytics',     // 2
+      'tables',        // 3
+      'editor',        // 4
+      'schema',        // 5
+      'storage',       // 6
+      'import-export', // 7
+      'realtime',      // 8
+      'webhooks',      // 9
+    ];
+
+    const handleDetailKeyDown = (e: KeyboardEvent) => {
+      const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName);
+      if (isInput) return;
+
+      // Allow 1..9 (without Ctrl/Meta/Alt) to switch tabs quickly when focused on Database Detail
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        const num = parseInt(e.key, 10);
+        if (num >= 1 && num <= detailTabsList.length) {
+          e.preventDefault();
+          handleTabChange(detailTabsList[num - 1]);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleDetailKeyDown);
+    return () => window.removeEventListener('keydown', handleDetailKeyDown);
+  }, [databaseId, onTabChange]);
+
   // Queries
   const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useQuery<DatabaseOverviewStats>({
     queryKey: ['dbStats', databaseId],

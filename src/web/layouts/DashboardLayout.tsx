@@ -387,7 +387,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   {t('nav.shortcuts', 'Shortcuts')}
                 </div>
                 <kbd className="px-1.5 py-0.2 text-[9px] font-mono bg-muted/80 border border-border/80 rounded text-muted-foreground font-bold">
-                  Ctrl+K
+                  Shift+?
                 </kbd>
               </button>
             </div>

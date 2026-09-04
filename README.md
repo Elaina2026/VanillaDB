@@ -80,6 +80,27 @@ Traditional managed cloud databases (such as free tiers on Supabase, Neon, or Pl
 
 ---
 
+## Keyboard Shortcuts
+
+| Shortcut | Description |
+| :--- | :--- |
+| **`Ctrl + K`** | Open Command Palette / Universal search |
+| **`Ctrl + B`** | Open Create Database modal |
+| **`Ctrl + Shift + L`** | Toggle interface language (English / Vietnamese) |
+| **`Ctrl + Shift + T`** | Toggle theme (Light / Dark) |
+| **`Alt + 1`** | Navigate to Overview page |
+| **`Alt + 2`** | Navigate to Live Telemetry page |
+| **`Alt + 3`** | Navigate to Databases page |
+| **`Alt + 4`** | Navigate to Activity Logs page |
+| **`Alt + 5`** | Navigate to Users page |
+| **`Alt + 6`** | Navigate to Settings page |
+| **`1 .. 9`** | Switch between Database Detail workspace tabs |
+| **`Shift + ?`** | Open Keyboard Shortcuts reference page |
+| **`Ctrl + Enter`** | Execute active query in SQL Console |
+| **`Esc`** | Close active modals or Command Palette |
+
+---
+
 ## Architecture
 
 ```

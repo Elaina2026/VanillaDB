@@ -5,6 +5,7 @@ export type Language = 'en' | 'vi';
 interface I18nContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
+  toggleLanguage: () => void;
   t: (key: string, defaultVal?: string) => string;
 }
 
@@ -715,12 +716,20 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('vdb_language', lang);
   };
 
+  const toggleLanguage = () => {
+    setLangState((prev) => {
+      const next = prev === 'en' ? 'vi' : 'en';
+      localStorage.setItem('vdb_language', next);
+      return next;
+    });
+  };
+
   const t = (key: string, defaultVal?: string): string => {
     return translations[language]?.[key] || defaultVal || translations.en[key] || key;
   };
 
   return (
-    <I18nContext.Provider value={{ language, setLanguage, t }}>
+    <I18nContext.Provider value={{ language, setLanguage, toggleLanguage, t }}>
       {children}
     </I18nContext.Provider>
   );
@@ -732,6 +741,7 @@ export const useI18n = () => {
     return {
       language: 'en' as Language,
       setLanguage: () => {},
+      toggleLanguage: () => {},
       t: (key: string, def?: string) => def || key,
     };
   }

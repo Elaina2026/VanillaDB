@@ -19,7 +19,7 @@ import { useTheme } from './hooks/useTheme.js';
 
 export const App: React.FC = () => {
   const { authenticated, isLoading, isOffline, refetchStatus } = useAuth();
-  const { language, setLanguage } = useI18n();
+  const { language, toggleLanguage } = useI18n();
   const { theme, setTheme } = useTheme();
 
   // URL Hash routing: #/overview, #/telemetry, #/users, #/databases, #/databases/:id, #/databases/:id/:tab, #/activity, #/settings
@@ -85,35 +85,35 @@ export const App: React.FC = () => {
       }
 
       // Toggle Language: Ctrl + Shift + L
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'L' || e.key === 'l' || e.code === 'KeyL')) {
         e.preventDefault();
-        setLanguage(language === 'en' ? 'vi' : 'en');
+        toggleLanguage();
         return;
       }
 
       // Toggle Theme: Ctrl + Shift + T
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 't') {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'T' || e.key === 't' || e.code === 'KeyT')) {
         e.preventDefault();
         setTheme(theme === 'dark' ? 'light' : 'dark');
         return;
       }
 
-      // Jump to Shortcuts Reference: Shift + ?
-      if (e.key === '?' && e.shiftKey && !isInput) {
+      // Jump to Shortcuts Reference: Shift + ? or '?'
+      if ((e.key === '?' || (e.shiftKey && e.code === 'Slash')) && !isInput) {
         e.preventDefault();
         navigateTo('shortcuts');
         return;
       }
 
       // Fast Navigation (when not typing in an input):
-      // Alt + 1: Overview, Alt + 2: Databases, Alt + 3: Telemetry, Alt + 4: Activity, Alt + 5: Users, Alt + 6: Settings
+      // Alt + 1: Overview, Alt + 2: Live Telemetry, Alt + 3: Databases, Alt + 4: Activity Logs, Alt + 5: Users, Alt + 6: Settings
       if (e.altKey && !e.ctrlKey && !e.metaKey) {
-        if (e.key === '1') { e.preventDefault(); navigateTo('overview'); return; }
-        if (e.key === '2') { e.preventDefault(); navigateTo('databases'); return; }
-        if (e.key === '3') { e.preventDefault(); navigateTo('telemetry'); return; }
-        if (e.key === '4') { e.preventDefault(); navigateTo('activity'); return; }
-        if (e.key === '5') { e.preventDefault(); navigateTo('users'); return; }
-        if (e.key === '6') { e.preventDefault(); navigateTo('settings'); return; }
+        if (e.key === '1' || e.code === 'Digit1') { e.preventDefault(); navigateTo('overview'); return; }
+        if (e.key === '2' || e.code === 'Digit2') { e.preventDefault(); navigateTo('telemetry'); return; }
+        if (e.key === '3' || e.code === 'Digit3') { e.preventDefault(); navigateTo('databases'); return; }
+        if (e.key === '4' || e.code === 'Digit4') { e.preventDefault(); navigateTo('activity'); return; }
+        if (e.key === '5' || e.code === 'Digit5') { e.preventDefault(); navigateTo('users'); return; }
+        if (e.key === '6' || e.code === 'Digit6') { e.preventDefault(); navigateTo('settings'); return; }
       }
     };
 

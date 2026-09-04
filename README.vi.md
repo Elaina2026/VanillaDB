@@ -95,11 +95,12 @@ Truy cập trình duyệt tại địa chỉ: **`http://localhost:3000`** để 
 | **`Ctrl + Shift + L`** | Chuyển đổi nhanh ngôn ngữ hiển thị (English ↔ Tiếng Việt) |
 | **`Ctrl + Shift + T`** | Chuyển đổi nhanh giao diện Sáng / Tối (Light / Dark) |
 | **`Alt + 1`** | Đi đến trang Tổng quan hệ thống (Overview) |
-| **`Alt + 2`** | Đi đến danh sách Cơ sở dữ liệu (Databases) |
-| **`Alt + 3`** | Đi đến Giám sát thời gian thực (Live Telemetry 1s) |
+| **`Alt + 2`** | Đi đến Giám sát thời gian thực (Live Telemetry) |
+| **`Alt + 3`** | Đi đến danh sách Cơ sở dữ liệu (Databases) |
 | **`Alt + 4`** | Đi đến Nhật ký hoạt động & Kiểm toán (Activity Logs) |
 | **`Alt + 5`** | Đi đến Quản lý người dùng (Users) |
 | **`Alt + 6`** | Đi đến Cài đặt hệ thống (Settings) |
+| **`1 .. 9`** | Chuyển nhanh 9 tab chức năng trong chi tiết Database |
 | **`Shift + ?`** | Mở bảng tra cứu phím tắt toàn năng |
 | **`Ctrl + Enter`** | Thực thi câu lệnh SQL đang soạn thảo trong SQL Console |
 | **`Esc`** | Đóng các modal popup hoặc thanh tìm kiếm lệnh |
