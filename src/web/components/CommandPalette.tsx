@@ -62,8 +62,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       setQuery('');
       setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 50);
+
+      const handleGlobalEsc = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          onClose();
+        }
+      };
+
+      window.addEventListener('keydown', handleGlobalEsc);
+      return () => window.removeEventListener('keydown', handleGlobalEsc);
     }
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   const isVi = language === 'vi';
 
@@ -223,8 +233,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-100">
-      <div className="w-full max-w-xl bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[75vh]">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-100"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-xl bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[75vh]"
+      >
         {/* Search Input Bar */}
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border bg-muted/20">
           <Search className="w-4 h-4 text-muted-foreground shrink-0" />
