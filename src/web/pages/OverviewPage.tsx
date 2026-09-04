@@ -209,7 +209,7 @@ export const OverviewPage: React.FC<{
             <div className="flex justify-between py-2">
               <span className="text-muted-foreground">VanillaDatabase Version</span>
               <span className="font-mono font-semibold text-emerald-500">
-                v{status?.version || '1.3.1'}
+                v{status?.version || '1.3.2'}
               </span>
             </div>
             <div className="flex justify-between py-2">

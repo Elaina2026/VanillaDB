@@ -49,6 +49,7 @@ import { CreateTableModal } from '../components/CreateTableModal.js';
 import { RowModal } from '../components/RowModal.js';
 import { ImportExportModal } from '../components/ImportExportModal.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
+import { DatabaseOperationsTimelineChart } from '../components/MetricsCharts.js';
 import { useAuth } from '../hooks/useAuth.js';
 import type {
   DatabaseOverviewStats,
@@ -952,42 +953,13 @@ export const DatabaseDetailPage: React.FC<{
                 </div>
               </div>
 
-              {/* Stacked Timeline Chart */}
+              {/* Interactive SVG Gradient Timeline Area Chart */}
               {isMetricsLoading ? (
-                <div className="py-16 text-center text-xs text-muted-foreground">Loading request metrics timeline...</div>
+                <div className="py-16 text-center text-xs text-muted-foreground font-mono">Loading request metrics timeline...</div>
               ) : (
                 <div className="space-y-4">
-                  <div className="h-44 flex items-end gap-2 pt-6 pb-2 border-b border-border">
-                    {(metricsStats?.timeline || []).map((t, idx) => {
-                      const maxTotal = Math.max(...(metricsStats?.timeline || []).map((x) => x.totalCount), 1);
-                      const barHeightPercent = Math.min(100, Math.max(8, (t.totalCount / maxTotal) * 100));
-                      const selectPct = t.totalCount > 0 ? (t.selectCount / t.totalCount) * 100 : 0;
-                      const insertPct = t.totalCount > 0 ? (t.insertCount / t.totalCount) * 100 : 0;
-                      const updatePct = t.totalCount > 0 ? (t.updateCount / t.totalCount) * 100 : 0;
-                      const deletePct = t.totalCount > 0 ? (t.deleteCount / t.totalCount) * 100 : 0;
-                      const ddlPct = t.totalCount > 0 ? (t.ddlCount / t.totalCount) * 100 : 0;
-
-                      return (
-                        <div key={idx} className="flex-1 flex flex-col items-center h-full justify-end group relative">
-                          <div className="text-[10px] font-mono text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mb-1 absolute -top-5">
-                            {t.totalCount}
-                          </div>
-                          <div
-                            style={{ height: `${barHeightPercent}%` }}
-                            className="w-full max-w-[28px] rounded-t overflow-hidden flex flex-col-reverse bg-muted/40 transition-all hover:brightness-110"
-                          >
-                            <div style={{ height: `${selectPct}%` }} className="bg-blue-500 w-full" title={`SELECT: ${t.selectCount}`} />
-                            <div style={{ height: `${insertPct}%` }} className="bg-emerald-500 w-full" title={`INSERT: ${t.insertCount}`} />
-                            <div style={{ height: `${updatePct}%` }} className="bg-amber-500 w-full" title={`UPDATE: ${t.updateCount}`} />
-                            <div style={{ height: `${deletePct}%` }} className="bg-red-500 w-full" title={`DELETE: ${t.deleteCount}`} />
-                            <div style={{ height: `${ddlPct}%` }} className="bg-purple-500 w-full" title={`DDL: ${t.ddlCount}`} />
-                          </div>
-                          <span className="text-[9px] font-mono text-muted-foreground mt-1 block truncate">
-                            {t.timeLabel}
-                          </span>
-                        </div>
-                      );
-                    })}
+                  <div className="min-h-[220px] w-full pt-2">
+                    <DatabaseOperationsTimelineChart timeline={metricsStats?.timeline || []} />
                   </div>
 
                   {/* Summary row */}
@@ -1517,6 +1489,62 @@ export const DatabaseDetailPage: React.FC<{
                 >
                   Clear
                 </button>
+
+                {/* Quick SQL Templates Dropdown */}
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) return;
+                    const tableName = selectedTable || (schema.find((s) => s.type === 'table')?.name) || 'users';
+                    let templateSql = '';
+                    switch (val) {
+                      case 'select_all':
+                        templateSql = `SELECT * FROM ${tableName} LIMIT 100;`;
+                        break;
+                      case 'select_count':
+                        templateSql = `SELECT count(*) as total_rows FROM ${tableName};`;
+                        break;
+                      case 'insert':
+                        templateSql = `INSERT INTO ${tableName} (/* columns */)\nVALUES (/* values */);`;
+                        break;
+                      case 'update':
+                        templateSql = `UPDATE ${tableName}\nSET updated_at = unixepoch()\nWHERE id = 1;`;
+                        break;
+                      case 'delete':
+                        templateSql = `DELETE FROM ${tableName}\nWHERE id = 1;`;
+                        break;
+                      case 'create_table':
+                        templateSql = `CREATE TABLE IF NOT EXISTS app_items (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  title TEXT NOT NULL,\n  metadata JSON,\n  created_at INTEGER DEFAULT (unixepoch())\n);`;
+                        break;
+                      case 'create_index':
+                        templateSql = `CREATE INDEX IF NOT EXISTS idx_${tableName}_created\nON ${tableName} (created_at DESC);`;
+                        break;
+                      case 'vacuum':
+                        templateSql = `VACUUM;`;
+                        break;
+                      case 'pragma_integrity':
+                        templateSql = `PRAGMA integrity_check;`;
+                        break;
+                    }
+                    if (templateSql) {
+                      setSqlText(templateSql);
+                    }
+                    e.target.value = '';
+                  }}
+                  className="px-2.5 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-medium transition-colors focus:outline-none"
+                >
+                  <option value="" disabled>⚡ Quick SQL Templates...</option>
+                  <option value="select_all">SELECT * (Limit 100)</option>
+                  <option value="select_count">COUNT(*) Aggregation</option>
+                  <option value="insert">INSERT Template</option>
+                  <option value="update">UPDATE Template</option>
+                  <option value="delete">DELETE Template</option>
+                  <option value="create_table">CREATE TABLE Template</option>
+                  <option value="create_index">CREATE INDEX Template</option>
+                  <option value="pragma_integrity">PRAGMA integrity_check</option>
+                  <option value="vacuum">VACUUM (Defrag)</option>
+                </select>
               </div>
 
               {queryResult && (

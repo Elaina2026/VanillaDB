@@ -27,7 +27,7 @@ import {
 
 export const TelemetryPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState<TimeRange>('1h');
-  const [refreshInterval, setRefreshInterval] = useState<number>(5000);
+  const [refreshInterval, setRefreshInterval] = useState<number>(1000); // Default to live 1s
 
   const { data: status, isLoading: isStatusLoading, refetch: refetchStatus } = useQuery<SystemStatus>({
     queryKey: ['systemStatus'],
@@ -91,8 +91,9 @@ export const TelemetryPage: React.FC = () => {
           <select
             value={refreshInterval}
             onChange={(e) => setRefreshInterval(Number(e.target.value))}
-            className="bg-card border border-border text-foreground text-xs rounded-md px-2.5 py-1.5 font-medium shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            className="bg-card border border-border text-foreground text-xs rounded-md px-2.5 py-1.5 font-medium shadow-sm focus:outline-none focus:ring-1 focus:ring-primary font-mono"
           >
+            <option value={1000}>⚡ Live Realtime: 1s</option>
             <option value={2000}>Refresh: 2s (High-Res)</option>
             <option value={5000}>Refresh: 5s (Default)</option>
             <option value={15000}>Refresh: 15s</option>

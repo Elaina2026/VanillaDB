@@ -24,14 +24,17 @@ import {
   FileCode,
   Zap,
   Globe,
-  Radio
+  Radio,
+  Languages
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../hooks/useAuth.js';
+import { useI18n } from '../hooks/useI18n.js';
 import type { SystemSettings, SystemStatus } from '@shared/index.js';
 
 export const SettingsPage: React.FC = () => {
   const { user: currentUser } = useAuth();
+  const { language, setLanguage, t } = useI18n();
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<'general' | 'engine' | 'backups' | 'quotas' | 'debug' | 'account'>('general');
@@ -262,6 +265,22 @@ export const SettingsPage: React.FC = () => {
                   className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 text-foreground"
                 />
                 <p className="text-[10px] text-muted-foreground mt-1">Used for webhook dispatch callbacks and SDK endpoints.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                  <Languages className="w-3.5 h-3.5 text-blue-500" />
+                  Giao diện ngôn ngữ / Language
+                </label>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value as any)}
+                  className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground"
+                >
+                  <option value="vi">Tiếng Việt (Mặc định)</option>
+                  <option value="en">English (US)</option>
+                </select>
+                <p className="text-[10px] text-muted-foreground mt-1">Tùy chỉnh ngôn ngữ quản trị toàn hệ thống.</p>
               </div>
             </div>
           </div>
@@ -648,7 +667,7 @@ export const SettingsPage: React.FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
               <div className="p-2.5 bg-muted/40 rounded border border-border">
                 <span className="text-[10px] text-muted-foreground uppercase font-semibold block">VanillaDB</span>
-                <span className="font-mono font-bold text-emerald-500 block mt-0.5">v{status?.version || '1.3.1'}</span>
+                <span className="font-mono font-bold text-emerald-500 block mt-0.5">v{status?.version || '1.3.2'}</span>
               </div>
 
               <div className="p-2.5 bg-muted/40 rounded border border-border">

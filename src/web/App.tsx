@@ -10,8 +10,10 @@ import { DatabasesPage } from './pages/DatabasesPage.js';
 import { DatabaseDetailPage } from './pages/DatabaseDetailPage.js';
 import { ActivityPage } from './pages/ActivityPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
+import { ShortcutsPage } from './pages/ShortcutsPage.js';
 import { CreateDatabaseModal } from './components/CreateDatabaseModal.js';
 import { CreateTokenModal } from './components/CreateTokenModal.js';
+import { CommandPalette } from './components/CommandPalette.js';
 
 export const App: React.FC = () => {
   const { authenticated, isLoading, isOffline, refetchStatus } = useAuth();
@@ -54,9 +56,39 @@ export const App: React.FC = () => {
     }
   };
 
-  // Modals
+  // Modals & Command Palette
   const [isCreateDbOpen, setIsCreateDbOpen] = useState(false);
   const [createTokenDbId, setCreateTokenDbId] = useState<string | null>(null);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  // Global Keyboard Shortcuts listener (Ctrl + K, Ctrl + B, Shift + ?)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts inside text inputs or textareas unless it's Escape or Ctrl+K
+      const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName);
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setIsCreateDbOpen(true);
+        return;
+      }
+
+      if (e.key === '?' && e.shiftKey && !isInput) {
+        e.preventDefault();
+        navigateTo('shortcuts');
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   if (isOffline) {
     return <ErrorPage type="offline" onRetry={refetchStatus} />;
@@ -74,7 +106,7 @@ export const App: React.FC = () => {
     return <AuthPage />;
   }
 
-  const validTabs = ['overview', 'telemetry', 'users', 'databases', 'activity', 'settings'];
+  const validTabs = ['overview', 'telemetry', 'users', 'databases', 'activity', 'settings', 'shortcuts'];
   const isInvalidTab = !route.databaseId && !validTabs.includes(route.tab);
 
   if (isInvalidTab) {
@@ -117,6 +149,11 @@ export const App: React.FC = () => {
         <ActivityPage />
       ) : route.tab === 'settings' ? (
         <SettingsPage />
+      ) : route.tab === 'shortcuts' ? (
+        <ShortcutsPage
+          onNavigate={(t, id) => navigateTo(t, id)}
+          onOpenCreateDb={() => setIsCreateDbOpen(true)}
+        />
       ) : (
         <OverviewPage
           onSelectDatabase={(id) => navigateTo('databases', id)}
@@ -138,6 +175,13 @@ export const App: React.FC = () => {
         isOpen={!!createTokenDbId}
         databaseId={createTokenDbId}
         onClose={() => setCreateTokenDbId(null)}
+      />
+
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigate={(tab, dbId, dbTab) => navigateTo(tab, dbId, dbTab)}
+        onOpenCreateDb={() => setIsCreateDbOpen(true)}
       />
     </DashboardLayout>
   );

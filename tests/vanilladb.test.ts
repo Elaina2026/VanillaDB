@@ -87,7 +87,7 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     const body = res.json();
     expect(body.status).toBe('ok');
     expect(body.service).toBe('VanillaDatabase');
-    expect(body.version).toBe('1.3.1');
+    expect(body.version).toBe('1.3.2');
   });
 
   // 2. Database Lifecycle

@@ -577,8 +577,135 @@ export const RequestVolumeChart: React.FC<{ timeRange: TimeRange; status?: Syste
 };
 
 /* -------------------------------------------------------------------------- */
-/* 5. Query Latency Distribution (Avg ms & P95 ms)                           */
 /* -------------------------------------------------------------------------- */
+/* 6. Database 24h Operations Timeline Area Chart                             */
+/* -------------------------------------------------------------------------- */
+export const DatabaseOperationsTimelineChart: React.FC<{
+  timeline: Array<{
+    timeLabel: string;
+    timestamp: number;
+    selectCount: number;
+    insertCount: number;
+    updateCount: number;
+    deleteCount: number;
+    ddlCount: number;
+    totalCount: number;
+  }>;
+}> = ({ timeline }) => {
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const chartId = useId().replace(/:/g, '');
+
+  if (!timeline || timeline.length === 0) {
+    return (
+      <div className="py-12 text-center text-xs text-muted-foreground font-mono">
+        No query operations recorded in the last 24 hours.
+      </div>
+    );
+  }
+
+  const width = 600;
+  const height = 200;
+  const padding = { top: 20, right: 20, bottom: 30, left: 45 };
+  const innerW = width - padding.left - padding.right;
+  const innerH = height - padding.top - padding.bottom;
+
+  const maxTotal = Math.max(...timeline.map((d) => d.totalCount), 10) * 1.15;
+
+  const getX = (i: number) => padding.left + (i / Math.max(1, timeline.length - 1)) * innerW;
+  const getY = (val: number) => padding.top + innerH - (val / maxTotal) * innerH;
+
+  const pointsTotal = timeline.map((d, i) => `${getX(i)},${getY(d.totalCount)}`).join(' ');
+  const areaTotal = `${padding.left},${padding.top + innerH} ${pointsTotal} ${padding.left + innerW},${padding.top + innerH}`;
+
+  const hovered = hoverIndex !== null ? timeline[hoverIndex] : null;
+
+  return (
+    <div className="flex flex-col h-full space-y-2">
+      <div className="relative flex-1 w-full min-h-[180px]">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" onMouseLeave={() => setHoverIndex(null)}>
+          <defs>
+            <linearGradient id={`dbOpsGrad-${chartId}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.45" />
+              <stop offset="60%" stopColor="#8b5cf6" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+
+          {/* Grid lines */}
+          {[0, 0.33, 0.66, 1].map((ratio) => {
+            const y = padding.top + innerH * (1 - ratio);
+            const val = Math.round(maxTotal * ratio);
+            return (
+              <g key={ratio}>
+                <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} className="stroke-border/60" strokeDasharray="3 3" />
+                <text x={padding.left - 6} y={y + 3} textAnchor="end" className="fill-muted-foreground text-[9px] font-mono">
+                  {val}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* X Axis Labels */}
+          {timeline.filter((_, idx) => idx % Math.ceil(timeline.length / 6) === 0).map((d) => {
+            const idx = timeline.indexOf(d);
+            return (
+              <text key={idx} x={getX(idx)} y={height - 8} textAnchor="middle" className="fill-muted-foreground text-[9px] font-mono">
+                {d.timeLabel}
+              </text>
+            );
+          })}
+
+          {/* Area & Polyline */}
+          <polygon points={areaTotal} fill={`url(#dbOpsGrad-${chartId})`} />
+          <polyline points={pointsTotal} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+          {/* Interactive Hover Columns */}
+          {timeline.map((d, i) => (
+            <rect
+              key={i}
+              x={getX(i) - innerW / (timeline.length * 2)}
+              y={padding.top}
+              width={innerW / timeline.length}
+              height={innerH}
+              fill="transparent"
+              className="cursor-crosshair"
+              onMouseEnter={() => setHoverIndex(i)}
+            />
+          ))}
+
+          {hoverIndex !== null && (
+            <g>
+              <line x1={getX(hoverIndex)} y1={padding.top} x2={getX(hoverIndex)} y2={padding.top + innerH} className="stroke-foreground/50" strokeDasharray="2 2" />
+              <circle cx={getX(hoverIndex)} cy={getY(timeline[hoverIndex].totalCount)} r="4.5" fill="#3b82f6" stroke="#fff" strokeWidth="2" />
+            </g>
+          )}
+        </svg>
+
+        {hovered && hoverIndex !== null && (
+          <div
+            className="absolute pointer-events-none z-10 bg-popover/95 backdrop-blur-sm border border-border rounded-lg p-2.5 shadow-xl text-xs space-y-1"
+            style={{
+              left: `${Math.min(Math.max(10, (getX(hoverIndex) / width) * 100), 70)}%`,
+              top: '5px',
+            }}
+          >
+            <div className="text-[10px] text-muted-foreground font-mono font-bold border-b border-border pb-1">
+              Window: {hovered.timeLabel} • Total: {hovered.totalCount} ops
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] font-mono">
+              <span className="text-blue-400">SELECT: {hovered.selectCount}</span>
+              <span className="text-emerald-400">INSERT: {hovered.insertCount}</span>
+              <span className="text-amber-400">UPDATE: {hovered.updateCount}</span>
+              <span className="text-red-400">DELETE: {hovered.deleteCount}</span>
+              <span className="text-purple-400 col-span-2">DDL/Schema: {hovered.ddlCount}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const QueryLatencyChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus }> = ({ timeRange, status }) => {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const data = generateSeries(timeRange, status);

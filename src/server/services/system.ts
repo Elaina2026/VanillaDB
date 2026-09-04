@@ -45,7 +45,7 @@ export class SystemService {
   constructor() {
     this.refreshStorageCache();
     this.storageCacheInterval = setInterval(() => this.refreshStorageCache(), 30 * 1000);
-    this.metricsInterval = setInterval(() => this.sampleMetrics(), 5000);
+    this.metricsInterval = setInterval(() => this.sampleMetrics(), 1000); // 1s high-resolution telemetry sampling
     // Initial sample
     this.sampleMetrics();
   }
@@ -312,7 +312,7 @@ export class SystemService {
     const freeMem = os.freemem();
 
     return {
-      version: '1.3.1',
+      version: '1.3.2',
       nodeVersion: process.version,
       sqliteVersion: sqliteVersionRow.version,
       platform: `${os.type()} ${os.release()} (${os.arch()})`,

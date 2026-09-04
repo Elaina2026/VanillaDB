@@ -79,7 +79,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           <div>
             <div className="flex items-center gap-1">
               <span className="font-semibold text-xs tracking-tight block">VanillaDatabase</span>
-              <span className="text-[8px] px-1 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-mono font-bold">v1.3.1</span>
+              <span className="text-[8px] px-1 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-mono font-bold">v1.3.2</span>
             </div>
             <span className="text-[9px] text-muted-foreground block -mt-0.5">SQLite Cloud</span>
           </div>
@@ -135,7 +135,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="font-semibold text-sm tracking-tight block">VanillaDatabase</span>
-                  <span className="text-[9px] px-1 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-mono font-bold">v1.3.1</span>
+                  <span className="text-[9px] px-1 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-mono font-bold">v1.3.2</span>
                 </div>
                 <span className="text-[10px] text-muted-foreground block -mt-0.5">SQLite Platform</span>
               </div>
@@ -333,6 +333,28 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               >
                 <Settings className="w-4 h-4" />
                 Settings
+              </button>
+
+              <button
+                onClick={() => {
+                  setSelectedDatabaseId(null);
+                  setCurrentTab('shortcuts');
+                  closeMobileMenu();
+                }}
+                className={cn(
+                  'w-full flex items-center justify-between px-3 py-2 text-xs rounded-md font-medium transition-colors',
+                  currentTab === 'shortcuts'
+                    ? 'bg-blue-600 text-white font-semibold'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                )}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Terminal className="w-4 h-4" />
+                  Shortcuts
+                </div>
+                <kbd className="px-1.5 py-0.2 text-[9px] font-mono bg-muted/80 border border-border/80 rounded text-muted-foreground font-bold">
+                  Ctrl+K
+                </kbd>
               </button>
             </div>
           )}

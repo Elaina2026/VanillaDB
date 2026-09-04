@@ -98,11 +98,34 @@ export const CreateTokenModal: React.FC<{
             <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs rounded-md space-y-1">
               <div className="font-semibold flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5" />
-                Copy this token now
+                Copy this token & Database URL now
               </div>
               <p className="text-[11px] opacity-90">
                 For security reasons, VanillaDatabase will never display this secret token again.
               </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Database API Base URL</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={`${window.location.origin}/v1/databases/${databaseId}`}
+                  className="flex-1 px-3 py-2 text-xs font-mono bg-background border border-border rounded-md select-all text-blue-400 font-semibold"
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/v1/databases/${databaseId}`);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="px-3 py-2 bg-muted hover:bg-accent text-foreground rounded-md text-xs font-semibold flex items-center gap-1.5 shrink-0 border border-border"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy URL
+                </button>
+              </div>
             </div>
 
             <div>
@@ -112,15 +135,24 @@ export const CreateTokenModal: React.FC<{
                   type="text"
                   readOnly
                   value={createdSecret}
-                  className="flex-1 px-3 py-2 text-xs font-mono bg-background border border-border rounded-md select-all"
+                  className="flex-1 px-3 py-2 text-xs font-mono bg-background border border-border rounded-md select-all text-emerald-400 font-semibold"
                 />
                 <button
                   onClick={handleCopy}
                   className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 shrink-0"
                 >
                   {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copied ? 'Copied' : 'Copy'}
+                  {copied ? 'Copied' : 'Copy Secret'}
                 </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">TypeScript / Python Connection Snippet</label>
+              <div className="p-2.5 bg-muted/60 border border-border rounded-md text-[11px] font-mono text-muted-foreground space-y-1">
+                <div className="text-foreground">
+                  <span className="text-purple-400">new</span> VanillaDatabase&#123; url: <span className="text-emerald-400">'{window.location.origin}/v1/databases/{databaseId}'</span>, token: <span className="text-emerald-400">'{createdSecret}'</span> &#125;
+                </div>
               </div>
             </div>
 
