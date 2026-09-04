@@ -47,22 +47,22 @@ export const ErdCanvas: React.FC<{
   const handleMouseUp = () => setIsDragging(false);
 
   return (
-    <div className="relative w-full h-[600px] bg-[#09090b] border border-[#27272a] rounded-xl overflow-hidden select-none">
+    <div className="relative w-full h-[600px] bg-card border border-border rounded-xl overflow-hidden select-none">
       {/* Zoom / Pan Controls Toolbar */}
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-[#18181b]/90 border border-[#27272a] backdrop-blur-md rounded-lg p-1.5 shadow-xl">
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-card/90 border border-border backdrop-blur-md rounded-lg p-1.5 shadow-xl">
         <button
           onClick={() => setZoom((z) => Math.min(1.8, z + 0.15))}
-          className="p-1.5 hover:bg-[#27272a] text-[#a1a1aa] hover:text-[#ffffff] rounded transition-colors"
+          className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded transition-colors"
           title="Zoom In"
         >
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
-        <span className="text-[10px] font-mono font-bold text-[#71717a] px-1.5">
+        <span className="text-[10px] font-mono font-bold text-muted-foreground px-1.5">
           {Math.round(zoom * 100)}%
         </span>
         <button
           onClick={() => setZoom((z) => Math.max(0.4, z - 0.15))}
-          className="p-1.5 hover:bg-[#27272a] text-[#a1a1aa] hover:text-[#ffffff] rounded transition-colors"
+          className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded transition-colors"
           title="Zoom Out"
         >
           <ZoomOut className="w-3.5 h-3.5" />
@@ -72,7 +72,7 @@ export const ErdCanvas: React.FC<{
             setZoom(1);
             setPan({ x: 30, y: 30 });
           }}
-          className="p-1.5 hover:bg-[#27272a] text-[#a1a1aa] hover:text-[#ffffff] rounded transition-colors"
+          className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded transition-colors"
           title="Reset View"
         >
           <RotateCcw className="w-3.5 h-3.5" />
@@ -149,21 +149,19 @@ export const ErdCanvas: React.FC<{
                   width={cardWidth}
                   height={pos.height}
                   rx="10"
-                  fill="#121214"
-                  stroke="#27272a"
+                  className="fill-card stroke-border hover:stroke-blue-500/70 transition-colors shadow-2xl"
                   strokeWidth="1.5"
-                  className="hover:stroke-blue-500/70 transition-colors shadow-2xl"
                 />
 
                 {/* Table Header Banner */}
-                <rect width={cardWidth} height="36" rx="10" fill="#18181b" />
-                <rect y="26" width={cardWidth} height="10" fill="#18181b" />
-                <line x1="0" y1="36" x2={cardWidth} y2="36" stroke="#27272a" strokeWidth="1" />
+                <rect width={cardWidth} height="36" rx="10" className="fill-muted/80" />
+                <rect y="26" width={cardWidth} height="10" className="fill-muted/80" />
+                <line x1="0" y1="36" x2={cardWidth} y2="36" className="stroke-border" strokeWidth="1" />
 
-                <text x="14" y="23" fill="#60a5fa" fontSize="12" fontWeight="bold" fontFamily="monospace">
+                <text x="14" y="23" className="fill-blue-500" fontSize="12" fontWeight="bold" fontFamily="monospace">
                   {tbl.name}
                 </text>
-                <text x={cardWidth - 14} y="23" textAnchor="end" fill="#71717a" fontSize="10" fontFamily="monospace">
+                <text x={cardWidth - 14} y="23" textAnchor="end" className="fill-muted-foreground" fontSize="10" fontFamily="monospace">
                   {tbl.columns.length} cols
                 </text>
 
@@ -177,16 +175,16 @@ export const ErdCanvas: React.FC<{
                           PK
                         </text>
                       ) : (
-                        <circle cx="16" cy={cy - 3} r="2" fill="#52525b" />
+                        <circle cx="16" cy={cy - 3} r="2" className="fill-muted-foreground" />
                       )}
-                      <text x="36" y={cy} fill={col.pk ? '#ffffff' : '#d4d4d8'} fontSize="11" fontFamily="monospace">
+                      <text x="36" y={cy} className={col.pk ? 'fill-foreground font-semibold' : 'fill-muted-foreground'} fontSize="11" fontFamily="monospace">
                         {col.name}
                       </text>
                       <text
                         x={cardWidth - 14}
                         y={cy}
                         textAnchor="end"
-                        fill="#71717a"
+                        className="fill-muted-foreground/70"
                         fontSize="9"
                         fontFamily="monospace"
                       >

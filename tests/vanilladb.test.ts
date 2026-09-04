@@ -878,5 +878,124 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     expect(authRes.statusCode).toBe(200);
     expect(authRes.json().data.challenge).toBeDefined();
   });
+
+  // 17. Deep Security & SQL Sandboxing Test
+  it('should strictly reject malicious SQLite injection payloads and dangerous functions', async () => {
+    // 1. Block ATTACH DATABASE attempt
+    const attachRes = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: { sql: "ATTACH DATABASE ':memory:' AS malicious_db;" },
+    });
+    expect(attachRes.statusCode).toBe(400);
+    expect(attachRes.json().error.code).toBe('SQLITE_ERROR');
+
+    // 2. Block DETACH DATABASE attempt
+    const detachRes = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: { sql: "DETACH DATABASE malicious_db;" },
+    });
+    expect(detachRes.statusCode).toBe(400);
+
+    // 3. Block load_extension attempt
+    const loadExtRes = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: { sql: "SELECT load_extension('malicious.so');" },
+    });
+    expect(loadExtRes.statusCode).toBe(400);
+
+    // 4. Verify AI vector math helpers execute correctly without leaking memory or throwing
+    const vecRes = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readOnlyToken}` },
+      payload: {
+        sql: "SELECT vec_cosine_similarity(?, ?) as similarity, vec_cosine_distance(?, ?) as distance;",
+        params: [JSON.stringify([1, 0, 0]), JSON.stringify([1, 0, 0]), JSON.stringify([1, 0, 0]), JSON.stringify([0, 1, 0])],
+      },
+    });
+    expect(vecRes.statusCode).toBe(200);
+    const vecData = vecRes.json().data.rows[0];
+    expect(vecData.similarity).toBeCloseTo(1.0, 5);
+    expect(vecData.distance).toBeGreaterThanOrEqual(0.99);
+
+    // 5. Verify SQL crypto functions
+    const cryptoRes = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readOnlyToken}` },
+      payload: {
+        sql: "SELECT hash_sha256('vanilladb') as sha, hash_hmac('vanilladb', 'secret') as hmac;",
+      },
+    });
+    expect(cryptoRes.statusCode).toBe(200);
+    const cryptoData = cryptoRes.json().data.rows[0];
+    expect(cryptoData.sha).toHaveLength(64);
+    expect(cryptoData.hmac).toHaveLength(64);
+  });
+
+  // 18. Deep Transaction Rollback & Concurrency Stress Test
+  it('should ensure atomic transaction rollback on failure without leaving partial writes', async () => {
+    // 1. Setup bank accounts table
+    await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: {
+        sql: `CREATE TABLE bank_accounts (id TEXT PRIMARY KEY, balance INTEGER NOT NULL CHECK(balance >= 0));`,
+      },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/batch`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: {
+        transaction: true,
+        statements: [
+          { sql: 'INSERT INTO bank_accounts (id, balance) VALUES (?, ?);', params: ['acc_alice', 100] },
+          { sql: 'INSERT INTO bank_accounts (id, balance) VALUES (?, ?);', params: ['acc_bob', 50] },
+        ],
+      },
+    });
+
+    // 2. Perform atomic transfer where second statement violates CHECK constraint (negative balance)
+    const failingTransfer = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/batch`,
+      headers: { authorization: `Bearer ${readWriteToken}` },
+      payload: {
+        transaction: true,
+        statements: [
+          { sql: 'UPDATE bank_accounts SET balance = balance + 1000 WHERE id = ?;', params: ['acc_bob'] },
+          { sql: 'UPDATE bank_accounts SET balance = balance - 500 WHERE id = ?;', params: ['acc_alice'] }, // Alice only has 100 -> fails CHECK(balance >= 0)
+        ],
+      },
+    });
+
+    expect(failingTransfer.statusCode).toBe(400);
+
+    // 3. Verify Bob did NOT receive the 1000 balance increase (Entire transaction rolled back)
+    const checkBalance = await app.inject({
+      method: 'POST',
+      url: `/v1/databases/${testDbId}/query`,
+      headers: { authorization: `Bearer ${readOnlyToken}` },
+      payload: {
+        sql: 'SELECT id, balance FROM bank_accounts ORDER BY id ASC;',
+      },
+    });
+
+    expect(checkBalance.statusCode).toBe(200);
+    const rows = checkBalance.json().data.rows;
+    expect(rows[0].id).toBe('acc_alice');
+    expect(rows[0].balance).toBe(100);
+    expect(rows[1].id).toBe('acc_bob');
+    expect(rows[1].balance).toBe(50);
+  });
 });
 

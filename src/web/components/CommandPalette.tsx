@@ -55,6 +55,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     enabled: isOpen,
   });
 
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
   useEffect(() => {
     if (isOpen) {
       setQuery('');
@@ -62,8 +64,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const isVi = language === 'vi';
 
@@ -194,16 +194,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     item.category.toLowerCase().includes(query.toLowerCase())
   );
 
-  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
-
   useEffect(() => {
-    if (filtered.length > 0 && itemRefs.current[selectedIndex]) {
+    if (isOpen && filtered.length > 0 && itemRefs.current[selectedIndex]) {
       itemRefs.current[selectedIndex]?.scrollIntoView({
         block: 'nearest',
         behavior: 'smooth',
       });
     }
-  }, [selectedIndex, filtered.length]);
+  }, [isOpen, selectedIndex, filtered.length]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -221,6 +219,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       onClose();
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-100">

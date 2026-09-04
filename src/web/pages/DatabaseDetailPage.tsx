@@ -1401,7 +1401,7 @@ export const DatabaseDetailPage: React.FC<{
               </div>
 
               {/* Data Table with Checkboxes & Action buttons */}
-              <div className="flex-1 overflow-auto bg-[#09090b]">
+              <div className="flex-1 overflow-auto bg-card">
                 {!selectedTable ? (
                   <div className="p-8 text-center text-xs text-muted-foreground flex flex-col items-center justify-center h-full gap-2">
                     <TableIcon className="w-8 h-8 opacity-40" />
@@ -1420,11 +1420,11 @@ export const DatabaseDetailPage: React.FC<{
                     Table is empty. Use "Insert Row" or SQL Editor to add data.
                   </div>
                 ) : (
-                  <table className="w-full text-left text-xs border-collapse font-mono bg-[#09090b] text-[#f4f4f5]">
-                    <thead className="bg-[#18181b] border-b border-[#27272a] sticky top-0 z-10 text-[#a1a1aa]">
+                  <table className="w-full text-left text-xs border-collapse font-mono bg-card text-foreground">
+                    <thead className="bg-muted/60 border-b border-border sticky top-0 z-10 text-muted-foreground">
                       <tr>
                         {/* Select All Checkbox */}
-                        <th className="w-10 py-2.5 px-3 border-r border-[#27272a] text-center">
+                        <th className="w-10 py-2.5 px-3 border-r border-border text-center">
                           <input
                             type="checkbox"
                             checked={
@@ -1438,19 +1438,19 @@ export const DatabaseDetailPage: React.FC<{
                                 setSelectedRowIds([]);
                               }
                             }}
-                            className="rounded border-[#3f3f46] text-blue-600 bg-[#27272a]"
+                            className="rounded border-border text-blue-600 bg-background"
                           />
                         </th>
                         {/* Row Action Column */}
-                        <th className="w-16 py-2.5 px-2 border-r border-[#27272a] text-center">Actions</th>
+                        <th className="w-16 py-2.5 px-2 border-r border-border text-center">Actions</th>
                         {tableRows.columns.map((col) => (
-                          <th key={col} className="py-2.5 px-3 font-semibold text-[#60a5fa] border-r border-[#27272a] last:border-r-0">
+                          <th key={col} className="py-2.5 px-3 font-semibold text-blue-500 dark:text-blue-400 border-r border-border last:border-r-0">
                             {col}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#27272a]">
+                    <tbody className="divide-y divide-border">
                       {tableRows.rows.map((row, idx) => {
                         const pkVal = row[primaryKeyCol];
                         const isSelected = selectedRowIds.includes(pkVal);
@@ -1462,10 +1462,10 @@ export const DatabaseDetailPage: React.FC<{
                                 setMobileDetailRow(row);
                               }
                             }}
-                            className={`hover:bg-[#1e1e24] cursor-pointer md:cursor-default ${isSelected ? 'bg-blue-950/40' : ''}`}
+                            className={`hover:bg-muted/50 cursor-pointer md:cursor-default ${isSelected ? 'bg-blue-500/10' : ''}`}
                           >
                             {/* Checkbox */}
-                            <td className="py-2 px-3 border-r border-[#27272a] text-center">
+                            <td className="py-2 px-3 border-r border-border text-center">
                               <input
                                 type="checkbox"
                                 checked={isSelected}
@@ -1476,15 +1476,15 @@ export const DatabaseDetailPage: React.FC<{
                                     setSelectedRowIds(selectedRowIds.filter((id) => id !== pkVal));
                                   }
                                 }}
-                                className="rounded border-[#3f3f46] text-blue-600 bg-[#27272a]"
+                                className="rounded border-border text-blue-600 bg-background"
                               />
                             </td>
                             {/* Row Action Buttons */}
-                            <td className="py-1 px-2 border-r border-[#27272a] text-center">
+                            <td className="py-1 px-2 border-r border-border text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <button
                                   onClick={() => setEditingRow(row)}
-                                  className="p-1 hover:bg-[#27272a] rounded text-[#a1a1aa] hover:text-[#ffffff] transition-colors"
+                                  className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors"
                                   title="Edit Row"
                                 >
                                   <Edit2 className="w-3 h-3" />
@@ -1504,7 +1504,7 @@ export const DatabaseDetailPage: React.FC<{
                                       },
                                     });
                                   }}
-                                  className="p-1 hover:bg-red-500/20 rounded text-[#a1a1aa] hover:text-red-400 transition-colors"
+                                  className="p-1 hover:bg-red-500/20 rounded text-muted-foreground hover:text-red-500 transition-colors"
                                   title="Delete Row"
                                 >
                                   <Trash2 className="w-3 h-3" />
@@ -1516,13 +1516,13 @@ export const DatabaseDetailPage: React.FC<{
                               return (
                                 <td
                                   key={col}
-                                  className="py-2 px-3 border-r border-[#27272a] last:border-r-0 truncate max-w-xs text-[#f4f4f5]"
+                                  className="py-2 px-3 border-r border-border last:border-r-0 truncate max-w-xs text-foreground"
                                   title={typeof val === 'object' ? JSON.stringify(val) : String(val)}
                                 >
                                   {val === null ? (
-                                    <span className="text-[#71717a] italic">NULL</span>
+                                    <span className="text-muted-foreground/60 italic">NULL</span>
                                   ) : typeof val === 'object' ? (
-                                    <span className="text-[#c084fc] font-semibold">{JSON.stringify(val)}</span>
+                                    <span className="text-purple-500 font-semibold">{JSON.stringify(val)}</span>
                                   ) : (
                                     String(val)
                                   )}
@@ -3318,7 +3318,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                         rows={4}
                         value={jobSql}
                         onChange={(e) => setJobSql(e.target.value)}
-                        className="w-full p-2.5 bg-[#09090b] border border-[#27272a] rounded font-mono text-foreground text-xs"
+                        className="w-full p-2.5 bg-background border border-border rounded font-mono text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
                     </div>
                   </div>
