@@ -1,3 +1,4 @@
+import './suppressWarnings.js';
 import { authService } from './services/auth.js';
 import { getMetadataDb, closeMetadataDb } from './db/metadata.js';
 

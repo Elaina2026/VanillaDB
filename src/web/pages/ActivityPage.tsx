@@ -4,10 +4,13 @@ import { Activity, Shield, Filter, RefreshCw, CheckCircle, XCircle, Terminal, Se
 import { apiRequest } from '../api/client.js';
 import { formatDate } from '../lib/utils.js';
 import { useI18n } from '../hooks/useI18n.js';
+import { useAuth } from '../hooks/useAuth.js';
 import type { ActivityRecord, AuditRecord } from '@shared/index.js';
 
 export const ActivityPage: React.FC = () => {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const isSuperAdminOrAdmin = user?.role === 'super_admin' || user?.role === 'admin';
   const [activeTab, setActiveTab] = useState<'activity' | 'audit'>('activity');
   const [filterSearch, setFilterSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -23,7 +26,7 @@ export const ActivityPage: React.FC = () => {
   const { data: auditData, isLoading: isAuditLoading, refetch: refetchAudit, isFetching: isAuditFetching } = useQuery<{ items: AuditRecord[]; total: number }>({
     queryKey: ['auditLogs'],
     queryFn: () => apiRequest('/api/admin/audit?limit=500'),
-    enabled: activeTab === 'audit',
+    enabled: activeTab === 'audit' && isSuperAdminOrAdmin,
     refetchInterval: 10000,
   });
 
@@ -74,24 +77,30 @@ export const ActivityPage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <div className="flex bg-muted p-0.5 rounded-md border border-border">
-            <button
-              onClick={() => handleTabSwitch('activity')}
-              className={`px-2.5 sm:px-3 py-1 text-xs font-medium rounded transition-colors ${
-                activeTab === 'activity' ? 'bg-card text-foreground shadow-sm font-semibold' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
+          {isSuperAdminOrAdmin ? (
+            <div className="flex bg-muted p-0.5 rounded-md border border-border">
+              <button
+                onClick={() => handleTabSwitch('activity')}
+                className={`px-2.5 sm:px-3 py-1 text-xs font-medium rounded transition-colors ${
+                  activeTab === 'activity' ? 'bg-card text-foreground shadow-sm font-semibold' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {t('activity.tabActivity', 'API & SQL Activity')}
+              </button>
+              <button
+                onClick={() => handleTabSwitch('audit')}
+                className={`px-2.5 sm:px-3 py-1 text-xs font-medium rounded transition-colors ${
+                  activeTab === 'audit' ? 'bg-card text-foreground shadow-sm font-semibold' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {t('activity.tabAudit', 'Security & Audit')}
+              </button>
+            </div>
+          ) : (
+            <span className="text-xs px-2.5 py-1 bg-muted rounded border border-border text-muted-foreground font-medium">
               {t('activity.tabActivity', 'API & SQL Activity')}
-            </button>
-            <button
-              onClick={() => handleTabSwitch('audit')}
-              className={`px-2.5 sm:px-3 py-1 text-xs font-medium rounded transition-colors ${
-                activeTab === 'audit' ? 'bg-card text-foreground shadow-sm font-semibold' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {t('activity.tabAudit', 'Security & Audit')}
-            </button>
-          </div>
+            </span>
+          )}
           <button
             onClick={() => (activeTab === 'activity' ? refetchActivity() : refetchAudit())}
             className="p-1.5 bg-card border border-border hover:bg-accent rounded text-muted-foreground transition-colors"

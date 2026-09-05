@@ -11,13 +11,18 @@ export const TokenPermissionSchema = z.enum([
 
 export type UserRole = 'super_admin' | 'admin' | 'user';
 
+export type MemberRole = 'owner' | 'admin' | 'editor' | 'viewer';
+
 export interface UserRecord {
   id: string;
   username: string;
+  email?: string | null;
+  avatar_url?: string | null;
   role: UserRole;
   max_databases: number;
   rate_limit_per_minute: number;
   status: 'active' | 'disabled';
+  totp_enabled?: boolean;
   database_count?: number;
   created_at: number;
   updated_at?: number;
@@ -32,6 +37,9 @@ export interface DatabaseRecord {
   max_size_mb?: number | null; // Max disk quota in MB (null = unlimited)
   owner_id?: string | null;
   owner_username?: string | null;
+  access_role?: MemberRole;
+  is_shared?: boolean;
+  member_count?: number;
   created_at: number;
   updated_at: number;
   last_accessed_at: number | null;
@@ -300,6 +308,10 @@ export interface SystemSettings {
   log_level: 'trace' | 'debug' | 'info' | 'warn' | 'error';
   enable_cors_all: boolean;
   enable_stack_traces: boolean;
+  enable_system_alerts?: boolean;
+  alert_webhook_url?: string;
+  alert_cpu_threshold?: number;
+  alert_ram_threshold?: number;
 }
 
 export interface SystemStatus {
@@ -334,6 +346,7 @@ export interface SystemStatus {
   securityDiagnostics?: {
     atRestEncryptionActive: boolean;
     encryptionAlgorithm: string;
+    recommendations?: string[];
   };
 }
 
@@ -363,6 +376,40 @@ export interface WebAuthnCredentialRecord {
   transports?: string[] | null;
   created_at: number;
   last_used_at?: number | null;
+}
+
+export interface DatabaseMemberRecord {
+  id: string;
+  database_id: string;
+  user_id: string;
+  username: string;
+  email?: string | null;
+  avatar_url?: string | null;
+  role: MemberRole;
+  invited_by: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface DatabaseInviteRecord {
+  id: string;
+  database_id: string;
+  database_name?: string;
+  email: string;
+  role: MemberRole;
+  invited_by: string;
+  status: 'pending' | 'accepted' | 'revoked';
+  created_at: number;
+  expires_at: number;
+}
+
+export interface UserDashboardStats {
+  databasesCount: number;
+  maxDatabases: number;
+  sharedDatabasesCount: number;
+  storageUsedBytes: number;
+  activeTokensCount: number;
+  recentActivity: ActivityRecord[];
 }
 
 export interface MetricHistoryPoint {

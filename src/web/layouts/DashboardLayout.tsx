@@ -30,7 +30,9 @@ import {
   Clock,
   Users,
   Menu,
-  X
+  X,
+  User as UserIcon,
+  LayoutDashboard
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import { useTheme } from '../hooks/useTheme.js';
@@ -227,6 +229,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   { id: 'tokens', label: t('db.tokens', 'API Tokens'), icon: Shield },
                   { id: 'jobs', label: t('db.jobs', 'Scheduled Jobs'), icon: Clock },
                   { id: 'backups', label: t('db.backups', 'Backups'), icon: Archive },
+                  { id: 'members', label: t('db.members', 'Members & Collaboration'), icon: Users },
                   { id: 'settings', label: t('db.settings', 'Danger Settings'), icon: Sliders },
                 ].map((t) => {
                   const Icon = t.icon;
@@ -268,26 +271,32 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 )}
               >
-                <Server className="w-4 h-4" />
-                {t('nav.overview', 'Overview')}
+                {user?.role === 'user' ? (
+                  <LayoutDashboard className="w-4 h-4" />
+                ) : (
+                  <Server className="w-4 h-4" />
+                )}
+                {user?.role === 'user' ? t('nav.userDashboard', 'User Dashboard') : t('nav.overview', 'Overview')}
               </button>
 
-              <button
-                onClick={() => {
-                  setSelectedDatabaseId(null);
-                  setCurrentTab('telemetry');
-                  closeMobileMenu();
-                }}
-                className={cn(
-                  'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
-                  currentTab === 'telemetry'
-                    ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                )}
-              >
-                <TrendingUp className="w-4 h-4" />
-                {t('nav.telemetry', 'Live Telemetry')}
-              </button>
+              {(user?.role === 'super_admin' || user?.role === 'admin') && (
+                <button
+                  onClick={() => {
+                    setSelectedDatabaseId(null);
+                    setCurrentTab('telemetry');
+                    closeMobileMenu();
+                  }}
+                  className={cn(
+                    'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
+                    currentTab === 'telemetry'
+                      ? 'bg-blue-600 text-white font-semibold'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  )}
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  {t('nav.telemetry', 'Live Telemetry')}
+                </button>
+              )}
 
               <button
                 onClick={() => {
@@ -397,12 +406,32 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* User and Theme Footer */}
         <div className="p-3 border-t border-border space-y-2 shrink-0 bg-card">
           <div className="flex items-center justify-between px-2 py-1 text-xs text-muted-foreground">
-            <span className="truncate font-medium">{user?.username}</span>
-            <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                setSelectedDatabaseId(null);
+                setCurrentTab('settings');
+                closeMobileMenu();
+              }}
+              className="flex items-center gap-2 min-w-0 hover:text-foreground text-left cursor-pointer transition-colors group flex-1"
+              title={t('settings.tabAccount', 'My Account & Security')}
+            >
+              <div className="w-7 h-7 rounded-full overflow-hidden border border-border group-hover:border-blue-500 bg-muted/50 flex items-center justify-center shrink-0 transition-colors">
+                {user?.avatar_url ? (
+                  <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
+                ) : (
+                  <UserIcon className="w-4 h-4 text-muted-foreground group-hover:text-foreground" />
+                )}
+              </div>
+              <div className="truncate">
+                <span className="truncate font-medium text-foreground block group-hover:text-blue-500 transition-colors">{user?.username}</span>
+                <span className="text-[10px] text-muted-foreground block capitalize">{user?.role || 'user'}</span>
+              </div>
+            </button>
+            <div className="flex items-center gap-1 shrink-0 ml-1">
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
-                title="Toggle theme"
+                title="Toggle theme (Light / Dark)"
               >
                 {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
               </button>
@@ -420,43 +449,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Universal Top Header with Quick Search (Ctrl + K) on every route */}
-        <div className="hidden md:flex h-12 border-b border-border bg-card/60 backdrop-blur-sm px-4 items-center justify-between shrink-0 z-20">
-          <div className="flex items-center gap-3 flex-1 max-w-xl">
-            <button
-              onClick={onOpenSearch}
-              className="w-full max-w-md flex items-center justify-between px-3 py-1.5 bg-background hover:bg-muted/60 border border-border rounded-lg text-xs text-muted-foreground transition-all group cursor-pointer shadow-xs hover:border-blue-500/40"
-              title="Quick Search (Ctrl + K)"
-            >
-              <div className="flex items-center gap-2">
-                <Search className="w-3.5 h-3.5 text-muted-foreground group-hover:text-blue-500 transition-colors" />
-                <span className="font-sans">{t('nav.search', 'Quick search (Ctrl + K)')}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-muted border border-border rounded text-muted-foreground group-hover:text-foreground">
-                  Ctrl
-                </kbd>
-                <kbd className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-muted border border-border rounded text-muted-foreground group-hover:text-foreground">
-                  K
-                </kbd>
-              </div>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs">
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="p-1.5 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground transition-colors border border-border bg-card"
-              title="Toggle theme (Light / Dark)"
-            >
-              {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {children}
-        </div>
+        {children}
       </main>
     </div>
   );

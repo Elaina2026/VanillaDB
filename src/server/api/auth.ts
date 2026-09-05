@@ -3,6 +3,13 @@ import { z } from 'zod';
 import { authService } from '../services/auth.js';
 import { activityService } from '../services/activity.js';
 import { webAuthnService } from '../services/webauthn.js';
+import { databaseMembersService } from '../services/members.js';
+import {
+  generateTotpSecret,
+  verifyTotpCode,
+  getTotpAuthUri,
+  generateQrCodeSvgDataUrl
+} from '../utils/totp.js';
 import { config } from '../config/index.js';
 import { requireAdminAuth } from '../middleware/auth.js';
 
@@ -13,7 +20,18 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const sessionCookie = req.cookies?.vdb_session;
     if (sessionCookie) {
-      currentUser = authService.verifySessionCookie(sessionCookie, config.sessionSecret);
+      const sess = authService.verifySessionCookie(sessionCookie, config.sessionSecret);
+      if (sess) {
+        const full = authService.getUserById(sess.userId);
+        currentUser = {
+          userId: sess.userId,
+          username: sess.username,
+          role: sess.role,
+          email: full?.email || null,
+          avatar_url: full?.avatar_url || null,
+          totp_enabled: full?.totp_enabled ?? false,
+        };
+      }
     }
 
     return reply.send({
@@ -24,6 +42,77 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         user: currentUser,
       },
     });
+  });
+
+  // Public User Self-Registration
+  fastify.post('/register', async (req, reply) => {
+    if (!authService.hasAdminUser()) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'NOT_INITIALIZED', message: 'Platform requires initial admin setup before registration' },
+      });
+    }
+
+    const RegisterSchema = z.object({
+      email: z.string().email('Invalid email address'),
+      password: z.string().min(6, 'Password must be at least 6 characters').max(128),
+      username: z.string().min(3).max(50).optional(),
+    });
+
+    const parsed = RegisterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid input' },
+      });
+    }
+
+    const email = parsed.data.email.trim().toLowerCase();
+    const username = (parsed.data.username || email.split('@')[0]).trim();
+
+    try {
+      const user = await authService.createUser({
+        username,
+        email,
+        password: parsed.data.password,
+        role: 'user',
+        maxDatabases: 5,
+        rateLimitPerMinute: 60,
+      });
+
+      // Claim any pending invites for this email address
+      databaseMembersService.claimPendingInvites(user.id, email);
+
+      const { cookieValue, expires } = authService.generateSessionCookie(user, config.sessionSecret);
+      reply.setCookie('vdb_session', cookieValue, {
+        path: '/',
+        httpOnly: true,
+        secure: config.isProduction,
+        sameSite: 'lax',
+        expires,
+      });
+
+      activityService.recordAudit({
+        user: user.username,
+        action: 'user.register',
+        resource: user.id,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ email }),
+      });
+
+      return reply.status(201).send({
+        success: true,
+        data: {
+          user: { id: user.id, username: user.username, email: user.email, role: user.role, created_at: user.created_at },
+        },
+      });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'REGISTRATION_ERROR', message: err.message || 'Registration failed' },
+      });
+    }
   });
 
   fastify.post('/setup', async (req, reply) => {
@@ -37,6 +126,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     const SetupSchema = z.object({
       username: z.string().min(3).max(50),
       password: z.string().min(6).max(128),
+      email: z.string().email().optional(),
       confirmPassword: z.string(),
     }).refine(data => data.password === data.confirmPassword, {
       message: 'Passwords do not match',
@@ -51,7 +141,14 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const user = await authService.createAdminUser(parsed.data.username, parsed.data.password, 'super_admin', 1000, 0);
+    const user = await authService.createAdminUser(
+      parsed.data.username,
+      parsed.data.password,
+      'super_admin',
+      1000,
+      0,
+      parsed.data.email
+    );
     const { cookieValue, expires } = authService.generateSessionCookie(user, config.sessionSecret);
 
     reply.setCookie('vdb_session', cookieValue, {
@@ -88,7 +185,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     if (!parsed.success) {
       return reply.status(400).send({
         success: false,
-        error: { code: 'INVALID_CREDENTIALS', message: 'Username and password required' },
+        error: { code: 'INVALID_CREDENTIALS', message: 'Username/Email and password required' },
       });
     }
 
@@ -104,7 +201,20 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.status(401).send({
         success: false,
-        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password' },
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' },
+      });
+    }
+
+    // Check if 2FA (TOTP) is enabled on user's account
+    if (user.totp_enabled) {
+      const tempToken = authService.createTemp2faChallenge(user.id, config.sessionSecret);
+      return reply.send({
+        success: true,
+        data: {
+          require2fa: true,
+          tempToken,
+          username: user.username,
+        },
       });
     }
 
@@ -128,7 +238,59 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({
       success: true,
       data: {
-        user: { id: user.id, username: user.username, created_at: user.created_at },
+        user: { id: user.id, username: user.username, role: user.role, created_at: user.created_at },
+      },
+    });
+  });
+
+  // 2FA Verification during login
+  fastify.post('/login/2fa', async (req, reply) => {
+    const Schema = z.object({
+      tempToken: z.string().min(1),
+      code: z.string().length(6),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Valid 6-digit code required' } });
+    }
+
+    const userId = authService.verifyTemp2faChallenge(parsed.data.tempToken, config.sessionSecret);
+    if (!userId) {
+      return reply.status(401).send({ success: false, error: { code: 'EXPIRED_2FA_CHALLENGE', message: '2FA session expired. Please sign in again.' } });
+    }
+
+    const userWithSecret = authService.getUserById(userId);
+    if (!userWithSecret || !userWithSecret.totp_secret) {
+      return reply.status(400).send({ success: false, error: { code: '2FA_NOT_CONFIGURED', message: '2FA not found' } });
+    }
+
+    const isValid = verifyTotpCode(userWithSecret.totp_secret, parsed.data.code);
+    if (!isValid) {
+      return reply.status(401).send({ success: false, error: { code: 'INVALID_2FA_CODE', message: 'Mã xác thực 2FA không chính xác' } });
+    }
+
+    const { cookieValue, expires } = authService.generateSessionCookie(userWithSecret, config.sessionSecret);
+    reply.setCookie('vdb_session', cookieValue, {
+      path: '/',
+      httpOnly: true,
+      secure: config.isProduction,
+      sameSite: 'lax',
+      expires,
+    });
+
+    activityService.recordAudit({
+      user: userWithSecret.username,
+      action: 'login_2fa',
+      resource: 'auth',
+      result: 'success',
+      requestId: req.id,
+    });
+
+    return reply.send({
+      success: true,
+      data: {
+        user: { id: userWithSecret.id, username: userWithSecret.username, role: userWithSecret.role, created_at: userWithSecret.created_at },
       },
     });
   });
@@ -251,5 +413,196 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = req.params as { id: string };
     const ok = webAuthnService.deleteCredential(req.adminUser!.userId, id);
     return reply.send({ success: ok });
+  });
+
+  // User Profile & Avatar Update
+  fastify.put('/profile', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const Schema = z.object({
+      email: z.union([z.string().email(), z.literal(''), z.null()]).optional(),
+      avatar_url: z.union([z.string().max(5000000), z.literal(''), z.null()]).optional(), // supports URL or Data URL up to 5MB
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid profile payload' },
+      });
+    }
+
+    try {
+      const cleanEmail = parsed.data.email !== undefined ? (parsed.data.email?.trim() || null) : undefined;
+      const cleanAvatar = parsed.data.avatar_url !== undefined ? (parsed.data.avatar_url?.trim() || null) : undefined;
+
+      const updated = await authService.updateUser(req.adminUser!.userId, {
+        email: cleanEmail,
+        avatarUrl: cleanAvatar,
+      });
+
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'user.update_profile',
+        resource: req.adminUser!.userId,
+        result: 'success',
+        requestId: req.id,
+      });
+
+      return reply.send({ success: true, data: updated });
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: { code: 'PROFILE_UPDATE_ERROR', message: err.message } });
+    }
+  });
+
+  // 2FA TOTP Setup (Generate Secret & QR Code)
+  fastify.post('/2fa/setup', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const user = req.adminUser!;
+    const fullUser = authService.getUserById(user.userId);
+    if (!fullUser) {
+      return reply.status(404).send({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+    }
+
+    const secret = generateTotpSecret();
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    metaDb.prepare('UPDATE users SET totp_temp_secret = ? WHERE id = ?').run(secret, user.userId);
+
+    const identifier = fullUser.email || user.username;
+    const otpauthUri = getTotpAuthUri(identifier, secret);
+    const qrDataUrl = await generateQrCodeSvgDataUrl(otpauthUri);
+
+    return reply.send({
+      success: true,
+      data: {
+        secret,
+        otpauthUri,
+        qrDataUrl,
+      },
+    });
+  });
+
+  // 2FA TOTP Activate: REQUIRES password + 6-digit TOTP code
+  fastify.post('/2fa/activate', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const Schema = z.object({
+      password: z.string().min(1, 'Mật khẩu tài khoản là bắt buộc'),
+      code: z.string().length(6, 'Mã xác thực phải gồm 6 chữ số'),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Mật khẩu và mã 6 số là bắt buộc' },
+      });
+    }
+
+    const user = authService.getUserById(req.adminUser!.userId);
+    if (!user || !user.totp_temp_secret) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: '2FA_NOT_INITIALIZED', message: 'Vui lòng nhấn tạo mã QR trước khi kích hoạt' },
+      });
+    }
+
+    // Verify user's current password
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const userRow = metaDb.prepare('SELECT password_hash FROM users WHERE id = ?').get(user.id) as { password_hash: string } | undefined;
+    if (!userRow) {
+      return reply.status(404).send({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+    }
+
+    const isPasswordValid = await authService.verifyPassword(userRow.password_hash, parsed.data.password);
+    if (!isPasswordValid) {
+      return reply.status(401).send({
+        success: false,
+        error: { code: 'INVALID_PASSWORD', message: 'Mật khẩu tài khoản không chính xác' },
+      });
+    }
+
+    // Verify TOTP 6-digit code
+    const isCodeValid = verifyTotpCode(user.totp_temp_secret, parsed.data.code);
+    if (!isCodeValid) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_TOTP_CODE', message: 'Mã xác thực 2FA không chính xác hoặc đã hết hạn' },
+      });
+    }
+
+    // Commit 2FA activation
+    metaDb.prepare(`
+      UPDATE users
+      SET totp_secret = totp_temp_secret, totp_enabled = 1, totp_temp_secret = NULL, updated_at = ?
+      WHERE id = ?
+    `).run(Date.now(), user.id);
+
+    activityService.recordAudit({
+      user: user.username,
+      action: '2fa.activate',
+      resource: user.id,
+      result: 'success',
+      requestId: req.id,
+    });
+
+    return reply.send({ success: true, message: 'Đã kích hoạt bảo mật 2 lớp (2FA) thành công' });
+  });
+
+  // 2FA TOTP Disable: REQUIRES password + 6-digit TOTP code
+  fastify.post('/2fa/disable', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const Schema = z.object({
+      password: z.string().min(1, 'Mật khẩu tài khoản là bắt buộc'),
+      code: z.string().length(6, 'Mã xác thực phải gồm 6 chữ số'),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Mật khẩu và mã 6 số là bắt buộc' },
+      });
+    }
+
+    const user = authService.getUserById(req.adminUser!.userId);
+    if (!user || !user.totp_secret) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: '2FA_NOT_ENABLED', message: 'Tài khoản chưa bật 2FA' },
+      });
+    }
+
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const userRow = metaDb.prepare('SELECT password_hash FROM users WHERE id = ?').get(user.id) as { password_hash: string } | undefined;
+    if (!userRow) {
+      return reply.status(404).send({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+    }
+
+    const isPasswordValid = await authService.verifyPassword(userRow.password_hash, parsed.data.password);
+    if (!isPasswordValid) {
+      return reply.status(401).send({
+        success: false,
+        error: { code: 'INVALID_PASSWORD', message: 'Mật khẩu tài khoản không chính xác' },
+      });
+    }
+
+    const isCodeValid = verifyTotpCode(user.totp_secret, parsed.data.code);
+    if (!isCodeValid) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_TOTP_CODE', message: 'Mã xác thực 2FA không chính xác hoặc đã hết hạn' },
+      });
+    }
+
+    metaDb.prepare(`
+      UPDATE users
+      SET totp_secret = NULL, totp_enabled = 0, totp_temp_secret = NULL, updated_at = ?
+      WHERE id = ?
+    `).run(Date.now(), user.id);
+
+    activityService.recordAudit({
+      user: user.username,
+      action: '2fa.disable',
+      resource: user.id,
+      result: 'success',
+      requestId: req.id,
+    });
+
+    return reply.send({ success: true, message: 'Đã tắt bảo mật 2 lớp (2FA)' });
   });
 };

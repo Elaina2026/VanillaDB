@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatBytes } from '../lib/utils.js';
+import { useI18n } from '../hooks/useI18n.js';
 import type { SystemStatus, SystemMetricsHistory } from '@shared/index.js';
 import {
   NetworkChart,
@@ -26,6 +27,7 @@ import {
 } from '../components/MetricsCharts.js';
 
 export const TelemetryPage: React.FC = () => {
+  const { t } = useI18n();
   const [timeRange, setTimeRange] = useState<TimeRange>('1h');
   const [refreshInterval, setRefreshInterval] = useState<number>(1000); // Default to live 1s
 
@@ -57,14 +59,14 @@ export const TelemetryPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-foreground">Live Telemetry & Metrics</h1>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">{t('telemetry.title', 'Live Telemetry & Metrics')}</h1>
             <span className="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-semibold uppercase tracking-wider flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Live 60-Point Stream
+              {t('telemetry.stream', 'Live 60-Point Stream')}
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Real-time interactive SVG charts for Network In/Out, CPU, RAM, QPS throughput, and P95 latency distribution.
+            {t('telemetry.desc', 'Real-time interactive SVG charts for Network In/Out, CPU, RAM, QPS throughput, and P95 latency distribution.')}
           </p>
         </div>
 
@@ -82,7 +84,7 @@ export const TelemetryPage: React.FC = () => {
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {range === '10m' ? 'Live 10m' : range}
+                {range === '10m' ? t('telemetry.live10m', 'Live 10m') : range === '1h' ? t('telemetry.1h', '1h') : t('telemetry.24h', '24h')}
               </button>
             ))}
           </div>
@@ -93,11 +95,11 @@ export const TelemetryPage: React.FC = () => {
             onChange={(e) => setRefreshInterval(Number(e.target.value))}
             className="bg-card border border-border text-foreground text-xs rounded-md px-2.5 py-1.5 font-medium shadow-sm focus:outline-none focus:ring-1 focus:ring-primary font-mono"
           >
-            <option value={1000}>Live Realtime: 1s</option>
-            <option value={2000}>Refresh: 2s (High-Res)</option>
-            <option value={5000}>Refresh: 5s (Default)</option>
-            <option value={15000}>Refresh: 15s</option>
-            <option value={0}>Manual Pause</option>
+            <option value={1000}>{t('telemetry.live1s', 'Live Realtime: 1s')}</option>
+            <option value={2000}>{t('telemetry.live2s', 'Refresh: 2s (High-Res)')}</option>
+            <option value={5000}>{t('telemetry.live5s', 'Refresh: 5s (Default)')}</option>
+            <option value={15000}>{t('telemetry.live15s', 'Refresh: 15s')}</option>
+            <option value={0}>{t('telemetry.pause', 'Manual Pause')}</option>
           </select>
 
           <button
@@ -105,7 +107,7 @@ export const TelemetryPage: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-semibold shadow-sm transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isStatusLoading || isHistoryLoading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Refresh</span>
+            <span className="hidden sm:inline">{t('telemetry.refresh', 'Refresh')}</span>
           </button>
         </div>
       </div>
@@ -114,27 +116,27 @@ export const TelemetryPage: React.FC = () => {
       {metricsHistory?.summary && (
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
           <div className="bg-card border border-border rounded-lg p-3">
-            <div className="text-[10px] uppercase font-bold text-muted-foreground">Peak CPU</div>
+            <div className="text-[10px] uppercase font-bold text-muted-foreground">{t('telemetry.peakCpu', 'Peak CPU')}</div>
             <div className="text-lg font-mono font-bold text-foreground mt-0.5">{metricsHistory.summary.peakCpu}%</div>
           </div>
           <div className="bg-card border border-border rounded-lg p-3">
-            <div className="text-[10px] uppercase font-bold text-muted-foreground">Peak RAM</div>
+            <div className="text-[10px] uppercase font-bold text-muted-foreground">{t('telemetry.peakRam', 'Peak RAM')}</div>
             <div className="text-lg font-mono font-bold text-foreground mt-0.5">{metricsHistory.summary.peakRamPercent}%</div>
           </div>
           <div className="bg-card border border-border rounded-lg p-3">
-            <div className="text-[10px] uppercase font-bold text-muted-foreground">Max QPS</div>
+            <div className="text-[10px] uppercase font-bold text-muted-foreground">{t('telemetry.maxQps', 'Max QPS')}</div>
             <div className="text-lg font-mono font-bold text-blue-500 mt-0.5">{metricsHistory.summary.maxQps} req/s</div>
           </div>
           <div className="bg-card border border-border rounded-lg p-3">
-            <div className="text-[10px] uppercase font-bold text-muted-foreground">Avg Latency</div>
+            <div className="text-[10px] uppercase font-bold text-muted-foreground">{t('telemetry.avgLatency', 'Avg Latency')}</div>
             <div className="text-lg font-mono font-bold text-cyan-500 mt-0.5">{metricsHistory.summary.avgLatencyMs} ms</div>
           </div>
           <div className="bg-card border border-border rounded-lg p-3">
-            <div className="text-[10px] uppercase font-bold text-muted-foreground">Network In</div>
+            <div className="text-[10px] uppercase font-bold text-muted-foreground">{t('telemetry.networkIn', 'Network In')}</div>
             <div className="text-lg font-mono font-bold text-emerald-500 mt-0.5">{formatBytes(metricsHistory.summary.totalNetworkInBytes)}</div>
           </div>
           <div className="bg-card border border-border rounded-lg p-3">
-            <div className="text-[10px] uppercase font-bold text-muted-foreground">Network Out</div>
+            <div className="text-[10px] uppercase font-bold text-muted-foreground">{t('telemetry.networkOut', 'Network Out')}</div>
             <div className="text-lg font-mono font-bold text-purple-500 mt-0.5">{formatBytes(metricsHistory.summary.totalNetworkOutBytes)}</div>
           </div>
         </div>
@@ -147,10 +149,10 @@ export const TelemetryPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
               <Cpu className="w-4 h-4 text-indigo-500" />
-              Realtime CPU & RAM Dual Area Trend
+              {t('telemetry.chartCpuRam', 'Realtime CPU & RAM Dual Area Trend')}
             </h2>
             <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">
-              {timeRange} window
+              {timeRange} {t('telemetry.window', 'window')}
             </span>
           </div>
           <div className="flex-1 min-h-[220px]">
@@ -163,10 +165,10 @@ export const TelemetryPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
               <Wifi className="w-4 h-4 text-emerald-500" />
-              Network Traffic Throughput (In / Out)
+              {t('telemetry.chartNetwork', 'Network Traffic Throughput (In / Out)')}
             </h2>
             <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">
-              {timeRange} window
+              {timeRange} {t('telemetry.window', 'window')}
             </span>
           </div>
           <div className="flex-1 min-h-[220px]">
@@ -179,10 +181,10 @@ export const TelemetryPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-blue-500" />
-              Request Volume & Error Rate Timeline
+              {t('telemetry.chartRequest', 'Request Volume & Error Rate Timeline')}
             </h2>
             <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">
-              QPS / Error %
+              {t('telemetry.qps', 'QPS')} / {t('telemetry.errorRate', 'Error Rate')} %
             </span>
           </div>
           <div className="flex-1 min-h-[220px]">
@@ -195,7 +197,7 @@ export const TelemetryPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
               <Timer className="w-4 h-4 text-cyan-500" />
-              Query Latency Distribution
+              {t('telemetry.chartLatency', 'Query Latency Distribution')}
             </h2>
             <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">
               Avg vs P95 (ms)
@@ -212,10 +214,10 @@ export const TelemetryPage: React.FC = () => {
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
             <HardDrive className="w-4 h-4 text-purple-500" />
-            Storage Allocation Breakdown
+            {t('telemetry.chartStorage', 'Storage Allocation Breakdown')}
           </h2>
           <span className="text-xs font-mono font-semibold text-muted-foreground">
-            Total Used: {formatBytes(totalStorage)}
+            {t('telemetry.totalStorageUsed', 'Total Used')}: {formatBytes(totalStorage)}
           </span>
         </div>
 

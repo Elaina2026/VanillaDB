@@ -42,7 +42,9 @@ import {
   Radio,
   User,
   TrendingUp,
-  X
+  X,
+  Users,
+  UserPlus
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatTimeAgo, formatDate } from '../lib/utils.js';
@@ -66,19 +68,21 @@ import type {
   WebhookRecord,
   SqlQueryResult,
   SqlWriteResult,
-  ScheduledJobRecord
+  ScheduledJobRecord,
+  DatabaseMemberRecord,
+  DatabaseInviteRecord
 } from '@shared/index.js';
 
 export const DatabaseDetailPage: React.FC<{
   databaseId: string;
-  initialTab?: 'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'jobs' | 'backups' | 'settings';
+  initialTab?: 'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'jobs' | 'backups' | 'members' | 'settings';
   onTabChange?: (tab: string) => void;
   onBack: () => void;
   onOpenCreateToken: (dbId: string) => void;
 }> = ({ databaseId, initialTab = 'overview', onTabChange, onBack, onOpenCreateToken }) => {
   const { user: currentUser } = useAuth();
   const { t } = useI18n();
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'jobs' | 'backups' | 'settings'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'jobs' | 'backups' | 'members' | 'settings'>(initialTab);
   const queryClient = useQueryClient();
 
   const [isImportExportOpen, setIsImportExportOpen] = useState(false);
@@ -175,6 +179,61 @@ export const DatabaseDetailPage: React.FC<{
     queryKey: ['dbWebhooks', databaseId],
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/webhooks`),
     enabled: activeTab === 'webhooks' || activeTab === 'overview',
+  });
+
+  // Collaboration / Database Members queries and mutations
+  const { data: membersData, isLoading: isMembersLoading, refetch: refetchMembers } = useQuery<{
+    members: DatabaseMemberRecord[];
+    invites: DatabaseInviteRecord[];
+  }>({
+    queryKey: ['dbMembers', databaseId],
+    queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/members`),
+    enabled: activeTab === 'members' || activeTab === 'overview',
+  });
+
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteEmailOrUser, setInviteEmailOrUser] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'editor' | 'viewer'>('viewer');
+  const [inviteStatus, setInviteStatus] = useState<string | null>(null);
+
+  const inviteMemberMutation = useMutation({
+    mutationFn: (payload: { emailOrUsername: string; role: 'admin' | 'editor' | 'viewer' }) =>
+      apiRequest(`/api/admin/databases/${databaseId}/members`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      setIsInviteModalOpen(false);
+      setInviteEmailOrUser('');
+      setInviteRole('viewer');
+      setInviteStatus(null);
+      refetchMembers();
+      refetchStats();
+    },
+    onError: (err: any) => {
+      setInviteStatus(err.message || 'Failed to invite member');
+    },
+  });
+
+  const removeMemberMutation = useMutation({
+    mutationFn: (memberOrUserId: string) =>
+      apiRequest(`/api/admin/databases/${databaseId}/members/${memberOrUserId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      refetchMembers();
+      refetchStats();
+    },
+  });
+
+  const revokeInviteMutation = useMutation({
+    mutationFn: (inviteId: string) =>
+      apiRequest(`/api/admin/databases/${databaseId}/invites/${inviteId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      refetchMembers();
+    },
   });
 
   // Webhook form states
@@ -663,10 +722,11 @@ export const DatabaseDetailPage: React.FC<{
         method: 'POST',
         body: JSON.stringify(payload),
       }),
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       setIsFtsModalOpen(false);
       refetchSchema();
-      setNotificationMessage(`FTS5 virtual table "${data.data.ftsTable}" created with sync triggers!`);
+      const ftsTable = data?.ftsTable || data?.data?.ftsTable || 'fts';
+      setNotificationMessage(`FTS5 virtual table "${ftsTable}" created with sync triggers!`);
       setTimeout(() => setNotificationMessage(null), 4000);
     },
     onError: (err: any) => {
@@ -794,7 +854,7 @@ export const DatabaseDetailPage: React.FC<{
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
                 <div className="flex items-center justify-between text-muted-foreground mb-1">
-                  <span className="text-xs font-medium">Total Storage</span>
+                  <span className="text-xs font-medium">{t('db.totalStorage', 'Total Storage')}</span>
                   <HardDrive className="w-4 h-4 text-emerald-500" />
                 </div>
                 <div className="text-2xl font-bold text-foreground">{formatBytes(totalDbStorage)}</div>
@@ -806,19 +866,19 @@ export const DatabaseDetailPage: React.FC<{
 
               <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
                 <div className="flex items-center justify-between text-muted-foreground mb-1">
-                  <span className="text-xs font-medium">Schema Entities</span>
+                  <span className="text-xs font-medium">{t('db.schemaEntities', 'Schema Entities')}</span>
                   <Layers className="w-4 h-4 text-blue-500" />
                 </div>
-                <div className="text-2xl font-bold text-foreground">{stats?.tableCount ?? 0} Tables</div>
+                <div className="text-2xl font-bold text-foreground">{stats?.tableCount ?? 0} {t('schema.tableCount', 'Tables')}</div>
                 <div className="text-[10px] text-muted-foreground flex justify-between mt-1">
-                  <span>{stats?.indexCount ?? 0} Indexes</span>
+                  <span>{stats?.indexCount ?? 0} {t('schema.indexCount', 'Indexes')}</span>
                   <span>{stats?.viewCount ?? 0} Views</span>
                 </div>
               </div>
 
               <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
                 <div className="flex items-center justify-between text-muted-foreground mb-1">
-                  <span className="text-xs font-medium">B-Tree Page Utilization</span>
+                  <span className="text-xs font-medium">{t('db.btreeUtilization', 'B-Tree Page Utilization')}</span>
                   <PieChart className="w-4 h-4 text-purple-500" />
                 </div>
                 <div className="text-2xl font-bold text-foreground font-mono">
@@ -832,12 +892,12 @@ export const DatabaseDetailPage: React.FC<{
 
               <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
                 <div className="flex items-center justify-between text-muted-foreground mb-1">
-                  <span className="text-xs font-medium">API Tokens & Access</span>
+                  <span className="text-xs font-medium">{t('db.apiTokens', 'API Tokens & Access')}</span>
                   <Shield className="w-4 h-4 text-amber-500" />
                 </div>
-                <div className="text-2xl font-bold text-foreground">{stats?.tokenCount ?? tokens.length} Active</div>
+                <div className="text-2xl font-bold text-foreground">{stats?.tokenCount ?? tokens.length} {t('db.active', 'Active')}</div>
                 <div className="text-[10px] text-muted-foreground mt-1">
-                  Zero Rate Limiting Enabled
+                  {t('db.zeroRateLimit', 'Zero Rate Limiting Enabled')}
                 </div>
               </div>
             </div>
@@ -847,37 +907,37 @@ export const DatabaseDetailPage: React.FC<{
               {/* Pragma Parameters */}
               <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2 flex items-center justify-between">
-                  <span>SQLite Engine Parameters</span>
+                  <span>{t('db.sqliteEngineParams', 'SQLite Engine Parameters')}</span>
                   <Cpu className="w-4 h-4 text-blue-500" />
                 </h3>
                 <div className="divide-y divide-border text-xs">
                   <div className="py-2 flex justify-between items-center">
-                    <span className="text-muted-foreground">SQLite Engine Version</span>
+                    <span className="text-muted-foreground">{t('db.sqliteVersion', 'SQLite Engine Version')}</span>
                     <span className="font-mono font-medium text-foreground">{stats?.sqliteVersion}</span>
                   </div>
                   <div className="py-2 flex justify-between items-center">
-                    <span className="text-muted-foreground">Journal Mode</span>
+                    <span className="text-muted-foreground">{t('db.journalMode', 'Journal Mode')}</span>
                     <span className="font-mono uppercase font-semibold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
                       {stats?.journalMode || 'WAL'}
                     </span>
                   </div>
                   <div className="py-2 flex justify-between items-center">
-                    <span className="text-muted-foreground">Synchronous Safety Level</span>
+                    <span className="text-muted-foreground">{t('db.syncLevel', 'Synchronous Safety Level')}</span>
                     <span className="font-mono uppercase font-medium text-foreground">{stats?.synchronous || 'NORMAL'}</span>
                   </div>
                   <div className="py-2 flex justify-between items-center">
-                    <span className="text-muted-foreground">Lock / Busy Timeout</span>
+                    <span className="text-muted-foreground">{t('db.lockTimeout', 'Lock / Busy Timeout')}</span>
                     <span className="font-mono text-foreground">{stats?.busyTimeout || 5000} ms</span>
                   </div>
                   <div className="py-2 flex justify-between items-center">
-                    <span className="text-muted-foreground">Page Count & Freelist</span>
+                    <span className="text-muted-foreground">{t('db.pageCountFreelist', 'Page Count & Freelist')}</span>
                     <span className="font-mono text-foreground">
                       {stats?.pageCount || 0} pages ({stats?.freelistCount || 0} free)
                     </span>
                   </div>
                   <div className="py-2 flex justify-between items-center">
-                    <span className="text-muted-foreground">Foreign Key Constraints</span>
-                    <span className="font-mono font-semibold text-emerald-500">ENABLED (ON)</span>
+                    <span className="text-muted-foreground">{t('db.fkConstraints', 'Foreign Key Constraints')}</span>
+                    <span className="font-mono font-semibold text-emerald-500">{t('db.enabled', 'ENABLED (ON)')}</span>
                   </div>
                 </div>
               </div>
@@ -886,11 +946,11 @@ export const DatabaseDetailPage: React.FC<{
               <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-3 flex flex-col justify-between">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2 flex items-center justify-between">
-                    <span>Engine Maintenance & Optimization</span>
+                    <span>{t('db.engineMaintenance', 'Engine Maintenance & Optimization')}</span>
                     <Activity className="w-4 h-4 text-emerald-500" />
                   </h3>
                   <p className="text-xs text-muted-foreground my-2">
-                    Execute internal SQLite maintenance routines, WAL sync flushes, and integrity checks.
+                    {t('db.engineMaintenanceDesc', 'Execute internal SQLite maintenance routines, WAL sync flushes, and integrity checks.')}
                   </p>
                   <div className="grid grid-cols-2 gap-2 mt-3">
                     <button
@@ -898,32 +958,32 @@ export const DatabaseDetailPage: React.FC<{
                       disabled={maintenanceMutation.isPending}
                       className="px-3 py-2 bg-muted hover:bg-accent text-xs font-medium rounded-md border border-border transition-colors text-foreground text-left"
                     >
-                      <div className="font-semibold">Quick Check</div>
-                      <div className="text-[10px] text-muted-foreground">Verify B-Tree structure</div>
+                      <div className="font-semibold">{t('db.quickCheck', 'Quick Check')}</div>
+                      <div className="text-[10px] text-muted-foreground">{t('db.quickCheckDesc', 'Verify B-Tree structure')}</div>
                     </button>
                     <button
                       onClick={() => maintenanceMutation.mutate('integrity_check')}
                       disabled={maintenanceMutation.isPending}
                       className="px-3 py-2 bg-muted hover:bg-accent text-xs font-medium rounded-md border border-border transition-colors text-foreground text-left"
                     >
-                      <div className="font-semibold">Integrity Check</div>
-                      <div className="text-[10px] text-muted-foreground">Full DB validation</div>
+                      <div className="font-semibold">{t('db.integrityCheck', 'Integrity Check')}</div>
+                      <div className="text-[10px] text-muted-foreground">{t('db.integrityCheckDesc', 'Full DB validation')}</div>
                     </button>
                     <button
                       onClick={() => maintenanceMutation.mutate('wal_checkpoint')}
                       disabled={maintenanceMutation.isPending}
                       className="px-3 py-2 bg-muted hover:bg-accent text-xs font-medium rounded-md border border-border transition-colors text-foreground text-left"
                     >
-                      <div className="font-semibold">Checkpoint WAL</div>
-                      <div className="text-[10px] text-muted-foreground">Flush WAL to main DB</div>
+                      <div className="font-semibold">{t('db.checkpointWal', 'Checkpoint WAL')}</div>
+                      <div className="text-[10px] text-muted-foreground">{t('db.checkpointWalDesc', 'Flush WAL to main DB')}</div>
                     </button>
                     <button
                       onClick={() => maintenanceMutation.mutate('optimize')}
                       disabled={maintenanceMutation.isPending}
                       className="px-3 py-2 bg-muted hover:bg-accent text-xs font-medium rounded-md border border-border transition-colors text-foreground text-left"
                     >
-                      <div className="font-semibold">Optimize</div>
-                      <div className="text-[10px] text-muted-foreground">Run query optimizer</div>
+                      <div className="font-semibold">{t('db.optimize', 'Optimize')}</div>
+                      <div className="text-[10px] text-muted-foreground">{t('db.optimizeDesc', 'Run query optimizer')}</div>
                     </button>
                   </div>
                 </div>
@@ -940,38 +1000,38 @@ export const DatabaseDetailPage: React.FC<{
             {/* Table Storage & Row Distribution */}
             <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">
-                Table Row & Index Distribution
+                {t('db.tableDistribution', 'Table Row & Index Distribution')}
               </h3>
               {schema.length === 0 ? (
                 <div className="py-6 text-center text-xs text-muted-foreground">
-                  No tables created in this database yet.
+                  {t('db.noTables', 'No tables created in this database yet.')}
                 </div>
               ) : (
                 <div className="border border-border rounded-lg overflow-hidden">
                   <table className="w-full text-left text-xs font-mono">
                     <thead className="bg-muted/50 border-b border-border text-muted-foreground">
                       <tr>
-                        <th className="py-2 px-3">Table Name</th>
-                        <th className="py-2 px-3">Type</th>
-                        <th className="py-2 px-3">Columns</th>
-                        <th className="py-2 px-3">Indexes</th>
-                        <th className="py-2 px-3">Foreign Keys</th>
-                        <th className="py-2 px-3 text-right">Row Count</th>
+                        <th className="py-2 px-3">{t('db.tableName', 'Table Name')}</th>
+                        <th className="py-2 px-3">{t('common.type', 'Type')}</th>
+                        <th className="py-2 px-3">{t('db.columns', 'Columns')}</th>
+                        <th className="py-2 px-3">{t('db.indexes', 'Indexes')}</th>
+                        <th className="py-2 px-3">{t('db.foreignKeys', 'Foreign Keys')}</th>
+                        <th className="py-2 px-3 text-right">{t('db.rowCount', 'Row Count')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {schema.map((t) => (
-                        <tr key={t.name} className="hover:bg-muted/20">
+                      {schema.map((tItem) => (
+                        <tr key={tItem.name} className="hover:bg-muted/20">
                           <td className="py-2 px-3 font-semibold text-foreground flex items-center gap-1.5">
                             <TableIcon className="w-3.5 h-3.5 text-blue-500" />
-                            {t.name}
+                            {tItem.name}
                           </td>
-                          <td className="py-2 px-3 text-muted-foreground uppercase text-[10px]">{t.type}</td>
-                          <td className="py-2 px-3 text-muted-foreground">{t.columns.length} cols</td>
-                          <td className="py-2 px-3 text-muted-foreground">{t.indexes?.length || 0} idx</td>
-                          <td className="py-2 px-3 text-muted-foreground">{t.foreignKeys?.length || 0} fks</td>
+                          <td className="py-2 px-3 text-muted-foreground uppercase text-[10px]">{tItem.type}</td>
+                          <td className="py-2 px-3 text-muted-foreground">{tItem.columns.length} cols</td>
+                          <td className="py-2 px-3 text-muted-foreground">{tItem.indexes?.length || 0} idx</td>
+                          <td className="py-2 px-3 text-muted-foreground">{tItem.foreignKeys?.length || 0} fks</td>
                           <td className="py-2 px-3 text-right font-bold text-foreground">
-                            {t.rowCountEstimate !== undefined ? t.rowCountEstimate.toLocaleString() : '—'}
+                            {tItem.rowCountEstimate !== undefined ? tItem.rowCountEstimate.toLocaleString() : '—'}
                           </td>
                         </tr>
                       ))}
@@ -990,7 +1050,7 @@ export const DatabaseDetailPage: React.FC<{
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
                 <div className="flex items-center justify-between text-muted-foreground mb-1">
-                  <span className="text-xs font-medium">Total 24h Requests</span>
+                  <span className="text-xs font-medium">{t('db.requests24h', 'Total 24h Requests')}</span>
                   <Activity className="w-4 h-4 text-blue-500" />
                 </div>
                 <div className="text-2xl font-bold text-foreground font-mono">
@@ -1004,7 +1064,7 @@ export const DatabaseDetailPage: React.FC<{
 
               <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
                 <div className="flex items-center justify-between text-muted-foreground mb-1">
-                  <span className="text-xs font-medium">Write Operations (DML/DDL)</span>
+                  <span className="text-xs font-medium">{t('db.writeOps', 'Write Operations (DML/DDL)')}</span>
                   <TrendingUp className="w-4 h-4 text-emerald-500" />
                 </div>
                 <div className="text-2xl font-bold text-emerald-500 font-mono">
@@ -1019,7 +1079,7 @@ export const DatabaseDetailPage: React.FC<{
 
               <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
                 <div className="flex items-center justify-between text-muted-foreground mb-1">
-                  <span className="text-xs font-medium">Total Disk Footprint</span>
+                  <span className="text-xs font-medium">{t('db.totalDiskFootprint', 'Total Disk Footprint')}</span>
                   <HardDrive className="w-4 h-4 text-purple-500" />
                 </div>
                 <div className="text-2xl font-bold text-foreground font-mono">
@@ -1033,7 +1093,7 @@ export const DatabaseDetailPage: React.FC<{
 
               <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
                 <div className="flex items-center justify-between text-muted-foreground mb-1">
-                  <span className="text-xs font-medium">B-Tree Page Utilization</span>
+                  <span className="text-xs font-medium">{t('db.btreeUtilization', 'B-Tree Page Utilization')}</span>
                   <PieChart className="w-4 h-4 text-amber-500" />
                 </div>
                 <div className="text-2xl font-bold text-foreground font-mono">
@@ -1052,10 +1112,10 @@ export const DatabaseDetailPage: React.FC<{
                 <div>
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <Activity className="w-4 h-4 text-blue-500" />
-                    Database Request Operations (24h Window)
+                    {t('db.requestOpsTimeline', 'Database Request Operations (24h Window)')}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Real-time distribution of SELECT, INSERT, UPDATE, DELETE, and DDL operations.
+                    {t('db.requestOpsTimelineDesc', 'Real-time distribution of SELECT, INSERT, UPDATE, DELETE, and DDL operations.')}
                   </p>
                 </div>
                 <div className="flex items-center gap-3 text-xs">
@@ -1124,10 +1184,10 @@ export const DatabaseDetailPage: React.FC<{
                 <div>
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <HardDrive className="w-4 h-4 text-purple-500" />
-                    SQLite Storage & B-Tree Page Allocation
+                    {t('db.sqliteStorageAlloc', 'SQLite Storage & B-Tree Page Allocation')}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Physical disk allocation per {storageStats?.pageSize || 4096}-byte database page.
+                    {t('db.sqliteStorageAllocDesc', 'Physical disk allocation per database page.')}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1143,7 +1203,7 @@ export const DatabaseDetailPage: React.FC<{
               {/* Physical Disk Allocation Visual Bar */}
               <div className="space-y-2">
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">Physical Disk Breakdown</span>
+                  <span className="font-medium text-foreground">{t('db.physicalDiskBreakdown', 'Physical Disk Breakdown')}</span>
                   <span className="font-mono font-bold text-foreground">
                     {formatBytes(storageStats?.totalSizeBytes ?? totalDbStorage)} total
                   </span>
@@ -1169,14 +1229,14 @@ export const DatabaseDetailPage: React.FC<{
                 <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-muted-foreground pt-1">
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-sm bg-blue-600 shrink-0" />
-                    <span>Main Database File ({formatBytes(storageStats?.fileSizeBytes ?? stats?.fileSizeBytes ?? 0)})</span>
+                    <span>{t('db.mainDbFile', 'Main Database File')} ({formatBytes(storageStats?.fileSizeBytes ?? stats?.fileSizeBytes ?? 0)})</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-sm bg-emerald-500 shrink-0" />
-                    <span>Write-Ahead Log ({formatBytes(storageStats?.walSizeBytes ?? stats?.walSizeBytes ?? 0)})</span>
+                    <span>{t('db.walFile', 'Write-Ahead Log (WAL)')} ({formatBytes(storageStats?.walSizeBytes ?? stats?.walSizeBytes ?? 0)})</span>
                   </div>
                   <div className="flex items-center gap-2 font-mono">
-                    <span>Fragmentation:</span>
+                    <span>{t('db.fragmentation', 'Fragmentation')}:</span>
                     <span className={`font-bold ${(storageStats?.fragmentationPercent || fragmentationPercent) > 20 ? 'text-amber-500' : 'text-emerald-500'}`}>
                       {storageStats?.fragmentationPercent ?? fragmentationPercent}% freelist
                     </span>
@@ -1187,7 +1247,7 @@ export const DatabaseDetailPage: React.FC<{
               {/* B-Tree Page Matrix Grid */}
               <div className="border border-border rounded-lg p-4 bg-muted/20 space-y-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-foreground">B-Tree Page Allocation Grid</span>
+                  <span className="font-semibold text-foreground">{t('db.btreePageGrid', 'B-Tree Page Allocation Grid')}</span>
                   <div className="flex items-center gap-4 text-[11px] text-muted-foreground font-mono">
                     <span className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full bg-blue-500" />
@@ -1224,17 +1284,17 @@ export const DatabaseDetailPage: React.FC<{
               {/* Table & Index Storage Breakdown Table */}
               <div className="space-y-3">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Table & Index Storage Distribution
+                  {t('db.tableIndexStorageDist', 'Table & Index Storage Distribution')}
                 </h4>
                 <div className="border border-border rounded-lg overflow-hidden">
                   <table className="w-full text-left text-xs font-mono">
                     <thead className="bg-muted/50 border-b border-border text-muted-foreground">
                       <tr>
-                        <th className="py-2 px-3">Entity Name</th>
-                        <th className="py-2 px-3">Type</th>
-                        <th className="py-2 px-3 text-right">Rows</th>
-                        <th className="py-2 px-3 text-right">Indexes</th>
-                        <th className="py-2 px-3 text-right">Estimated Size</th>
+                        <th className="py-2 px-3">{t('db.entityName', 'Entity Name')}</th>
+                        <th className="py-2 px-3">{t('common.type', 'Type')}</th>
+                        <th className="py-2 px-3 text-right">{t('common.rows', 'Rows')}</th>
+                        <th className="py-2 px-3 text-right">{t('db.indexes', 'Indexes')}</th>
+                        <th className="py-2 px-3 text-right">{t('db.estimatedSize', 'Estimated Size')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -3543,10 +3603,10 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 <div>
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <Edit2 className="w-4 h-4 text-blue-500" />
-                    Database Properties & Metadata
+                    {t('db.propertiesTitle', 'Database Properties & Metadata')}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Update the instance display name and description.
+                    {t('db.propertiesDesc', 'Update the instance display name and description.')}
                   </p>
                 </div>
               </div>
@@ -3564,7 +3624,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 className="space-y-4"
               >
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">Database Name</label>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">{t('common.name', 'Database Name')}</label>
                   <input
                     type="text"
                     required
@@ -3575,7 +3635,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">Description (Optional)</label>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">{t('common.description', 'Description')}</label>
                   <textarea
                     rows={2}
                     value={editDbDescription}
@@ -3586,7 +3646,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">Disk Storage Quota (MB)</label>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">{t('db.maxSizeMb', 'Disk Storage Quota (MB)')}</label>
                   <input
                     type="number"
                     min={1}
@@ -3595,7 +3655,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     placeholder="Leave empty for unlimited size"
                     className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground font-mono focus:ring-1 focus:ring-blue-500"
                   />
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Limits maximum SQLite database and WAL file size.</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{t('db.maxSizeMbDesc', 'Limits maximum SQLite database and WAL file size.')}</p>
                 </div>
 
                 <div className="flex justify-end pt-1">
@@ -3604,7 +3664,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     disabled={updateDbInfoMutation.isPending || !editDbName.trim()}
                     className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
                   >
-                    {updateDbInfoMutation.isPending ? 'Saving...' : 'Save Properties'}
+                    {updateDbInfoMutation.isPending ? t('common.saving', 'Saving...') : t('db.saveProperties', 'Save Properties')}
                   </button>
                 </div>
               </form>
@@ -3805,7 +3865,247 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
             </div>
           </div>
         )}
+
+        {/* COLLABORATION & MEMBERS TAB */}
+        {activeTab === 'members' && (
+          <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-150">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border rounded-xl p-5 shadow-sm">
+              <div>
+                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Users className="w-5 h-5 text-blue-500" />
+                  {t('members.title', 'Members & Access Collaboration')}
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t('members.desc', 'Each user can only access their own databases. Invite members by email or username to collaborate securely.')}
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setInviteStatus(null);
+                  setIsInviteModalOpen(true);
+                }}
+                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors flex items-center gap-2 self-start sm:self-auto cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>{t('members.inviteBtn', 'Invite New Member')}</span>
+              </button>
+            </div>
+
+            {/* Members List */}
+            <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-border bg-muted/30 flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                  {t('members.current', 'Current Members')} ({membersData?.members?.length || 0})
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  {t('members.owner', 'Owner')}: <strong className="text-foreground">{stats?.database.owner_username || 'Admin'}</strong>
+                </span>
+              </div>
+
+              <div className="divide-y divide-border">
+                {/* Database Owner Entry */}
+                <div className="p-4 flex items-center justify-between hover:bg-accent/20 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-blue-600/10 border border-blue-500/30 flex items-center justify-center font-bold text-blue-600 text-xs">
+                      {stats?.database.owner_username?.slice(0, 2).toUpperCase() || 'OW'}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-foreground">
+                          {stats?.database.owner_username || t('members.owner', 'Owner')}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-500 border border-purple-500/20">
+                          {t('members.owner', 'Owner')}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-muted-foreground block mt-0.5">{t('members.ownerFull', 'Full administrative control and database deletion.')}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Invited Members */}
+                {membersData?.members?.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground text-xs">
+                    {t('members.empty', 'No members invited yet. This database is completely private.')}
+                  </div>
+                ) : (
+                  membersData?.members?.map((member) => (
+                    <div key={member.id} className="p-4 flex items-center justify-between hover:bg-accent/20 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full overflow-hidden border border-border bg-muted flex items-center justify-center font-bold text-xs shrink-0">
+                          {member.avatar_url ? (
+                            <img src={member.avatar_url} alt={member.username} className="w-full h-full object-cover" />
+                          ) : (
+                            <User className="w-4 h-4 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-foreground">{member.username}</span>
+                            {member.email && (
+                              <span className="text-[11px] text-muted-foreground">({member.email})</span>
+                            )}
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
+                                member.role === 'admin'
+                                  ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                  : member.role === 'editor'
+                                  ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                  : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                              }`}
+                            >
+                              {member.role}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground block mt-0.5">
+                            {member.invited_by} • {formatDate(member.created_at)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <button
+                          onClick={() => {
+                            if (confirm(`${t('members.removeConfirm', 'Are you sure you want to remove member permissions for')} ${member.username}?`)) {
+                              removeMemberMutation.mutate(member.user_id);
+                            }
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                          title="Remove Member"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Pending Invites List */}
+            {membersData?.invites && membersData.invites.length > 0 && (
+              <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+                <div className="px-5 py-3.5 border-b border-border bg-muted/30">
+                  <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                    {t('members.pending', 'Pending Invites')} ({membersData.invites.length})
+                  </span>
+                </div>
+
+                <div className="divide-y divide-border">
+                  {membersData.invites.map((invite) => (
+                    <div key={invite.id} className="p-4 flex items-center justify-between hover:bg-accent/20 transition-colors">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-foreground">{invite.email}</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                            {invite.role}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground block mt-0.5">
+                          {t('members.pendingDesc', 'Access will be automatically granted once the user registers with this email.')}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={() => revokeInviteMutation.mutate(invite.id)}
+                        className="px-2.5 py-1 text-xs text-red-500 border border-red-500/20 hover:bg-red-500/10 rounded cursor-pointer"
+                      >
+                        {t('members.revoke', 'Revoke Invite')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Invite Member Modal */}
+      {isInviteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-blue-500" />
+                <h3 className="text-sm font-bold text-foreground">{t('members.modalTitle', 'Invite Collaboration Member')}</h3>
+              </div>
+              <button
+                onClick={() => setIsInviteModalOpen(false)}
+                className="p-1 text-muted-foreground hover:text-foreground rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {inviteStatus && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-md">
+                {inviteStatus}
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!inviteEmailOrUser.trim()) return;
+                inviteMemberMutation.mutate({
+                  emailOrUsername: inviteEmailOrUser.trim(),
+                  role: inviteRole,
+                });
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  {t('members.emailOrUser', 'Email or Username')}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={inviteEmailOrUser}
+                  onChange={(e) => setInviteEmailOrUser(e.target.value)}
+                  placeholder="user@example.com hoặc username"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-blue-500"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {t('members.emailHint', 'If the user does not exist yet, an invite is recorded and automatically activated upon registration.')}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">{t('members.role', 'Role Permission')}</label>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground"
+                >
+                  <option value="viewer">{t('members.roleViewer', 'Viewer - Read-only schema and SELECT queries (No mutations)')}</option>
+                  <option value="editor">{t('members.roleEditor', 'Editor - Query, Insert, Update, Delete data & Upload files')}</option>
+                  <option value="admin">{t('members.roleAdmin', 'Admin - Full schema control, backup creation, and member management')}</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsInviteModalOpen(false)}
+                  className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded"
+                >
+                  {t('common.cancel', 'Cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={inviteMemberMutation.isPending || !inviteEmailOrUser.trim()}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-semibold cursor-pointer"
+                >
+                  {inviteMemberMutation.isPending ? t('common.loading', 'Loading...') : t('members.sendInvite', 'Send Invitation')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Clone Database Modal */}
       {isCloneModalOpen && (

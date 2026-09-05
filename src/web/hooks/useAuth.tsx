@@ -7,6 +7,9 @@ interface AuthUser {
   userId: string;
   username: string;
   role?: UserRole;
+  email?: string | null;
+  avatar_url?: string | null;
+  totp_enabled?: boolean;
 }
 
 interface AuthContextType {

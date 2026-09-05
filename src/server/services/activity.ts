@@ -69,6 +69,7 @@ export class ActivityService {
 
   public listActivity(filters?: {
     databaseId?: string;
+    allowedDatabaseIds?: string[];
     tokenId?: string;
     status?: string;
     limit?: number;
@@ -81,6 +82,17 @@ export class ActivityService {
     let countQuery = 'SELECT COUNT(*) as count FROM activity_logs WHERE 1=1';
     const params: any[] = [];
     const countParams: any[] = [];
+
+    if (filters?.allowedDatabaseIds) {
+      if (filters.allowedDatabaseIds.length === 0) {
+        return { items: [], total: 0 };
+      }
+      const placeholders = filters.allowedDatabaseIds.map(() => '?').join(', ');
+      query += ` AND database_id IN (${placeholders})`;
+      countQuery += ` AND database_id IN (${placeholders})`;
+      params.push(...filters.allowedDatabaseIds);
+      countParams.push(...filters.allowedDatabaseIds);
+    }
 
     if (filters?.databaseId) {
       query += ' AND database_id = ?';

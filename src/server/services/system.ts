@@ -176,9 +176,15 @@ export class SystemService {
   private checkAlertThresholds(point: MetricHistoryPoint): void {
     const now = Date.now();
     const cooldownMs = 15 * 60 * 1000; // 15 mins
+    const settings = this.getSettings();
 
-    // 1. High CPU threshold (> 85%)
-    if (point.cpuPercent > 85) {
+    if (settings.enable_system_alerts === false) return;
+
+    const cpuThreshold = settings.alert_cpu_threshold ?? 85;
+    const ramThreshold = settings.alert_ram_threshold ?? 85;
+
+    // 1. High CPU threshold
+    if (point.cpuPercent > cpuThreshold) {
       const nextAllowed = this.alertCooldowns.get('cpu_high') || 0;
       if (now >= nextAllowed) {
         this.alertCooldowns.set('cpu_high', now + cooldownMs);
@@ -188,7 +194,7 @@ export class SystemService {
           data: {
             title: 'High CPU Alert',
             level: 'warning',
-            message: `Server CPU utilization reached ${point.cpuPercent}% (threshold: 85%)`,
+            message: `Server CPU utilization reached ${point.cpuPercent}% (threshold: ${cpuThreshold}%)`,
             timestamp: now,
           },
           timestamp: now,
@@ -196,8 +202,8 @@ export class SystemService {
       }
     }
 
-    // 2. High RAM threshold (> 85%)
-    if (point.ramPercent > 85) {
+    // 2. High RAM threshold
+    if (point.ramPercent > ramThreshold) {
       const nextAllowed = this.alertCooldowns.get('ram_high') || 0;
       if (now >= nextAllowed) {
         this.alertCooldowns.set('ram_high', now + cooldownMs);
@@ -207,7 +213,7 @@ export class SystemService {
           data: {
             title: 'High RAM Alert',
             level: 'warning',
-            message: `Host RAM utilization reached ${point.ramPercent}% (threshold: 85%)`,
+            message: `Host RAM utilization reached ${point.ramPercent}% (threshold: ${ramThreshold}%)`,
             timestamp: now,
           },
           timestamp: now,
@@ -298,6 +304,10 @@ export class SystemService {
       log_level: (map.log_level as any) || config.logLevel || 'info',
       enable_cors_all: map.enable_cors_all === 'true',
       enable_stack_traces: map.enable_stack_traces === 'true',
+      enable_system_alerts: map.enable_system_alerts !== 'false',
+      alert_webhook_url: map.alert_webhook_url || '',
+      alert_cpu_threshold: map.alert_cpu_threshold ? parseInt(map.alert_cpu_threshold, 10) : 85,
+      alert_ram_threshold: map.alert_ram_threshold ? parseInt(map.alert_ram_threshold, 10) : 85,
     };
   }
 
@@ -391,6 +401,12 @@ export class SystemService {
       securityDiagnostics: {
         atRestEncryptionActive: true,
         encryptionAlgorithm: 'AES-256-GCM (Authenticated)',
+        recommendations: [
+          'Store DATABASE_MASTER_KEY in dedicated external KMS / secure environment file',
+          'Enforce TLS 1.3 reverse proxy in front of production deployments',
+          'Regularly rotate API tokens and register WebAuthn hardware passkeys',
+          'Enable scheduled automated backups with 7+ days retention cap',
+        ],
       },
     };
   }

@@ -73,18 +73,48 @@ export class DatabaseService {
 
   public listDatabases(userId?: string, role?: string): DatabaseRecord[] {
     const metaDb = getMetadataDb();
-    const queryBase = `
+    if (userId && role === 'user') {
+      const rows = metaDb.prepare(`
+        SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
+               u.username as owner_username,
+               CASE
+                 WHEN d.owner_id = ? THEN 'owner'
+                 ELSE COALESCE(dm.role, 'viewer')
+               END as access_role,
+               CASE WHEN d.owner_id != ? THEN 1 ELSE 0 END as is_shared,
+               (SELECT COUNT(*) FROM database_members WHERE database_id = d.id) as member_count
+        FROM databases d
+        LEFT JOIN users u ON d.owner_id = u.id
+        LEFT JOIN database_members dm ON d.id = dm.database_id AND dm.user_id = ?
+        WHERE d.owner_id = ? OR dm.user_id = ?
+        ORDER BY d.created_at DESC
+      `).all(userId, userId, userId, userId, userId) as any[];
+
+      return rows.map(r => ({
+        ...r,
+        is_shared: Boolean(r.is_shared),
+        access_role: r.access_role || 'viewer',
+        member_count: Number(r.member_count || 0),
+      }));
+    }
+
+    const rows = metaDb.prepare(`
       SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
-             u.username as owner_username
+             u.username as owner_username,
+             'owner' as access_role,
+             0 as is_shared,
+             (SELECT COUNT(*) FROM database_members WHERE database_id = d.id) as member_count
       FROM databases d
       LEFT JOIN users u ON d.owner_id = u.id
-    `;
-    if (userId && role === 'user') {
-      const rows = metaDb.prepare(`${queryBase} WHERE d.owner_id = ? ORDER BY d.created_at DESC`).all(userId) as any[];
-      return rows;
-    }
-    const rows = metaDb.prepare(`${queryBase} ORDER BY d.created_at DESC`).all() as any[];
-    return rows;
+      ORDER BY d.created_at DESC
+    `).all() as any[];
+
+    return rows.map(r => ({
+      ...r,
+      is_shared: false,
+      access_role: 'owner',
+      member_count: Number(r.member_count || 0),
+    }));
   }
 
   public getDatabase(databaseId: string): DatabaseRecord | null {

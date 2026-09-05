@@ -4,6 +4,7 @@ import { AuthPage } from './pages/AuthPage.js';
 import { ErrorPage } from './pages/ErrorPage.js';
 import { DashboardLayout } from './layouts/DashboardLayout.js';
 import { OverviewPage } from './pages/OverviewPage.js';
+import { UserDashboardPage } from './pages/UserDashboardPage.js';
 import { TelemetryPage } from './pages/TelemetryPage.js';
 import { UsersPage } from './pages/UsersPage.js';
 import { DatabasesPage } from './pages/DatabasesPage.js';
@@ -18,7 +19,7 @@ import { useI18n } from './hooks/useI18n.js';
 import { useTheme } from './hooks/useTheme.js';
 
 export const App: React.FC = () => {
-  const { authenticated, isLoading, isOffline, refetchStatus } = useAuth();
+  const { authenticated, isLoading, isOffline, refetchStatus, user } = useAuth();
   const { language, toggleLanguage } = useI18n();
   const { theme, setTheme, toggleTheme } = useTheme();
 
@@ -164,11 +165,18 @@ export const App: React.FC = () => {
           onOpenCreateToken={(dbId) => setCreateTokenDbId(dbId)}
         />
       ) : route.tab === 'overview' ? (
-        <OverviewPage
-          onSelectDatabase={(id) => navigateTo('databases', id)}
-          onOpenCreateModal={() => setIsCreateDbOpen(true)}
-          onNavigateToTelemetry={() => navigateTo('telemetry')}
-        />
+        user?.role === 'user' ? (
+          <UserDashboardPage
+            onSelectDatabase={(id) => navigateTo('databases', id)}
+            onOpenCreateModal={() => setIsCreateDbOpen(true)}
+          />
+        ) : (
+          <OverviewPage
+            onSelectDatabase={(id) => navigateTo('databases', id)}
+            onOpenCreateModal={() => setIsCreateDbOpen(true)}
+            onNavigateToTelemetry={() => navigateTo('telemetry')}
+          />
+        )
       ) : route.tab === 'telemetry' ? (
         <TelemetryPage />
       ) : route.tab === 'users' ? (
@@ -188,11 +196,18 @@ export const App: React.FC = () => {
           onOpenCreateDb={() => setIsCreateDbOpen(true)}
         />
       ) : (
-        <OverviewPage
-          onSelectDatabase={(id) => navigateTo('databases', id)}
-          onOpenCreateModal={() => setIsCreateDbOpen(true)}
-          onNavigateToTelemetry={() => navigateTo('telemetry')}
-        />
+        user?.role === 'user' ? (
+          <UserDashboardPage
+            onSelectDatabase={(id) => navigateTo('databases', id)}
+            onOpenCreateModal={() => setIsCreateDbOpen(true)}
+          />
+        ) : (
+          <OverviewPage
+            onSelectDatabase={(id) => navigateTo('databases', id)}
+            onOpenCreateModal={() => setIsCreateDbOpen(true)}
+            onNavigateToTelemetry={() => navigateTo('telemetry')}
+          />
+        )
       )}
 
       {/* Modals */}

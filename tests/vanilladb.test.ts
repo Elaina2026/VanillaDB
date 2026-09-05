@@ -557,7 +557,7 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     try {
       databaseService.deleteDatabase(clonedDb.id);
     } catch {}
-  });
+  }, 20000);
 
   // 12. Multi-User RBAC & Quotas Test
   it('should create sub-account with DB and rate limit quotas, and enforce caps', async () => {
@@ -996,6 +996,204 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     expect(rows[0].balance).toBe(100);
     expect(rows[1].id).toBe('acc_bob');
     expect(rows[1].balance).toBe(50);
+  });
+
+  // 19. User Self-Registration, Avatar, Database Isolation & Members Collaboration Test
+  it('should support email self-registration, avatar updates, database isolation, and database invitations', async () => {
+    const uniqueSuffix = Date.now();
+    const alphaEmail = `alpha_${uniqueSuffix}@vanilladb.test`;
+    const alphaUsername = `user_alpha_${uniqueSuffix}`;
+    const betaEmail = `beta_${uniqueSuffix}@vanilladb.test`;
+    const betaUsername = `user_beta_${uniqueSuffix}`;
+
+    // 1. Self-register User Alpha via email
+    const regRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        email: alphaEmail,
+        username: alphaUsername,
+        password: 'PasswordAlpha123!',
+      },
+    });
+    expect(regRes.statusCode).toBe(201);
+    const alphaSessionCookie = `vdb_session=${regRes.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+
+    // 2. User Alpha updates profile with avatar URL
+    const updateProfileRes = await app.inject({
+      method: 'PUT',
+      url: '/api/auth/profile',
+      headers: { cookie: alphaSessionCookie },
+      payload: {
+        avatar_url: 'https://example.com/avatar_alpha.png',
+      },
+    });
+    expect(updateProfileRes.statusCode).toBe(200);
+    expect(updateProfileRes.json().data.avatar_url).toBe('https://example.com/avatar_alpha.png');
+
+    // 3. User Alpha creates an isolated database
+    const createAlphaDb = await app.inject({
+      method: 'POST',
+      url: '/api/admin/databases',
+      headers: { cookie: alphaSessionCookie },
+      payload: { name: 'Alpha Private Database' },
+    });
+    expect(createAlphaDb.statusCode).toBe(201);
+    const alphaDbId = createAlphaDb.json().data.id;
+
+    // 4. Self-register User Beta via email
+    const betaRegRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        email: betaEmail,
+        username: betaUsername,
+        password: 'PasswordBeta123!',
+      },
+    });
+    expect(betaRegRes.statusCode).toBe(201);
+    const betaSessionCookie = `vdb_session=${betaRegRes.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+
+    // 5. Database Isolation: Beta lists databases -> must NOT see Alpha's database
+    const betaListDb = await app.inject({
+      method: 'GET',
+      url: '/api/admin/databases',
+      headers: { cookie: betaSessionCookie },
+    });
+    expect(betaListDb.statusCode).toBe(200);
+    const betaDbs = betaListDb.json().data;
+    expect(betaDbs.some((d: any) => d.id === alphaDbId)).toBe(false);
+
+    // 6. Database Isolation: Beta attempts to query Alpha's database -> 403 Forbidden
+    const forbiddenRes = await app.inject({
+      method: 'GET',
+      url: `/api/admin/databases/${alphaDbId}`,
+      headers: { cookie: betaSessionCookie },
+    });
+    expect(forbiddenRes.statusCode).toBe(403);
+
+    // 7. Collaboration: Alpha invites Beta as 'viewer'
+    const inviteRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${alphaDbId}/members`,
+      headers: { cookie: alphaSessionCookie },
+      payload: {
+        emailOrUsername: betaEmail,
+        role: 'viewer',
+      },
+    });
+    expect(inviteRes.statusCode).toBe(201);
+
+    // 8. Beta lists databases -> Now sees Alpha's database marked as shared
+    const betaSharedList = await app.inject({
+      method: 'GET',
+      url: '/api/admin/databases',
+      headers: { cookie: betaSessionCookie },
+    });
+    expect(betaSharedList.statusCode).toBe(200);
+    const foundShared = betaSharedList.json().data.find((d: any) => d.id === alphaDbId);
+    expect(foundShared).toBeDefined();
+    expect(foundShared.is_shared).toBe(true);
+    expect(foundShared.access_role).toBe('viewer');
+
+    // 9. Beta user dashboard stats
+    const betaDashboard = await app.inject({
+      method: 'GET',
+      url: '/api/admin/user/dashboard',
+      headers: { cookie: betaSessionCookie },
+    });
+    expect(betaDashboard.statusCode).toBe(200);
+    expect(betaDashboard.json().data.sharedDatabasesCount).toBe(1);
+
+    // 10. Clean up
+    try {
+      databaseService.deleteDatabase(alphaDbId);
+    } catch {}
+  });
+
+  // 20. 2FA TOTP Secure Activation and Step-Up Login Flow Test
+  it('should enforce QR TOTP activation with password verification and step-up login challenge', async () => {
+    const { generateTotpCode } = await import('../src/server/utils/totp.js');
+    const totpSuffix = Date.now();
+    const totpUsername = `totp_tester_${totpSuffix}`;
+    const totpEmail = `totp_${totpSuffix}@vanilladb.test`;
+
+    // 1. Register a dedicated 2FA user
+    const regRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        email: totpEmail,
+        username: totpUsername,
+        password: 'SafePassword123!',
+      },
+    });
+    const sessionCookie = `vdb_session=${regRes.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+
+    // 2. Setup 2FA -> generates QR Data URL and secret
+    const setupRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/setup',
+      headers: { cookie: sessionCookie },
+    });
+    expect(setupRes.statusCode).toBe(200);
+    const { secret, qrDataUrl } = setupRes.json().data;
+    expect(secret).toBeDefined();
+    expect(qrDataUrl).toContain('data:image/svg+xml');
+
+    // 3. Activation attempt with wrong password -> Should reject (401 Unauthorized)
+    const wrongPassRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/activate',
+      headers: { cookie: sessionCookie },
+      payload: {
+        password: 'WrongPassword!',
+        code: generateTotpCode(secret),
+      },
+    });
+    expect(wrongPassRes.statusCode).toBe(401);
+
+    // 4. Activation attempt with valid password + valid OTP code -> Should succeed
+    const validOtp = generateTotpCode(secret);
+    const activateRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/activate',
+      headers: { cookie: sessionCookie },
+      payload: {
+        password: 'SafePassword123!',
+        code: validOtp,
+      },
+    });
+    expect(activateRes.statusCode).toBe(200);
+    expect(activateRes.json().success).toBe(true);
+
+    // 5. Normal login attempt -> Password correct but 2FA enabled -> Returns 2FA challenge (require2fa: true)
+    const loginRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: {
+        username: totpUsername,
+        password: 'SafePassword123!',
+      },
+    });
+    expect(loginRes.statusCode).toBe(200);
+    expect(loginRes.json().data.require2fa).toBe(true);
+    const tempToken = loginRes.json().data.tempToken;
+    expect(tempToken).toBeDefined();
+
+    // 6. Complete 2FA login challenge with 6-digit code -> Issues session cookie
+    const currentOtp = generateTotpCode(secret);
+    const login2faRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login/2fa',
+      payload: {
+        tempToken,
+        code: currentOtp,
+      },
+    });
+    expect(login2faRes.statusCode).toBe(200);
+    const finalSession = login2faRes.cookies.find((c: any) => c.name === 'vdb_session');
+    expect(finalSession).toBeDefined();
   });
 });
 

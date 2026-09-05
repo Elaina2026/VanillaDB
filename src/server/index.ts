@@ -1,3 +1,4 @@
+import './suppressWarnings.js';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';

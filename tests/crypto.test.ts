@@ -1,3 +1,4 @@
+import '../src/server/suppressWarnings.js';
 import { describe, it, expect } from 'vitest';
 import { encryptBuffer, decryptBuffer, deriveKeyFromString } from '../src/server/utils/crypto.js';
 

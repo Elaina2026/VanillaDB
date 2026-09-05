@@ -13,26 +13,42 @@ import { realtimeService } from '../services/realtime.js';
 import { activityService } from '../services/activity.js';
 import { authService } from '../services/auth.js';
 import { jobSchedulerService } from '../services/jobScheduler.js';
+import { databaseMembersService } from '../services/members.js';
 import { requireAdminAuth, requireRole } from '../middleware/auth.js';
 import { SqlTranslator } from '../utils/sqlTranslator.js';
 import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
-import { TokenPermissionSchema } from '../../../shared/index.js';
+import { TokenPermissionSchema, type MemberRole } from '../../../shared/index.js';
 
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', requireAdminAuth);
 
   // Helper to enforce BOLA / IDOR ownership validation on tenant database routes
-  const requireDatabaseAccess = (req: any, reply: any, databaseId: string) => {
+  const requireDatabaseAccess = (req: any, reply: any, databaseId: string, minRole: 'viewer' | 'editor' | 'admin' | 'owner' = 'viewer') => {
     const db = databaseService.getDatabase(databaseId);
     if (!db) {
       reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: `Database "${databaseId}" not found` } });
       return null;
     }
     const user = req.adminUser;
-    if (user && user.role === 'user' && db.owner_id && db.owner_id !== user.userId) {
+    if (!user) return null;
+
+    if (user.role === 'super_admin' || user.role === 'admin') {
+      return db;
+    }
+
+    const memberRole = databaseMembersService.getUserDatabaseRole(databaseId, user.userId, user.role);
+    if (!memberRole) {
       reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied: database belongs to another user' } });
       return null;
     }
+
+    // Role hierarchy: owner > admin > editor > viewer
+    const ranks: Record<MemberRole, number> = { viewer: 1, editor: 2, admin: 3, owner: 4 };
+    if (ranks[memberRole] < ranks[minRole]) {
+      reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: `Access denied: requires at least ${minRole} permissions` } });
+      return null;
+    }
+
     return db;
   };
 
@@ -103,7 +119,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.patch('/databases/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const db = requireDatabaseAccess(req, reply, id);
+    const db = requireDatabaseAccess(req, reply, id, 'admin');
     if (!db) return;
 
     const Schema = z.object({
@@ -128,7 +144,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete('/databases/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const db = requireDatabaseAccess(req, reply, id);
+    const db = requireDatabaseAccess(req, reply, id, 'owner');
     if (!db) return;
 
     databaseService.deleteDatabase(id);
@@ -146,7 +162,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/databases/:id/clone', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const db = requireDatabaseAccess(req, reply, id);
+    const db = requireDatabaseAccess(req, reply, id, 'admin');
     if (!db) return;
 
     const Schema = z.object({
@@ -232,6 +248,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Admin Table Browser rows
   fastify.get('/databases/:id/tables/:table/rows', async (req, reply) => {
     const { id, table } = req.params as { id: string; table: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'viewer');
+    if (!dbRecord) return;
     const query = req.query as any;
 
     const limit = Math.min(Math.max(parseInt(query.limit || '100', 10), 1), 1000);
@@ -260,6 +278,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Admin Insert Row
   fastify.post('/databases/:id/tables/:table/rows', async (req, reply) => {
     const { id, table } = req.params as { id: string; table: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'editor');
+    if (!dbRecord) return;
     const schema = dbManager.getSchema(id);
     const tableExists = schema.some(t => t.name === table);
     if (!tableExists) {
@@ -316,6 +336,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Admin Update Row
   fastify.put('/databases/:id/tables/:table/rows', async (req, reply) => {
     const { id, table } = req.params as { id: string; table: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'editor');
+    if (!dbRecord) return;
     const Schema = z.object({
       pkCol: z.string(),
       pkVal: z.any(),
@@ -370,6 +392,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Admin Bulk Delete Rows
   fastify.post('/databases/:id/tables/:table/delete-bulk', async (req, reply) => {
     const { id, table } = req.params as { id: string; table: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'editor');
+    if (!dbRecord) return;
     const Schema = z.object({
       pkCol: z.string(),
       pkValues: z.array(z.any()).min(1),
@@ -417,6 +441,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Admin Rename Table
   fastify.post('/databases/:id/tables/:table/rename', async (req, reply) => {
     const { id, table } = req.params as { id: string; table: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
+    if (!dbRecord) return;
     const Schema = z.object({ newName: z.string().min(1).max(100) });
     const parsed = Schema.safeParse(req.body);
     if (!parsed.success) {
@@ -457,6 +483,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Admin Truncate Table
   fastify.post('/databases/:id/tables/:table/truncate', async (req, reply) => {
     const { id, table } = req.params as { id: string; table: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'editor');
+    if (!dbRecord) return;
     const sql = `DELETE FROM "${table}"`;
     try {
       const startTime = performance.now();
@@ -500,6 +528,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Admin Drop Table
   fastify.delete('/databases/:id/tables/:table', async (req, reply) => {
     const { id, table } = req.params as { id: string; table: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
+    if (!dbRecord) return;
     const sql = `DROP TABLE IF EXISTS "${table}"`;
     try {
       dbManager.executeMultiStatements(id, sql);
@@ -533,6 +563,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Admin SQL Query console
   fastify.post('/databases/:id/query', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'viewer');
+    if (!dbRecord) return;
     const Schema = z.object({
       sql: z.string().min(1),
       params: z.union([z.array(z.any()), z.record(z.any())]).optional(),
@@ -544,6 +576,21 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         success: false,
         error: { code: 'INVALID_QUERY', message: 'SQL query string required' },
       });
+    }
+
+    // Role enforcement: viewer can only run SELECT statements
+    const user = req.adminUser!;
+    if (user.role !== 'super_admin' && user.role !== 'admin') {
+      const memberRole = databaseMembersService.getUserDatabaseRole(id, user.userId, user.role);
+      if (memberRole === 'viewer') {
+        const cleanSql = parsed.data.sql.trim().toUpperCase();
+        if (!cleanSql.startsWith('SELECT') && !cleanSql.startsWith('WITH') && !cleanSql.startsWith('EXPLAIN')) {
+          return reply.status(403).send({
+            success: false,
+            error: { code: 'FORBIDDEN', message: 'Viewer role can only execute read-only queries (SELECT)' },
+          });
+        }
+      }
     }
 
     const startTime = performance.now();
@@ -582,6 +629,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Multi-statement raw script execution
   fastify.post('/databases/:id/exec', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'editor');
+    if (!dbRecord) return;
     const Schema = z.object({
       sql: z.string().min(1),
     });
@@ -637,6 +686,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Maintenance operations
   fastify.post('/databases/:id/maintenance', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
+    if (!dbRecord) return;
     const Schema = z.object({
       action: z.enum(['quick_check', 'integrity_check', 'optimize', 'wal_checkpoint', 'vacuum', 'analyze', 'reindex']),
     });
@@ -687,6 +738,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Query Profiler & EXPLAIN QUERY PLAN
   fastify.post('/databases/:id/explain', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'viewer');
+    if (!dbRecord) return;
     const Schema = z.object({
       sql: z.string().min(1),
     });
@@ -707,12 +760,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Tokens management
   fastify.get('/databases/:id/tokens', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
+    if (!dbRecord) return;
     const tokens = tokenService.listTokens(id);
     return reply.send({ success: true, data: tokens });
   });
 
   fastify.post('/databases/:id/tokens', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
+    if (!dbRecord) return;
     const Schema = z.object({
       name: z.string().min(1).max(100),
       description: z.string().max(500).optional().nullable(),
@@ -761,6 +818,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/tokens/:tokenId/revoke', async (req, reply) => {
     const { tokenId } = req.params as { tokenId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const tokenRow = metaDb.prepare('SELECT database_id FROM api_tokens WHERE id = ?').get(tokenId) as { database_id: string } | undefined;
+    if (!tokenRow) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Token not found' } });
+    }
+    const dbRecord = requireDatabaseAccess(req, reply, tokenRow.database_id, 'admin');
+    if (!dbRecord) return;
+
     tokenService.revokeToken(tokenId);
     activityService.recordAudit({
       user: req.adminUser!.username,
@@ -774,6 +839,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete('/tokens/:tokenId', async (req, reply) => {
     const { tokenId } = req.params as { tokenId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const tokenRow = metaDb.prepare('SELECT database_id FROM api_tokens WHERE id = ?').get(tokenId) as { database_id: string } | undefined;
+    if (!tokenRow) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Token not found' } });
+    }
+    const dbRecord = requireDatabaseAccess(req, reply, tokenRow.database_id, 'admin');
+    if (!dbRecord) return;
+
     tokenService.deleteToken(tokenId);
     activityService.recordAudit({
       user: req.adminUser!.username,
@@ -788,12 +861,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Backups management
   fastify.get('/databases/:id/backups', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'viewer');
+    if (!dbRecord) return;
     const list = backupService.listBackups(id);
     return reply.send({ success: true, data: list });
   });
 
   fastify.post('/databases/:id/backups', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
+    if (!dbRecord) return;
     const backup = backupService.createBackup(id, 'manual');
     activityService.recordAudit({
       user: req.adminUser!.username,
@@ -808,6 +885,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/databases/:id/backups/:backupId/restore', async (req, reply) => {
     const { id, backupId } = req.params as { id: string; backupId: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
+    if (!dbRecord) return;
     backupService.restoreBackup(id, backupId);
     activityService.recordAudit({
       user: req.adminUser!.username,
@@ -822,12 +901,15 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/backups/:backupId/download', async (req, reply) => {
     const { backupId } = req.params as { backupId: string };
-    const raw = (req.query as any)?.raw === 'true';
     const backup = backupService.getBackup(backupId);
     if (!backup) {
       return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Backup not found' } });
     }
 
+    const dbRecord = requireDatabaseAccess(req, reply, backup.database_id, 'admin');
+    if (!dbRecord) return;
+
+    const raw = (req.query as any)?.raw === 'true';
     const filePath = path.resolve(config.backupsDir, backup.database_id, backup.filename);
     if (!fs.existsSync(filePath)) {
       return reply.status(404).send({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'Backup file missing on disk' } });
@@ -858,6 +940,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete('/backups/:backupId', async (req, reply) => {
     const { backupId } = req.params as { backupId: string };
+    const backup = backupService.getBackup(backupId);
+    if (!backup) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Backup not found' } });
+    }
+
+    const dbRecord = requireDatabaseAccess(req, reply, backup.database_id, 'admin');
+    if (!dbRecord) return;
+
     try {
       backupService.deleteBackup(backupId);
       return reply.send({ success: true });
@@ -869,8 +959,18 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Activity & Audit logs
   fastify.get('/activity', async (req, reply) => {
     const query = req.query as any;
+    const user = req.adminUser!;
+    let allowedDatabaseIds: string[] | undefined = undefined;
+
+    // Regular users can only see activity for databases they own or are invited to
+    if (user.role !== 'super_admin' && user.role !== 'admin') {
+      const userDatabases = databaseService.listDatabases(user.userId, user.role);
+      allowedDatabaseIds = userDatabases.map(d => d.id);
+    }
+
     const res = activityService.listActivity({
       databaseId: query.databaseId,
+      allowedDatabaseIds,
       tokenId: query.tokenId,
       status: query.status,
       limit: query.limit ? parseInt(query.limit, 10) : 50,
@@ -879,7 +979,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true, data: { items: res.items, total: res.total } });
   });
 
-  fastify.get('/audit', async (req, reply) => {
+  fastify.get('/audit', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
     const query = req.query as any;
     const res = activityService.listAuditLogs(
       query.limit ? parseInt(query.limit, 10) : 50,
@@ -891,12 +991,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Admin Files API
   fastify.get('/databases/:id/files', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'viewer');
+    if (!dbRecord) return;
     const files = storageService.listFiles(id);
     return reply.send({ success: true, data: files });
   });
 
   fastify.post('/databases/:id/files', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'editor');
+    if (!dbRecord) return;
     const data = await req.file();
     if (!data) {
       return reply.status(400).send({ success: false, error: { code: 'NO_FILE', message: 'Multipart file field required' } });
@@ -931,6 +1035,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'File not found' } });
     }
 
+    const dbRecord = requireDatabaseAccess(req, reply, file.database_id, 'editor');
+    if (!dbRecord) return;
+
     storageService.deleteFile(fileId);
     activityService.recordAudit({
       user: req.adminUser!.username,
@@ -946,12 +1053,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Webhooks Management
   fastify.get('/databases/:id/webhooks', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'viewer');
+    if (!dbRecord) return;
     const list = webhookService.listWebhooks(id);
     return reply.send({ success: true, data: list });
   });
 
   fastify.post('/databases/:id/webhooks', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
+    if (!dbRecord) return;
     const Schema = z.object({
       name: z.string().min(1).max(100),
       url: z.string().url(),
@@ -986,6 +1097,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete('/webhooks/:webhookId', async (req, reply) => {
     const { webhookId } = req.params as { webhookId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const hook = metaDb.prepare('SELECT database_id FROM webhooks WHERE id = ?').get(webhookId) as { database_id: string } | undefined;
+    if (!hook) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Webhook not found' } });
+    }
+    const dbRecord = requireDatabaseAccess(req, reply, hook.database_id, 'admin');
+    if (!dbRecord) return;
+
     webhookService.deleteWebhook(webhookId);
     activityService.recordAudit({
       user: req.adminUser!.username,
@@ -999,6 +1118,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.patch('/webhooks/:webhookId/toggle', async (req, reply) => {
     const { webhookId } = req.params as { webhookId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const hook = metaDb.prepare('SELECT database_id FROM webhooks WHERE id = ?').get(webhookId) as { database_id: string } | undefined;
+    if (!hook) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Webhook not found' } });
+    }
+    const dbRecord = requireDatabaseAccess(req, reply, hook.database_id, 'admin');
+    if (!dbRecord) return;
+
     const Schema = z.object({ active: z.boolean() });
     const parsed = Schema.safeParse(req.body);
     if (!parsed.success) {
@@ -1016,6 +1143,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!hook) {
       return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Webhook not found' } });
     }
+
+    const dbRecord = requireDatabaseAccess(req, reply, hook.database_id, 'admin');
+    if (!dbRecord) return;
 
     try {
       await webhookService.dispatch({
@@ -1041,6 +1171,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Export Data (SQL, CSV, JSON)
   fastify.get('/databases/:id/export', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'viewer');
+    if (!dbRecord) return;
     const query = req.query as { format?: string; table?: string };
     const format = query.format || 'sql';
     const targetTable = query.table;
@@ -1143,7 +1275,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Import Data (.sql, .sqlite/.db, .csv, .json, .ndjson, .dump) with Multi-Dialect Auto Translation
   fastify.post('/databases/:id/import', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const dbRecord = requireDatabaseAccess(req, reply, id);
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
     if (!dbRecord) return;
 
     const data = await req.file();
@@ -1646,5 +1778,147 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     const result = await jobSchedulerService.runJob(job);
     return reply.send({ success: result.success, error: result.error });
+  });
+
+  // Database Membership & Collaboration Endpoints
+  fastify.get('/databases/:id/members', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const db = requireDatabaseAccess(req, reply, id, 'viewer');
+    if (!db) return;
+
+    const data = databaseMembersService.listMembers(id);
+    return reply.send({ success: true, data });
+  });
+
+  fastify.post('/databases/:id/members', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const db = requireDatabaseAccess(req, reply, id, 'admin');
+    if (!db) return;
+
+    const Schema = z.object({
+      emailOrUsername: z.string().min(1),
+      role: z.enum(['admin', 'editor', 'viewer']).default('viewer'),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid member parameters' },
+      });
+    }
+
+    try {
+      const result = databaseMembersService.inviteMember(
+        id,
+        parsed.data.emailOrUsername,
+        parsed.data.role as any,
+        req.adminUser!.username
+      );
+
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'database.member_invite',
+        resource: id,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ target: parsed.data.emailOrUsername, role: parsed.data.role }),
+      });
+
+      return reply.status(201).send({ success: true, data: result.record, type: result.type });
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: { code: 'INVITE_ERROR', message: err.message } });
+    }
+  });
+
+  fastify.delete('/databases/:id/members/:memberOrUserId', async (req, reply) => {
+    const { id, memberOrUserId } = req.params as { id: string; memberOrUserId: string };
+    const db = requireDatabaseAccess(req, reply, id, 'admin');
+    if (!db) return;
+
+    databaseMembersService.removeMember(id, memberOrUserId);
+
+    activityService.recordAudit({
+      user: req.adminUser!.username,
+      action: 'database.member_remove',
+      resource: id,
+      result: 'success',
+      requestId: req.id,
+      details: JSON.stringify({ memberOrUserId }),
+    });
+
+    return reply.send({ success: true });
+  });
+
+  fastify.delete('/databases/:id/invites/:inviteId', async (req, reply) => {
+    const { id, inviteId } = req.params as { id: string; inviteId: string };
+    const db = requireDatabaseAccess(req, reply, id, 'admin');
+    if (!db) return;
+
+    const ok = databaseMembersService.revokeInvite(id, inviteId);
+    if (!ok) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Invite not found in this database' } });
+    }
+    return reply.send({ success: true });
+  });
+
+  // Dedicated User Dashboard Stats Endpoint
+  fastify.get('/user/dashboard', async (req, reply) => {
+    const user = req.adminUser!;
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+
+    // 1. Database counts
+    const ownedRow = metaDb.prepare('SELECT COUNT(*) as count FROM databases WHERE owner_id = ?').get(user.userId) as { count: number };
+    const sharedRow = metaDb.prepare('SELECT COUNT(*) as count FROM database_members WHERE user_id = ?').get(user.userId) as { count: number };
+
+    // 2. User info
+    const fullUser = authService.getUserById(user.userId);
+    const maxDatabases = fullUser?.max_databases ?? 5;
+
+    // 3. Total storage of user databases
+    const userDbs = databaseService.listDatabases(user.userId, user.role);
+    let storageUsedBytes = 0;
+    for (const d of userDbs) {
+      if (d.owner_id === user.userId) {
+        try {
+          const stats = databaseService.getDatabaseStorageStats(d.id);
+          storageUsedBytes += stats.totalSizeBytes;
+        } catch {}
+      }
+    }
+
+    // 4. User API tokens count
+    const tokensCountRow = metaDb.prepare(`
+      SELECT COUNT(*) as count
+      FROM api_tokens t
+      JOIN databases d ON t.database_id = d.id
+      WHERE (d.owner_id = ? OR d.id IN (SELECT database_id FROM database_members WHERE user_id = ?))
+        AND t.revoked_at IS NULL
+    `).get(user.userId, user.userId) as { count: number };
+
+    // 5. Recent Activity Logs for user databases
+    const recentActivity = metaDb.prepare(`
+      SELECT a.*
+      FROM activity_logs a
+      WHERE a.database_id IN (
+        SELECT id FROM databases WHERE owner_id = ?
+        UNION
+        SELECT database_id FROM database_members WHERE user_id = ?
+      )
+      ORDER BY a.timestamp DESC
+      LIMIT 10
+    `).all(user.userId, user.userId) as any[];
+
+    return reply.send({
+      success: true,
+      data: {
+        databasesCount: ownedRow?.count || 0,
+        maxDatabases,
+        sharedDatabasesCount: sharedRow?.count || 0,
+        storageUsedBytes,
+        activeTokensCount: tokensCountRow?.count || 0,
+        recentActivity,
+      },
+    });
   });
 };

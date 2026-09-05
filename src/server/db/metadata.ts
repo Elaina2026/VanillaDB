@@ -247,6 +247,48 @@ function runMigrations(db: DatabaseSync): void {
         CREATE INDEX IF NOT EXISTS idx_webauthn_user ON webauthn_credentials(user_id);
         CREATE INDEX IF NOT EXISTS idx_webauthn_cred ON webauthn_credentials(credential_id);
       `
+    },
+    {
+      version: 10,
+      name: 'add_user_profile_2fa_and_db_members',
+      sql: `
+        ALTER TABLE users ADD COLUMN email TEXT;
+        ALTER TABLE users ADD COLUMN avatar_url TEXT;
+        ALTER TABLE users ADD COLUMN totp_secret TEXT;
+        ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE users ADD COLUMN totp_temp_secret TEXT;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL;
+
+        CREATE TABLE IF NOT EXISTS database_members (
+          id TEXT PRIMARY KEY,
+          database_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'viewer',
+          invited_by TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          FOREIGN KEY (database_id) REFERENCES databases(id) ON DELETE CASCADE,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          UNIQUE(database_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_db_members_user ON database_members(user_id);
+        CREATE INDEX IF NOT EXISTS idx_db_members_db ON database_members(database_id);
+
+        CREATE TABLE IF NOT EXISTS database_invites (
+          id TEXT PRIMARY KEY,
+          database_id TEXT NOT NULL,
+          email TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'viewer',
+          invited_by TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          created_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          FOREIGN KEY (database_id) REFERENCES databases(id) ON DELETE CASCADE,
+          UNIQUE(database_id, email)
+        );
+        CREATE INDEX IF NOT EXISTS idx_db_invites_email ON database_invites(email);
+        CREATE INDEX IF NOT EXISTS idx_db_invites_db ON database_invites(database_id);
+      `
     }
   ];
 

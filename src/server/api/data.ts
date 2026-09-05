@@ -60,6 +60,7 @@ export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, fileP
     reply.header('Content-Length', fileSize);
     reply.header('Content-Type', mimeType);
     reply.header('Accept-Ranges', 'bytes');
+    reply.header('X-Content-Type-Options', 'nosniff');
 
     if (fileBuffer) {
       return reply.send(fileBuffer);

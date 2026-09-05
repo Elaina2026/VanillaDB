@@ -1,6 +1,7 @@
 import React, { useState, useId } from 'react';
 import type { SystemStatus } from '@shared/index.js';
 import { formatBytes } from '../lib/utils.js';
+import { useI18n } from '../hooks/useI18n.js';
 
 export type TimeRange = '10m' | '1h' | '24h';
 
@@ -59,6 +60,7 @@ function generateSeries(timeRange: TimeRange, status?: SystemStatus): SeriesPoin
 /* 1. Network In/Out Area Chart                                               */
 /* -------------------------------------------------------------------------- */
 export const NetworkChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus }> = ({ timeRange, status }) => {
+  const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const data = generateSeries(timeRange, status);
   const chartId = useId().replace(/:/g, '');
@@ -89,14 +91,14 @@ export const NetworkChart: React.FC<{ timeRange: TimeRange; status?: SystemStatu
         <div className="flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
-            <span className="text-muted-foreground font-medium">In:</span>
+            <span className="text-muted-foreground font-medium">{t('telemetry.in', 'In')}:</span>
             <span className="font-mono font-bold text-foreground">
               {hoveredData ? formatSpeed(hoveredData.netInKB) : formatSpeed(data[data.length - 1].netInKB)}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" />
-            <span className="text-muted-foreground font-medium">Out:</span>
+            <span className="text-muted-foreground font-medium">{t('telemetry.out', 'Out')}:</span>
             <span className="font-mono font-bold text-foreground">
               {hoveredData ? formatSpeed(hoveredData.netOutKB) : formatSpeed(data[data.length - 1].netOutKB)}
             </span>
@@ -192,6 +194,7 @@ export const NetworkChart: React.FC<{ timeRange: TimeRange; status?: SystemStatu
 /* 2. Realtime CPU & RAM Dual Area Trend Chart (%)                             */
 /* -------------------------------------------------------------------------- */
 export const CpuRamChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus }> = ({ timeRange, status }) => {
+  const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const data = generateSeries(timeRange, status);
   const chartId = useId().replace(/:/g, '');
@@ -305,10 +308,10 @@ export const CpuRamChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus
           >
             <div className="text-[10px] text-muted-foreground font-mono">{hoveredData.label}</div>
             <div className="flex items-center justify-between gap-3 text-indigo-500 font-mono font-semibold">
-              <span>CPU Load:</span> <span>{hoveredData.cpu}%</span>
+              <span>{t('telemetry.cpuLoad', 'CPU Load')}:</span> <span>{hoveredData.cpu}%</span>
             </div>
             <div className="flex items-center justify-between gap-3 text-amber-500 font-mono font-semibold">
-              <span>RAM Used:</span> <span>{hoveredData.ram}%</span>
+              <span>{t('telemetry.ramUsed', 'RAM Used')}:</span> <span>{hoveredData.ram}%</span>
             </div>
           </div>
         )}
@@ -321,6 +324,7 @@ export const CpuRamChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus
 /* 3. Storage Breakdown Chart                                                 */
 /* -------------------------------------------------------------------------- */
 export const StorageBreakdownChart: React.FC<{ status?: SystemStatus }> = ({ status }) => {
+  const { t } = useI18n();
   const [hoverSegment, setHoverSegment] = useState<string | null>(null);
 
   const dbBytes = status?.totalDatabaseStorageBytes ?? 0;
@@ -332,10 +336,10 @@ export const StorageBreakdownChart: React.FC<{ status?: SystemStatus }> = ({ sta
   const total = pureDbBytes + walBytes + mediaBytes + backupBytes;
 
   const segments = [
-    { id: 'databases', name: 'Databases', bytes: pureDbBytes, color: '#3b82f6' },
-    { id: 'wal', name: 'WAL Files', bytes: walBytes, color: '#06b6d4' },
-    { id: 'media', name: 'Media Files', bytes: mediaBytes, color: '#10b981' },
-    { id: 'backups', name: 'Backups', bytes: backupBytes, color: '#a855f7' },
+    { id: 'databases', name: t('telemetry.databases', 'Databases'), bytes: pureDbBytes, color: '#3b82f6' },
+    { id: 'wal', name: t('telemetry.walFiles', 'WAL Files'), bytes: walBytes, color: '#06b6d4' },
+    { id: 'media', name: t('telemetry.mediaFiles', 'Media Files'), bytes: mediaBytes, color: '#10b981' },
+    { id: 'backups', name: t('telemetry.backups', 'Backups'), bytes: backupBytes, color: '#a855f7' },
   ];
 
   const cx = 100;
@@ -400,7 +404,7 @@ export const StorageBreakdownChart: React.FC<{ status?: SystemStatus }> = ({ sta
 
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
-            {activeSeg ? activeSeg.name : 'Total Storage'}
+            {activeSeg ? activeSeg.name : t('telemetry.totalStorage', 'Total Storage')}
           </span>
           <span className="text-sm font-bold text-foreground font-mono">
             {activeSeg ? formatBytes(activeSeg.bytes) : formatBytes(total)}
@@ -445,6 +449,7 @@ export const StorageBreakdownChart: React.FC<{ status?: SystemStatus }> = ({ sta
 /* 4. Request Volume & Error Rate Timeline                                    */
 /* -------------------------------------------------------------------------- */
 export const RequestVolumeChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus }> = ({ timeRange, status }) => {
+  const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const data = generateSeries(timeRange, status);
 
@@ -470,14 +475,14 @@ export const RequestVolumeChart: React.FC<{ timeRange: TimeRange; status?: Syste
         <div className="flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" />
-            <span className="text-muted-foreground font-medium font-medium">QPS:</span>
+            <span className="text-muted-foreground font-medium">{t('telemetry.qps', 'QPS')}:</span>
             <span className="font-mono font-bold text-foreground">
               {hoveredData ? hoveredData.qps : data[data.length - 1].qps} req/s
             </span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" />
-            <span className="text-muted-foreground font-medium font-medium">Error Rate:</span>
+            <span className="text-muted-foreground font-medium">{t('telemetry.errorRate', 'Error Rate')}:</span>
             <span className="font-mono font-bold text-red-500">
               {hoveredData ? `${hoveredData.errorRate}%` : `${data[data.length - 1].errorRate}%`}
             </span>
@@ -564,10 +569,10 @@ export const RequestVolumeChart: React.FC<{ timeRange: TimeRange; status?: Syste
           >
             <div className="text-[10px] text-muted-foreground font-mono">{hoveredData.label}</div>
             <div className="flex items-center justify-between gap-3 text-blue-500 font-mono font-semibold">
-              <span>QPS:</span> <span>{hoveredData.qps} req/s</span>
+              <span>{t('telemetry.qps', 'QPS')}:</span> <span>{hoveredData.qps} req/s</span>
             </div>
             <div className="flex items-center justify-between gap-3 text-red-500 font-mono font-semibold">
-              <span>Error Rate:</span> <span>{hoveredData.errorRate}%</span>
+              <span>{t('telemetry.errorRate', 'Error Rate')}:</span> <span>{hoveredData.errorRate}%</span>
             </div>
           </div>
         )}
@@ -707,6 +712,7 @@ export const DatabaseOperationsTimelineChart: React.FC<{
 };
 
 export const QueryLatencyChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus }> = ({ timeRange, status }) => {
+  const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const data = generateSeries(timeRange, status);
   const chartId = useId().replace(/:/g, '');
@@ -736,14 +742,14 @@ export const QueryLatencyChart: React.FC<{ timeRange: TimeRange; status?: System
         <div className="flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 inline-block" />
-            <span className="text-muted-foreground font-medium">Avg Latency:</span>
+            <span className="text-muted-foreground font-medium">{t('telemetry.avgLatency', 'Avg Latency')}:</span>
             <span className="font-mono font-bold text-foreground">
               {hoveredData ? `${hoveredData.avgMs} ms` : `${data[data.length - 1].avgMs} ms`}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block" />
-            <span className="text-muted-foreground font-medium">P95 Latency:</span>
+            <span className="text-muted-foreground font-medium">{t('telemetry.p95Latency', 'P95 Latency')}:</span>
             <span className="font-mono font-bold text-purple-500">
               {hoveredData ? `${hoveredData.p95Ms} ms` : `${data[data.length - 1].p95Ms} ms`}
             </span>
