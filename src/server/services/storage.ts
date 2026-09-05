@@ -11,6 +11,9 @@ import type { FileRecord } from '../../../shared/index.ts';
 
 export class StorageService {
   public getStoragePath(databaseId: string, filename?: string): string {
+    if (!databaseId || typeof databaseId !== 'string') {
+      throw new Error('Database ID is required for storage path');
+    }
     const sanitizedDbId = databaseId.replace(/[^a-zA-Z0-9_-]/g, '');
     const dbDir = path.resolve(config.storageDir, sanitizedDbId);
     const storageRoot = path.resolve(config.storageDir);

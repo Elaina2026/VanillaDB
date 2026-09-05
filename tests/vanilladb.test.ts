@@ -70,6 +70,27 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
         });
       }
 
+      // If still not authenticated (e.g. database initialized by another test runner), guarantee admin_test exists
+      if (loginRes.statusCode !== 200) {
+        const { authService } = await import('../src/server/services/auth.js');
+        const metaDb = (await import('../src/server/db/metadata.js')).getMetadataDb();
+        const existingAdmin = metaDb.prepare("SELECT id FROM users WHERE username = 'admin_test'").get() as any;
+        if (!existingAdmin) {
+          await authService.createAdminUser('admin_test', 'SuperSecretPassword123!', 'super_admin');
+        } else {
+          const hash = await authService.hashPassword('SuperSecretPassword123!');
+          metaDb.prepare("UPDATE users SET password_hash = ?, totp_enabled = 0 WHERE username = 'admin_test'").run(hash);
+        }
+        loginRes = await app.inject({
+          method: 'POST',
+          url: '/api/auth/login',
+          payload: {
+            username: 'admin_test',
+            password: 'SuperSecretPassword123!',
+          },
+        });
+      }
+
       // If account has 2FA enabled, complete step-up challenge using stored secret
       if (loginRes.statusCode === 200 && loginRes.json().data?.require2fa) {
         const { generateTotpCode } = await import('../src/server/utils/totp.js');
