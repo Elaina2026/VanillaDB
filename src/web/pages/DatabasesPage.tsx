@@ -70,7 +70,7 @@ export const DatabasesPage: React.FC<{
           />
         </div>
         <div className="text-xs text-muted-foreground">
-          {filtered.length} {filtered.length === 1 ? 'database' : 'databases'}
+          {filtered.length} {filtered.length === 1 ? t('databases.singular', 'database') : t('databases.plural', 'databases')}
         </div>
       </div>
 
@@ -117,11 +117,11 @@ export const DatabasesPage: React.FC<{
                       {db.owner_username ? (
                         <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.2 bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded font-medium">
                           <User className="w-2.5 h-2.5" />
-                          {db.owner_username === currentUser?.username ? 'You' : db.owner_username}
+                          {db.owner_username === currentUser?.username ? t('common.you', 'You') : db.owner_username}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border rounded font-medium">
-                          System
+                          {t('common.system', 'System')}
                         </span>
                       )}
                     </div>
@@ -131,7 +131,7 @@ export const DatabasesPage: React.FC<{
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-2 min-h-[32px]">
-                  {db.description || 'No description provided.'}
+                  {db.description || t('databases.noDescription', 'No description provided.')}
                 </p>
               </div>
 
@@ -147,12 +147,12 @@ export const DatabasesPage: React.FC<{
                       setDeletingDb(db);
                     }}
                     className="p-1 hover:bg-red-500/10 hover:text-red-500 rounded text-muted-foreground transition-colors"
-                    title="Delete Database"
+                    title={t('databases.deleteDatabase', 'Delete Database')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                   <span className="font-mono text-blue-500 hover:underline flex items-center gap-0.5">
-                    Open <ExternalLink className="w-3 h-3" />
+                    {t('common.open', 'Open')} <ExternalLink className="w-3 h-3" />
                   </span>
                 </div>
               </div>
@@ -168,10 +168,10 @@ export const DatabasesPage: React.FC<{
         onConfirm={() => {
           if (deletingDb) deleteDbMutation.mutate(deletingDb.id);
         }}
-        title={`Delete "${deletingDb?.name}"?`}
-        message="Are you sure you want to delete this database? All data, tables, files, and API tokens will be permanently removed."
-        confirmText="Confirm Delete"
-        cancelText="Cancel"
+        title={`${t('databases.deleteModalTitle', 'Delete Database?')} (${deletingDb?.name})`}
+        message={t('databases.deleteModalMessage', 'Are you sure you want to delete this database? All data, tables, files, and API tokens will be permanently removed.')}
+        confirmText={t('common.delete', 'Delete')}
+        cancelText={t('common.cancel', 'Cancel')}
         variant="danger"
         isLoading={deleteDbMutation.isPending}
       />

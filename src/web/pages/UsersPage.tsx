@@ -139,7 +139,7 @@ export const UsersPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold tracking-tight text-foreground">{t('users.title', 'User Management')}</h1>
             <span className="text-[10px] px-2 py-0.5 bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded font-semibold uppercase tracking-wider">
-              Super Admin Control
+              {t('users.superAdminBadge', 'Super Admin Control')}
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -173,7 +173,7 @@ export const UsersPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between text-muted-foreground mb-1">
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Accounts</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">{t('users.totalAccounts', 'Total Accounts')}</span>
             <Users className="w-4 h-4 text-blue-500" />
           </div>
           <div className="text-2xl font-bold tracking-tight text-foreground">{users.length}</div>
@@ -181,7 +181,7 @@ export const UsersPage: React.FC = () => {
 
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between text-muted-foreground mb-1">
-            <span className="text-xs font-semibold uppercase tracking-wider">Super Admins</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">{t('users.superAdmins', 'Super Admins')}</span>
             <Shield className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="text-2xl font-bold tracking-tight text-foreground">
@@ -191,7 +191,7 @@ export const UsersPage: React.FC = () => {
 
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between text-muted-foreground mb-1">
-            <span className="text-xs font-semibold uppercase tracking-wider">Standard Users</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">{t('users.standardUsers', 'Standard Users')}</span>
             <Key className="w-4 h-4 text-purple-500" />
           </div>
           <div className="text-2xl font-bold tracking-tight text-foreground">
@@ -207,7 +207,7 @@ export const UsersPage: React.FC = () => {
           <Search className="w-4 h-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search users by username or role..."
+            placeholder={t('users.searchPlaceholder', 'Search users by username or role...')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="bg-transparent border-none text-xs text-foreground placeholder:text-muted-foreground focus:outline-none w-full"
@@ -219,20 +219,20 @@ export const UsersPage: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-border bg-muted/40 text-muted-foreground font-semibold">
-                <th className="py-3 px-4">Username</th>
-                <th className="py-3 px-4">Role</th>
-                <th className="py-3 px-4">DB Quota</th>
-                <th className="py-3 px-4">Rate Limit</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Created At</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3 px-4">{t('users.username', 'Username')}</th>
+                <th className="py-3 px-4">{t('users.role', 'Role')}</th>
+                <th className="py-3 px-4">{t('users.dbQuota', 'DB Quota')}</th>
+                <th className="py-3 px-4">{t('users.rateLimitHeader', 'Rate Limit')}</th>
+                <th className="py-3 px-4">{t('common.status', 'Status')}</th>
+                <th className="py-3 px-4">{t('common.created', 'Created At')}</th>
+                <th className="py-3 px-4 text-right">{t('common.actions', 'Actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-8 text-center text-muted-foreground">
-                    No users matching search criteria.
+                    {t('users.noMatchingUsers', 'No users matching search criteria.')}
                   </td>
                 </tr>
               ) : (
@@ -243,7 +243,7 @@ export const UsersPage: React.FC = () => {
                         {u.username}
                         {u.username === currentUser?.username && (
                           <span className="text-[10px] px-1.5 py-0.2 bg-blue-500/10 text-blue-500 rounded font-normal">
-                            You
+                            {t('common.you', 'You')}
                           </span>
                         )}
                       </div>
@@ -264,30 +264,30 @@ export const UsersPage: React.FC = () => {
 
                     <td className="py-3 px-4 font-mono">
                       {u.role === 'super_admin' ? (
-                        <span className="text-emerald-500 font-semibold">Unlimited</span>
+                        <span className="text-emerald-500 font-semibold">{t('users.zeroUnlimited', 'Unlimited')}</span>
                       ) : (
                         <span>
-                          <strong className="text-foreground">{u.database_count ?? 0}</strong> / {u.max_databases} DBs
+                          <strong className="text-foreground">{u.database_count ?? 0}</strong> / {u.max_databases} {t('users.dbsUnit', 'DBs')}
                         </span>
                       )}
                     </td>
 
                     <td className="py-3 px-4 font-mono">
                       {u.rate_limit_per_minute > 0 ? (
-                        <span>{u.rate_limit_per_minute} req/min</span>
+                        <span>{u.rate_limit_per_minute} {t('users.reqPerMinUnit', 'req/min')}</span>
                       ) : (
-                        <span className="text-emerald-500 font-semibold">Unlimited</span>
+                        <span className="text-emerald-500 font-semibold">{t('users.zeroUnlimited', 'Unlimited')}</span>
                       )}
                     </td>
 
                     <td className="py-3 px-4">
                       {u.status === 'active' ? (
                         <span className="inline-flex items-center gap-1 text-emerald-500 font-medium text-[11px]">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Active
+                          <CheckCircle2 className="w-3.5 h-3.5" /> {t('common.active', 'Active')}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-red-500 font-medium text-[11px]">
-                          <XCircle className="w-3.5 h-3.5" /> Disabled
+                          <XCircle className="w-3.5 h-3.5" /> {t('common.disabled', 'Disabled')}
                         </span>
                       )}
                     </td>
@@ -301,7 +301,7 @@ export const UsersPage: React.FC = () => {
                         <button
                           onClick={() => handleOpenEdit(u)}
                           className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors"
-                          title="Edit User"
+                          title={t('users.editUser', 'Edit User')}
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
@@ -309,7 +309,7 @@ export const UsersPage: React.FC = () => {
                           onClick={() => setDeletingUserId(u.id)}
                           disabled={u.id === currentUser?.userId}
                           className="p-1.5 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-500 disabled:opacity-30 transition-colors"
-                          title="Delete User"
+                          title={t('users.deleteUser', 'Delete User')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -330,7 +330,7 @@ export const UsersPage: React.FC = () => {
             <div className="flex items-center justify-between border-b border-border pb-3">
               <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
                 <Users className="w-4 h-4 text-blue-500" />
-                {editingUser ? `Edit User: ${editingUser.username}` : 'Create New Account'}
+                {editingUser ? `${t('users.editUserPrefix', 'Edit User:')} ${editingUser.username}` : t('users.createNewAccount', 'Create New Account')}
               </h2>
               <button
                 onClick={() => {
@@ -351,20 +351,20 @@ export const UsersPage: React.FC = () => {
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block text-muted-foreground font-medium mb-1">Username</label>
+                <label className="block text-muted-foreground font-medium mb-1">{t('users.username', 'Username')}</label>
                 <input
                   type="text"
                   disabled={!!editingUser}
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  placeholder="e.g. developer_sub1"
+                  placeholder={t('users.usernamePlaceholder', 'e.g. developer_sub1')}
                   className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
                 />
               </div>
 
               <div>
                 <label className="block text-muted-foreground font-medium mb-1">
-                  {editingUser ? 'New Password (leave empty to keep current)' : 'Password'}
+                  {editingUser ? t('users.newPasswordHint', 'New Password (leave empty to keep current)') : t('auth.password', 'Password')}
                 </label>
                 <input
                   type="password"
@@ -377,34 +377,34 @@ export const UsersPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-muted-foreground font-medium mb-1">Role</label>
+                  <label className="block text-muted-foreground font-medium mb-1">{t('users.role', 'Role')}</label>
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                     className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   >
-                    <option value="user">User (Standard)</option>
-                    <option value="admin">Admin</option>
-                    <option value="super_admin">Super Admin</option>
+                    <option value="user">{t('users.roleUserStandard', 'User (Standard)')}</option>
+                    <option value="admin">{t('users.roleAdmin', 'Admin')}</option>
+                    <option value="super_admin">{t('users.roleSuperAdmin', 'Super Admin')}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-muted-foreground font-medium mb-1">Account Status</label>
+                  <label className="block text-muted-foreground font-medium mb-1">{t('users.accountStatus', 'Account Status')}</label>
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'disabled' })}
                     className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   >
-                    <option value="active">Active</option>
-                    <option value="disabled">Disabled (Locked)</option>
+                    <option value="active">{t('common.active', 'Active')}</option>
+                    <option value="disabled">{t('users.disabledLocked', 'Disabled (Locked)')}</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-muted-foreground font-medium mb-1">Max DBs Allowed</label>
+                  <label className="block text-muted-foreground font-medium mb-1">{t('users.maxDbsAllowed', 'Max DBs Allowed')}</label>
                   <input
                     type="number"
                     min={0}
@@ -412,11 +412,11 @@ export const UsersPage: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, maxDatabases: parseInt(e.target.value, 10) || 0 })}
                     className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary"
                   />
-                  <span className="text-[10px] text-muted-foreground mt-0.5 block">0 = No limit for admin</span>
+                  <span className="text-[10px] text-muted-foreground mt-0.5 block">{t('users.noLimitAdmin', '0 = No limit for admin')}</span>
                 </div>
 
                 <div>
-                  <label className="block text-muted-foreground font-medium mb-1">Rate Limit (req/min)</label>
+                  <label className="block text-muted-foreground font-medium mb-1">{t('users.rateLimit', 'Rate Limit (req/min)')}</label>
                   <input
                     type="number"
                     min={0}
@@ -424,7 +424,7 @@ export const UsersPage: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, rateLimitPerMinute: parseInt(e.target.value, 10) || 0 })}
                     className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary"
                   />
-                  <span className="text-[10px] text-muted-foreground mt-0.5 block">0 = Unlimited</span>
+                  <span className="text-[10px] text-muted-foreground mt-0.5 block">{t('users.zeroUnlimited', '0 = Unlimited')}</span>
                 </div>
               </div>
             </div>
@@ -437,7 +437,7 @@ export const UsersPage: React.FC = () => {
                 }}
                 className="px-4 py-2 bg-card border border-border hover:bg-accent text-foreground rounded text-xs font-medium"
               >
-                Cancel
+                {t('common.cancel', 'Cancel')}
               </button>
               <button
                 onClick={() => {
@@ -457,7 +457,7 @@ export const UsersPage: React.FC = () => {
                 disabled={createUserMutation.isPending || updateUserMutation.isPending || (!editingUser && (!formData.username || !formData.password))}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-semibold shadow-sm"
               >
-                {createUserMutation.isPending || updateUserMutation.isPending ? 'Saving...' : editingUser ? 'Update User' : 'Create User'}
+                {createUserMutation.isPending || updateUserMutation.isPending ? t('common.saving', 'Saving...') : editingUser ? t('users.updateUserBtn', 'Update User') : t('users.createUserBtn', 'Create User')}
               </button>
             </div>
           </div>
@@ -471,10 +471,10 @@ export const UsersPage: React.FC = () => {
         onConfirm={() => {
           if (deletingUserId) deleteUserMutation.mutate(deletingUserId);
         }}
-        title="Delete Account?"
-        message="Are you sure you want to permanently delete this user account? Their created databases will remain intact but ownership will be detached."
-        confirmText="Confirm Delete"
-        cancelText="Cancel"
+        title={t('users.deleteAccountTitle', 'Delete Account?')}
+        message={t('users.deleteAccountConfirm', 'Are you sure you want to permanently delete this user account? Their created databases will remain intact but ownership will be detached.')}
+        confirmText={t('users.confirmDelete', 'Confirm Delete')}
+        cancelText={t('common.cancel', 'Cancel')}
         variant="danger"
         isLoading={deleteUserMutation.isPending}
       />

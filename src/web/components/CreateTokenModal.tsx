@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Key, Copy, Check, ShieldCheck, AlertCircle } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
+import { useI18n } from '../hooks/useI18n.js';
 import type { TokenPermission } from '@shared/index.js';
 
 export const CreateTokenModal: React.FC<{
@@ -9,6 +10,7 @@ export const CreateTokenModal: React.FC<{
   databaseId: string | null;
   onClose: () => void;
 }> = ({ isOpen, databaseId, onClose }) => {
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [permissions, setPermissions] = useState<TokenPermission[]>(['database:read', 'database:write']);
@@ -260,14 +262,14 @@ export const CreateTokenModal: React.FC<{
                 onClick={handleClose}
                 className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md font-medium text-muted-foreground"
               >
-                Cancel
+                {t('common.cancel', 'Cancel')}
               </button>
               <button
                 type="submit"
                 disabled={createMutation.isPending || !name.trim() || permissions.length === 0}
                 className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md font-semibold transition-colors"
               >
-                {createMutation.isPending ? 'Generating...' : 'Generate Token'}
+                {createMutation.isPending ? t('common.saving', 'Saving...') : t('tokens.createToken', 'Create Token')}
               </button>
             </div>
           </form>

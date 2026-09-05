@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Plus, Trash2, Table } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../api/client.js';
+import { useI18n } from '../hooks/useI18n.js';
 
 interface ColumnDef {
   name: string;
@@ -18,6 +19,7 @@ export const CreateTableModal: React.FC<{
   onClose: () => void;
   onSuccess: (tableName: string) => void;
 }> = ({ isOpen, databaseId, onClose, onSuccess }) => {
+  const { t } = useI18n();
   const [tableName, setTableName] = useState('');
   const [columns, setColumns] = useState<ColumnDef[]>([
     { name: 'id', type: 'INTEGER', pk: true, notnull: true, unique: false, defaultValue: '' },
@@ -41,7 +43,7 @@ export const CreateTableModal: React.FC<{
       onClose();
     },
     onError: (err: any) => {
-      setError(err.message || 'Failed to create table');
+      setError(err.message || t('createTable.errorFailed', 'Failed to create table'));
     },
   });
 
@@ -85,7 +87,7 @@ export const CreateTableModal: React.FC<{
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tableName.trim()) {
-      setError('Table name is required');
+      setError(t('createTable.tableNameRequired', 'Table name is required'));
       return;
     }
     setError(null);
@@ -99,7 +101,7 @@ export const CreateTableModal: React.FC<{
         <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <Table className="w-4 h-4 text-blue-500" />
-            <h2 className="text-sm font-bold">Create Table</h2>
+            <h2 className="text-sm font-bold">{t('schema.createTable', 'Create Table')}</h2>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-accent rounded text-muted-foreground">
             <X className="w-4 h-4" />
@@ -114,7 +116,7 @@ export const CreateTableModal: React.FC<{
           )}
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Table Name</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">{t('db.tableName', 'Table Name')}</label>
             <input
               type="text"
               required
@@ -127,13 +129,13 @@ export const CreateTableModal: React.FC<{
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-medium text-muted-foreground">Columns Definition</label>
+              <label className="block text-xs font-medium text-muted-foreground">{t('createTable.columnsDefinition', 'Columns Definition')}</label>
               <button
                 type="button"
                 onClick={handleAddColumn}
                 className="flex items-center gap-1 text-xs text-blue-500 hover:underline font-medium"
               >
-                <Plus className="w-3 h-3" /> Add Column
+                <Plus className="w-3 h-3" /> {t('createTable.addColumn', 'Add Column')}
               </button>
             </div>
 
@@ -143,7 +145,7 @@ export const CreateTableModal: React.FC<{
                   <input
                     type="text"
                     required
-                    placeholder="column_name"
+                    placeholder={t('createTable.columnNamePlaceholder', 'column_name')}
                     value={col.name}
                     onChange={(e) => handleColumnChange(idx, 'name', e.target.value)}
                     className="flex-1 px-2 py-1 bg-background border border-border rounded font-mono text-xs"
@@ -168,7 +170,7 @@ export const CreateTableModal: React.FC<{
                       onChange={(e) => handleColumnChange(idx, 'pk', e.target.checked)}
                       className="rounded border-border text-blue-600"
                     />
-                    PK
+                    {t('createTable.pk', 'PK')}
                   </label>
 
                   <label className="flex items-center gap-1 cursor-pointer text-[11px]">
@@ -178,7 +180,7 @@ export const CreateTableModal: React.FC<{
                       onChange={(e) => handleColumnChange(idx, 'notnull', e.target.checked)}
                       className="rounded border-border text-blue-600"
                     />
-                    Not Null
+                    {t('createTable.notNull', 'Not Null')}
                   </label>
 
                   <label className="flex items-center gap-1 cursor-pointer text-[11px]">
@@ -188,7 +190,7 @@ export const CreateTableModal: React.FC<{
                       onChange={(e) => handleColumnChange(idx, 'unique', e.target.checked)}
                       className="rounded border-border text-blue-600"
                     />
-                    Unique
+                    {t('createTable.unique', 'Unique')}
                   </label>
 
                   <button
@@ -205,9 +207,9 @@ export const CreateTableModal: React.FC<{
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">SQL Preview</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">{t('createTable.sqlPreview', 'SQL Preview')}</label>
             <pre className="p-3 bg-muted/60 border border-border rounded text-[11px] font-mono text-foreground overflow-x-auto">
-              {tableName.trim() ? generateSql() : '-- Enter table name to see preview'}
+              {tableName.trim() ? generateSql() : t('createTable.previewPlaceholder', '-- Enter table name to see preview')}
             </pre>
           </div>
 
@@ -217,14 +219,14 @@ export const CreateTableModal: React.FC<{
               onClick={onClose}
               className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md font-medium text-muted-foreground"
             >
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </button>
             <button
               type="submit"
               disabled={createTableMutation.isPending || !tableName.trim()}
               className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md font-semibold transition-colors"
             >
-              {createTableMutation.isPending ? 'Creating...' : 'Create Table'}
+              {createTableMutation.isPending ? t('common.creating', 'Creating...') : t('schema.createTable', 'Create Table')}
             </button>
           </div>
         </form>

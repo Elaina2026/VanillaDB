@@ -149,14 +149,14 @@ export const SettingsPage: React.FC = () => {
         body: JSON.stringify(payload),
       }),
     onSuccess: () => {
-      setPasswordStatus({ type: 'success', message: 'Đổi mật khẩu tài khoản thành công!' });
+      setPasswordStatus({ type: 'success', message: t('settings.changePasswordSuccess', 'Password changed successfully!') });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setTimeout(() => setPasswordStatus(null), 4000);
     },
     onError: (err: any) => {
-      setPasswordStatus({ type: 'error', message: err.message || 'Đổi mật khẩu thất bại' });
+      setPasswordStatus({ type: 'error', message: err.message || t('settings.changePasswordFailed', 'Failed to change password') });
     },
   });
 
@@ -168,11 +168,11 @@ export const SettingsPage: React.FC = () => {
       }),
     onSuccess: () => {
       refetchAuthStatus();
-      setProfileStatus('Cập nhật thông tin hồ sơ thành công!');
+      setProfileStatus(t('settings.updateProfileSuccess', 'Profile updated successfully!'));
       setTimeout(() => setProfileStatus(null), 3500);
     },
     onError: (err: any) => {
-      setProfileStatus(`Lỗi: ${err.message || 'Cập nhật thất bại'}`);
+      setProfileStatus(err.message || t('settings.updateProfileFailed', 'Update failed'));
       setTimeout(() => setProfileStatus(null), 4000);
     },
   });
@@ -187,7 +187,7 @@ export const SettingsPage: React.FC = () => {
       setQrCodeData(data);
       setIs2faModalOpen(true);
     } catch (err: any) {
-      alert(err.message || 'Không thể tạo mã 2FA QR');
+      alert(err.message || t('settings.create2faQrFailed', 'Failed to generate 2FA QR code'));
     }
   };
 
@@ -205,7 +205,7 @@ export const SettingsPage: React.FC = () => {
       setGeneratedBackupCodes(codes);
       setIsBackupCodesModalOpen(true);
     } catch (err: any) {
-      setTotpStatus({ type: 'error', message: err.message || 'Kích hoạt 2FA thất bại' });
+      setTotpStatus({ type: 'error', message: err.message || t('settings.activate2faFailed', 'Failed to activate 2FA') });
     }
   };
 
@@ -222,7 +222,7 @@ export const SettingsPage: React.FC = () => {
       setDisableSuccessNotice(true);
       setTimeout(() => setDisableSuccessNotice(false), 5000);
     } catch (err: any) {
-      setTotpStatus({ type: 'error', message: err.message || 'Tắt 2FA thất bại' });
+      setTotpStatus({ type: 'error', message: err.message || t('settings.disable2faFailed', 'Failed to disable 2FA') });
     }
   };
 
@@ -252,7 +252,7 @@ export const SettingsPage: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      alert('Ảnh đại diện không được vượt quá 2MB');
+      alert(t('settings.avatarSizeLimit', 'Avatar image size cannot exceed 2MB'));
       return;
     }
     const reader = new FileReader();
@@ -300,15 +300,15 @@ export const SettingsPage: React.FC = () => {
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPassword) {
-      setPasswordStatus({ type: 'error', message: 'Vui lòng nhập mật khẩu hiện tại' });
+      setPasswordStatus({ type: 'error', message: t('settings.currentPasswordRequired', 'Please enter current password') });
       return;
     }
     if (newPassword.length < 6) {
-      setPasswordStatus({ type: 'error', message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+      setPasswordStatus({ type: 'error', message: t('settings.newPasswordMinLength', 'New password must be at least 6 characters') });
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordStatus({ type: 'error', message: 'Mật khẩu xác nhận không khớp' });
+      setPasswordStatus({ type: 'error', message: t('settings.confirmPasswordMismatch', 'Confirmation password does not match') });
       return;
     }
     setPasswordStatus(null);
@@ -461,8 +461,8 @@ export const SettingsPage: React.FC = () => {
                   onChange={(e) => setLanguage(e.target.value as any)}
                   className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground"
                 >
-                  <option value="vi">Tiếng Việt (Mặc định)</option>
-                  <option value="en">English (US)</option>
+                  <option value="vi">{t('settings.langVi', 'Vietnamese (Tiếng Việt)')}</option>
+                  <option value="en">{t('settings.langEn', 'English (US)')}</option>
                 </select>
                 <p className="text-[10px] text-muted-foreground mt-1">{t('settings.languageDesc', 'Select default management dashboard language.')}</p>
               </div>
@@ -534,10 +534,10 @@ export const SettingsPage: React.FC = () => {
                 onChange={(e) => setForm({ ...form, default_journal_mode: e.target.value })}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground disabled:opacity-50"
               >
-                <option value="wal">WAL (Write-Ahead Logging - Recommended for multi-tenant)</option>
-                <option value="delete">DELETE (Classic rollback)</option>
-                <option value="truncate">TRUNCATE</option>
-                <option value="memory">MEMORY (In-memory journal)</option>
+                <option value="wal">{t('settings.optWal', 'WAL (Write-Ahead Logging - Recommended for multi-tenant)')}</option>
+                <option value="delete">{t('settings.optDelete', 'DELETE (Classic rollback)')}</option>
+                <option value="truncate">{t('settings.optTruncate', 'TRUNCATE')}</option>
+                <option value="memory">{t('settings.optMemory', 'MEMORY (In-memory journal)')}</option>
               </select>
               <span className="text-[10px] text-muted-foreground mt-1 block">
                 {t('settings.journalModeDesc', 'WAL enables concurrent readers while writing.')}
@@ -552,10 +552,10 @@ export const SettingsPage: React.FC = () => {
                 onChange={(e) => setForm({ ...form, default_synchronous: e.target.value })}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground disabled:opacity-50"
               >
-                <option value="normal">NORMAL (Optimal durability with WAL)</option>
-                <option value="full">FULL (Strict sync on each commit)</option>
-                <option value="extra">EXTRA (Super strict with directory sync)</option>
-                <option value="off">OFF (Maximum write throughput, crash risk)</option>
+                <option value="normal">{t('settings.optNormal', 'NORMAL (Optimal durability with WAL)')}</option>
+                <option value="full">{t('settings.optFull', 'FULL (Strict sync on each commit)')}</option>
+                <option value="extra">{t('settings.optExtra', 'EXTRA (Super strict with directory sync)')}</option>
+                <option value="off">{t('settings.optOff', 'OFF (Maximum write throughput, crash risk)')}</option>
               </select>
               <span className="text-[10px] text-muted-foreground mt-1 block">
                 {t('settings.synchronousDesc', 'NORMAL is fast and safe when combined with WAL mode.')}
@@ -600,9 +600,9 @@ export const SettingsPage: React.FC = () => {
                 onChange={(e) => setForm({ ...form, default_auto_vacuum: e.target.value })}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground disabled:opacity-50"
               >
-                <option value="none">NONE (Manual vacuum via maintenance)</option>
-                <option value="incremental">INCREMENTAL (Background partial reclaim)</option>
-                <option value="full">FULL (Reclaim on every delete commit)</option>
+                <option value="none">{t('settings.optVacuumNone', 'NONE (Manual vacuum via maintenance)')}</option>
+                <option value="incremental">{t('settings.optVacuumIncremental', 'INCREMENTAL (Background partial reclaim)')}</option>
+                <option value="full">{t('settings.optVacuumFull', 'FULL (Reclaim on every delete commit)')}</option>
               </select>
             </div>
 
@@ -614,8 +614,8 @@ export const SettingsPage: React.FC = () => {
                 onChange={(e) => setForm({ ...form, default_foreign_keys: e.target.value === 'true' })}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground disabled:opacity-50"
               >
-                <option value="true">Enabled (PRAGMA foreign_keys = ON)</option>
-                <option value="false">Disabled (Ignore foreign key violations)</option>
+                <option value="true">{t('settings.optFkEnabled', 'Enabled (PRAGMA foreign_keys = ON)')}</option>
+                <option value="false">{t('settings.optFkDisabled', 'Disabled (Ignore foreign key violations)')}</option>
               </select>
             </div>
           </div>
@@ -644,12 +644,12 @@ export const SettingsPage: React.FC = () => {
                 onChange={(e) => setForm({ ...form, backup_schedule: e.target.value })}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground disabled:opacity-50"
               >
-                <option value="disabled">Disabled (Manual backups only)</option>
-                <option value="hourly">Every 1 Hour</option>
-                <option value="6hours">Every 6 Hours</option>
-                <option value="12hours">Every 12 Hours</option>
-                <option value="daily">Daily (Every 24h)</option>
-                <option value="weekly">Weekly (Every 7 days)</option>
+                <option value="disabled">{t('settings.optBackupDisabled', 'Disabled (Manual backups only)')}</option>
+                <option value="hourly">{t('settings.optBackupHourly', 'Every 1 Hour')}</option>
+                <option value="6hours">{t('settings.optBackup6Hours', 'Every 6 Hours')}</option>
+                <option value="12hours">{t('settings.optBackup12Hours', 'Every 12 Hours')}</option>
+                <option value="daily">{t('settings.optBackupDaily', 'Daily (Every 24h)')}</option>
+                <option value="weekly">{t('settings.optBackupWeekly', 'Weekly (Every 7 days)')}</option>
               </select>
               <span className="text-[10px] text-muted-foreground mt-1 block">
                 {t('settings.backupScheduleDesc', 'Automatic atomic VACUUM INTO snapshots created in background.')}
@@ -845,11 +845,11 @@ export const SettingsPage: React.FC = () => {
                   onChange={(e) => setForm({ ...form, log_level: e.target.value as any })}
                   className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground disabled:opacity-50"
                 >
-                  <option value="trace">TRACE (Deepest internal trace)</option>
-                  <option value="debug">DEBUG (Detailed debug statements)</option>
-                  <option value="info">INFO (Standard production info)</option>
-                  <option value="warn">WARN (Warnings & Anomalies)</option>
-                  <option value="error">ERROR (Failures & Errors only)</option>
+                  <option value="trace">{t('settings.optLogTrace', 'TRACE (Deepest internal trace)')}</option>
+                  <option value="debug">{t('settings.optLogDebug', 'DEBUG (Detailed debug statements)')}</option>
+                  <option value="info">{t('settings.optLogInfo', 'INFO (Standard production info)')}</option>
+                  <option value="warn">{t('settings.optLogWarn', 'WARN (Warnings & Anomalies)')}</option>
+                  <option value="error">{t('settings.optLogError', 'ERROR (Failures & Errors only)')}</option>
                 </select>
                 <span className="text-[10px] text-muted-foreground mt-1 block">
                   {t('settings.logLevelDesc', 'Takes effect dynamically without restarting server.')}
@@ -864,8 +864,8 @@ export const SettingsPage: React.FC = () => {
                   onChange={(e) => setForm({ ...form, enable_cors_all: e.target.value === 'all' })}
                   className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground disabled:opacity-50"
                 >
-                  <option value="all">Allow Any Origin (* - Debug / Development)</option>
-                  <option value="restricted">Strict Origin Check (Production Safe)</option>
+                  <option value="all">{t('settings.optCorsAll', 'Allow Any Origin (* - Debug / Development)')}</option>
+                  <option value="restricted">{t('settings.optCorsStrict', 'Strict Origin Check (Production Safe)')}</option>
                 </select>
                 <span className="text-[10px] text-muted-foreground mt-1 block">
                   {t('settings.corsDesc', 'Allow browser clients from any domain to connect during testing.')}
@@ -1018,7 +1018,7 @@ export const SettingsPage: React.FC = () => {
                 </div>
                 <label className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 rounded-full flex flex-col items-center justify-center text-[9px] font-semibold cursor-pointer transition-opacity">
                   <UploadCloud className="w-4 h-4 mb-0.5" />
-                  <span>Đổi ảnh</span>
+                  <span>{t('settings.changeAvatar', 'Change avatar')}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={handleAvatarFile} />
                 </label>
               </div>
@@ -1041,7 +1041,7 @@ export const SettingsPage: React.FC = () => {
                     onClick={() => updateProfileMutation.mutate({ email: profileEmail || undefined, avatar_url: profileAvatar || undefined })}
                     className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-colors cursor-pointer"
                   >
-                    {updateProfileMutation.isPending ? 'Đang lưu...' : 'Lưu hồ sơ & Avatar'}
+                    {updateProfileMutation.isPending ? t('common.saving', 'Saving...') : t('settings.saveProfileAndAvatar', 'Save Profile & Avatar')}
                   </button>
                   {profileAvatar && (
                     <button
@@ -1049,7 +1049,7 @@ export const SettingsPage: React.FC = () => {
                       onClick={() => setProfileAvatar('')}
                       className="px-2.5 py-1.5 text-xs text-muted-foreground hover:text-red-500 border border-border rounded hover:bg-red-500/10 transition-colors"
                     >
-                      Gỡ avatar
+                      {t('settings.removeAvatar', 'Remove avatar')}
                     </button>
                   )}
                 </div>
@@ -1080,10 +1080,10 @@ export const SettingsPage: React.FC = () => {
               <div>
                 <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                  Xác thực 2 bước (2FA - Google Authenticator / Authy)
+                  {t('settings.twoFactorTitle', 'Two-Factor Authentication (2FA - Google Authenticator / Authy)')}
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Bảo vệ tài khoản bằng mã xác thực 6 chữ số biến đổi mỗi 30 giây khi đăng nhập.
+                  {t('settings.twoFactorDesc', 'Protect your account with a 6-digit dynamic code changing every 30 seconds upon login.')}
                 </p>
               </div>
 
@@ -1092,7 +1092,7 @@ export const SettingsPage: React.FC = () => {
                   onClick={() => setIsDisable2faModalOpen(true)}
                   className="px-3 py-1.5 bg-red-600/10 hover:bg-red-600/20 text-red-500 border border-red-500/20 rounded text-xs font-semibold shadow-sm transition-colors cursor-pointer"
                 >
-                  Tắt 2FA
+                  {t('settings.disable2fa', 'Disable 2FA')}
                 </button>
               ) : (
                 <button
@@ -1100,23 +1100,23 @@ export const SettingsPage: React.FC = () => {
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <QrCode className="w-3.5 h-3.5" />
-                  Kích hoạt 2FA
+                  {t('settings.enable2fa', 'Enable 2FA')}
                 </button>
               )}
             </div>
 
             <div className="flex items-center gap-3 text-xs">
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Trạng thái:</span>
+                <span className="text-muted-foreground">{t('settings.statusLabel', 'Status:')}</span>
                 {currentUser?.totp_enabled ? (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                     <Check className="w-3 h-3" />
-                    Đang hoạt động (Được bảo vệ)
+                    {t('settings.twoFactorActive', 'Active (Protected)')}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground border border-border">
                     <X className="w-3 h-3" />
-                    Chưa kích hoạt
+                    {t('settings.twoFactorInactive', 'Inactive')}
                   </span>
                 )}
               </div>
@@ -1197,13 +1197,14 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           {/* Modal Kích Hoạt 2FA (Bắt buộc quét QR + Nhập mật khẩu + Nhập OTP) */}
+          {/* Modal Kích hoạt 2FA */}
           {is2faModalOpen && qrCodeData && (
             <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150">
                 <div className="flex items-center justify-between border-b border-border pb-3">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-5 h-5 text-blue-500" />
-                    <h3 className="text-sm font-bold text-foreground">Kích hoạt Google Authenticator / Authy</h3>
+                    <h3 className="text-sm font-bold text-foreground">{t('settings.activate2faModalTitle', 'Activate Google Authenticator / Authy')}</h3>
                   </div>
                   <button
                     onClick={() => setIs2faModalOpen(false)}
@@ -1221,27 +1222,27 @@ export const SettingsPage: React.FC = () => {
 
                 <div className="flex flex-col items-center justify-center p-3 bg-white rounded-lg border border-border">
                   <img src={qrCodeData.qrDataUrl} alt="2FA QR Code" className="w-44 h-44" />
-                  <p className="text-[10px] text-zinc-500 mt-1 font-mono select-all">Secret: {qrCodeData.secret}</p>
+                  <p className="text-[10px] text-zinc-500 mt-1 font-mono select-all">{t('settings.secretLabel', 'Secret:')} {qrCodeData.secret}</p>
                 </div>
 
                 <form onSubmit={handleActivate2fa} className="space-y-3 text-xs">
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      1. Mật khẩu tài khoản (Bắt buộc xác thực)
+                      {t('settings.stepPassword', '1. Account Password (Required verification)')}
                     </label>
                     <input
                       type="password"
                       required
                       value={totpVerifyPassword}
                       onChange={(e) => setTotpVerifyPassword(e.target.value)}
-                      placeholder="Nhập mật khẩu hiện tại..."
+                      placeholder={t('settings.enterCurrentPasswordPlaceholder', 'Enter current password...')}
                       className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
                     />
                   </div>
 
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      2. Mã 6 chữ số trên ứng dụng Authenticator
+                      {t('settings.stepTotpCode', '2. 6-digit code on Authenticator app')}
                     </label>
                     <input
                       type="text"
@@ -1261,14 +1262,14 @@ export const SettingsPage: React.FC = () => {
                       onClick={() => setIs2faModalOpen(false)}
                       className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded"
                     >
-                      Hủy
+                      {t('common.cancel', 'Cancel')}
                     </button>
                     <button
                       type="submit"
                       disabled={!totpVerifyPassword || totpVerifyCode.length !== 6}
                       className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-semibold"
                     >
-                      Xác nhận & Bật 2FA
+                      {t('settings.confirmAndEnable2fa', 'Confirm & Enable 2FA')}
                     </button>
                   </div>
                 </form>
@@ -1281,7 +1282,7 @@ export const SettingsPage: React.FC = () => {
             <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-sm space-y-4 animate-in zoom-in-95 duration-150">
                 <div className="flex items-center justify-between border-b border-border pb-3">
-                  <h3 className="text-sm font-bold text-foreground">Tắt xác thực 2 bước (2FA)</h3>
+                  <h3 className="text-sm font-bold text-foreground">{t('settings.disable2faModalTitle', 'Disable Two-Factor Authentication (2FA)')}</h3>
                   <button onClick={() => setIsDisable2faModalOpen(false)} className="text-muted-foreground hover:text-foreground">
                     <X className="w-4 h-4" />
                   </button>
@@ -1295,19 +1296,19 @@ export const SettingsPage: React.FC = () => {
 
                 <form onSubmit={handleDisable2fa} className="space-y-3 text-xs">
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Mật khẩu tài khoản</label>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.accountPassword', 'Account password')}</label>
                     <input
                       type="password"
                       required
                       value={totpVerifyPassword}
                       onChange={(e) => setTotpVerifyPassword(e.target.value)}
-                      placeholder="Mật khẩu của bạn..."
+                      placeholder={t('settings.yourPasswordPlaceholder', 'Your password...')}
                       className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Mã 6 chữ số hiện tại</label>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.currentTotpCode', 'Current 6-digit code')}</label>
                     <input
                       type="text"
                       required
@@ -1325,14 +1326,14 @@ export const SettingsPage: React.FC = () => {
                       onClick={() => setIsDisable2faModalOpen(false)}
                       className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded"
                     >
-                      Hủy
+                      {t('common.cancel', 'Cancel')}
                     </button>
                     <button
                       type="submit"
                       disabled={!totpVerifyPassword || totpVerifyCode.length !== 6}
                       className="px-4 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs font-semibold"
                     >
-                      Xác nhận tắt
+                      {t('settings.confirmDisable', 'Confirm Disable')}
                     </button>
                   </div>
                 </form>
@@ -1347,7 +1348,7 @@ export const SettingsPage: React.FC = () => {
                 <div className="flex items-center justify-between border-b border-border pb-3">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                    <h3 className="text-sm font-bold text-foreground">Kích Hoạt 2FA Thành Công!</h3>
+                    <h3 className="text-sm font-bold text-foreground">{t('settings.activate2faSuccessTitle', '2FA Activated Successfully!')}</h3>
                   </div>
                   <button
                     onClick={() => setIsBackupCodesModalOpen(false)}
@@ -1360,10 +1361,10 @@ export const SettingsPage: React.FC = () => {
                 <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs rounded-lg space-y-1">
                   <p className="font-bold flex items-center gap-1.5">
                     <Shield className="w-4 h-4" />
-                    Lưu trữ 6 mã dự phòng này ở nơi an toàn!
+                    {t('settings.backupCodesWarningTitle', 'Store these 6 backup codes in a safe place!')}
                   </p>
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Nếu bạn mất điện thoại hoặc không thể truy cập ứng dụng Authenticator, bạn có thể dùng một trong các mã này để đặt lại mật khẩu và lấy lại tài khoản. Mỗi mã chỉ dùng được một lần.
+                    {t('settings.backupCodesWarningDesc', 'If you lose your phone or cannot access the Authenticator app, you can use one of these codes to reset your password and recover your account. Each code can only be used once.')}
                   </p>
                 </div>
 
@@ -1383,7 +1384,7 @@ export const SettingsPage: React.FC = () => {
                     className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-muted hover:bg-accent border border-border text-foreground rounded text-xs font-medium transition-colors cursor-pointer"
                   >
                     {copiedBackupCodes ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedBackupCodes ? 'Đã sao chép!' : 'Sao chép tất cả'}</span>
+                    <span>{copiedBackupCodes ? t('common.copied', 'Copied!') : t('settings.copyAllBackupCodes', 'Copy all')}</span>
                   </button>
                   <button
                     type="button"
@@ -1391,7 +1392,7 @@ export const SettingsPage: React.FC = () => {
                     className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-muted hover:bg-accent border border-border text-foreground rounded text-xs font-medium transition-colors cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5 text-blue-500" />
-                    <span>Tải về máy (.txt)</span>
+                    <span>{t('settings.downloadBackupCodes', 'Download (.txt)')}</span>
                   </button>
                 </div>
 
@@ -1401,7 +1402,7 @@ export const SettingsPage: React.FC = () => {
                     onClick={() => setIsBackupCodesModalOpen(false)}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-colors cursor-pointer"
                   >
-                    Tôi đã lưu mã an toàn
+                    {t('settings.backupCodesSavedConfirm', 'I have safely saved the codes')}
                   </button>
                 </div>
               </div>
@@ -1448,14 +1449,14 @@ export const SettingsPage: React.FC = () => {
                       <div>
                         <span className="font-bold text-foreground block font-mono">{pk.credential_id.substring(0, 16)}...</span>
                         <span className="text-[10px] text-muted-foreground block">
-                          Registered: {new Date(pk.created_at).toLocaleDateString()} • Device: {pk.device_type || 'platform'}
+                          {t('settings.registeredLabel', 'Registered:')} {new Date(pk.created_at).toLocaleDateString()} • {t('settings.deviceLabel', 'Device:')} {pk.device_type || 'platform'}
                         </span>
                       </div>
                     </div>
                     <button
                       onClick={() => deletePasskeyMutation.mutate(pk.id)}
                       className="p-1 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
-                      title="Revoke Passkey"
+                      title={t('settings.revokePasskey', 'Revoke Passkey')}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

@@ -47,7 +47,7 @@ export const UserDashboardPage: React.FC<{
       setQrCodeData(data);
       setIs2faModalOpen(true);
     } catch (err: any) {
-      alert(err.message || 'Không thể tạo mã QR 2FA');
+      alert(err.message || t('settings.create2faQrFailed', 'Không thể tạo mã QR 2FA'));
     }
   };
 
@@ -62,9 +62,9 @@ export const UserDashboardPage: React.FC<{
       });
       refetchAuthStatus();
       setIs2faModalOpen(false);
-      alert('Đã kích hoạt bảo mật 2 lớp (2FA) thành công!');
+      alert(t('settings.activate2faSuccessTitle', 'Đã kích hoạt bảo mật 2 lớp (2FA) thành công!'));
     } catch (err: any) {
-      setTotpError(err.message || 'Kích hoạt 2FA thất bại');
+      setTotpError(err.message || t('settings.activate2faFailed', 'Kích hoạt 2FA thất bại'));
     } finally {
       setTotpLoading(false);
     }
@@ -103,14 +103,14 @@ export const UserDashboardPage: React.FC<{
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight text-foreground">
-                Chào mừng, {currentUser?.username}!
+                {t('userDashboard.welcome', 'Chào mừng,')} {currentUser?.username}!
               </h1>
               <span className="text-[10px] px-2 py-0.5 bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded font-semibold uppercase tracking-wider">
                 {currentUser?.role || 'user'}
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Bảng điều khiển cơ sở dữ liệu SQLite cô lập của bạn.
+              {t('userDashboard.subtitle', 'Bảng điều khiển cơ sở dữ liệu SQLite cô lập của bạn.')}
             </p>
           </div>
         </div>
@@ -120,7 +120,7 @@ export const UserDashboardPage: React.FC<{
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center gap-2 self-start sm:self-auto cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>Tạo Database mới</span>
+          <span>{t('userDashboard.createNewDb', 'Tạo Database mới')}</span>
         </button>
       </div>
 
@@ -129,12 +129,12 @@ export const UserDashboardPage: React.FC<{
         {/* Database Quota */}
         <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-2">
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium">Hạn mức Database</span>
+            <span className="text-xs font-medium">{t('userDashboard.dbQuota', 'Hạn mức Database')}</span>
             <Layers className="w-4 h-4 text-blue-500" />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-bold text-foreground">{stats?.databasesCount ?? myDatabases.length}</span>
-            <span className="text-xs text-muted-foreground">/ {stats?.maxDatabases ?? 5} cơ sở dữ liệu</span>
+            <span className="text-xs text-muted-foreground">/ {stats?.maxDatabases ?? 5} {t('userDashboard.databasesUnit', 'cơ sở dữ liệu')}</span>
           </div>
           {/* Progress bar */}
           <div className="w-full bg-muted/60 h-1.5 rounded-full overflow-hidden">
@@ -150,42 +150,42 @@ export const UserDashboardPage: React.FC<{
         {/* Shared Databases */}
         <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-2">
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium">Được chia sẻ với bạn</span>
+            <span className="text-xs font-medium">{t('userDashboard.sharedWithYou', 'Được chia sẻ với bạn')}</span>
             <Users className="w-4 h-4 text-purple-500" />
           </div>
           <div className="text-2xl font-bold text-foreground">
             {stats?.sharedDatabasesCount ?? sharedDatabases.length}
           </div>
           <span className="text-[10px] text-muted-foreground block">
-            Cơ sở dữ liệu người khác mời bạn cộng tác
+            {t('userDashboard.sharedWithYouDesc', 'Cơ sở dữ liệu người khác mời bạn cộng tác')}
           </span>
         </div>
 
         {/* Total Storage Used */}
         <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-2">
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium">Dung lượng sử dụng</span>
+            <span className="text-xs font-medium">{t('userDashboard.storageUsed', 'Dung lượng sử dụng')}</span>
             <HardDrive className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-2xl font-bold text-foreground">
             {formatBytes(stats?.storageUsedBytes ?? 0)}
           </div>
           <span className="text-[10px] text-muted-foreground block">
-            Bao gồm file SQLite chính và WAL buffer
+            {t('userDashboard.storageUsedDesc', 'Bao gồm file SQLite chính và WAL buffer')}
           </span>
         </div>
 
         {/* Active API Tokens */}
         <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-2">
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium">API Tokens đang dùng</span>
+            <span className="text-xs font-medium">{t('userDashboard.activeTokens', 'API Tokens đang dùng')}</span>
             <Key className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="text-2xl font-bold text-foreground">
-            {stats?.activeTokensCount ?? 0} Token
+            {stats?.activeTokensCount ?? 0} {t('userDashboard.tokensUnit', 'Token')}
           </div>
           <span className="text-[10px] text-muted-foreground block">
-            Dùng kết nối từ SDK & REST API
+            {t('userDashboard.activeTokensDesc', 'Dùng kết nối từ SDK & REST API')}
           </span>
         </div>
       </div>
@@ -197,20 +197,20 @@ export const UserDashboardPage: React.FC<{
           <div className="p-4 border-b border-border bg-muted/20 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Database className="w-4 h-4 text-blue-500" />
-              <h2 className="text-sm font-bold text-foreground">Database của tôi ({myDatabases.length})</h2>
+              <h2 className="text-sm font-bold text-foreground">{t('userDashboard.myDatabases', 'Database của tôi')} ({myDatabases.length})</h2>
             </div>
-            <span className="text-[10px] text-muted-foreground font-mono">Riêng tư & Cô lập</span>
+            <span className="text-[10px] text-muted-foreground font-mono">{t('userDashboard.privateAndIsolated', 'Riêng tư & Cô lập')}</span>
           </div>
 
           <div className="divide-y divide-border flex-1">
             {myDatabases.length === 0 ? (
               <div className="p-8 text-center text-xs text-muted-foreground space-y-2">
-                <p>Bạn chưa tạo cơ sở dữ liệu nào.</p>
+                <p>{t('userDashboard.noDatabases', 'Bạn chưa tạo cơ sở dữ liệu nào.')}</p>
                 <button
                   onClick={onOpenCreateModal}
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold cursor-pointer"
                 >
-                  Tạo Database đầu tiên
+                  {t('userDashboard.createFirstDb', 'Tạo Database đầu tiên')}
                 </button>
               </div>
             ) : (
@@ -230,7 +230,7 @@ export const UserDashboardPage: React.FC<{
                       </span>
                     </div>
                     <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                      {db.description || 'SQLite DB with WAL mode'}
+                      {db.description || t('db.defaultDescription', 'SQLite DB with WAL mode')}
                     </p>
                   </div>
 
@@ -251,15 +251,15 @@ export const UserDashboardPage: React.FC<{
           <div className="p-4 border-b border-border bg-muted/20 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-purple-500" />
-              <h2 className="text-sm font-bold text-foreground">Được chia sẻ với tôi ({sharedDatabases.length})</h2>
+              <h2 className="text-sm font-bold text-foreground">{t('userDashboard.sharedWithMe', 'Được chia sẻ với tôi')} ({sharedDatabases.length})</h2>
             </div>
-            <span className="text-[10px] text-muted-foreground font-mono">Cộng tác</span>
+            <span className="text-[10px] text-muted-foreground font-mono">{t('userDashboard.collaboration', 'Cộng tác')}</span>
           </div>
 
           <div className="divide-y divide-border flex-1">
             {sharedDatabases.length === 0 ? (
               <div className="p-8 text-center text-xs text-muted-foreground">
-                Chưa có database nào được người khác chia sẻ với bạn.
+                {t('userDashboard.noSharedDatabases', 'Chưa có database nào được người khác chia sẻ với bạn.')}
               </div>
             ) : (
               sharedDatabases.map((db) => (
@@ -286,7 +286,7 @@ export const UserDashboardPage: React.FC<{
                       </span>
                     </div>
                     <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                      Chủ sở hữu: {db.owner_username || 'Admin'}
+                      {t('userDashboard.owner', 'Chủ sở hữu:')} {db.owner_username || 'Admin'}
                     </p>
                   </div>
 
@@ -311,12 +311,12 @@ export const UserDashboardPage: React.FC<{
           </div>
           <div>
             <h3 className="text-sm font-bold text-foreground">
-              Bảo mật tài khoản: {currentUser?.totp_enabled ? 'Đã bật xác thực 2 bước (2FA)' : 'Chưa bật 2FA'}
+              {t('userDashboard.accountSecurity', 'Bảo mật tài khoản:')} {currentUser?.totp_enabled ? t('userDashboard.totpEnabled', 'Đã bật xác thực 2 bước (2FA)') : t('userDashboard.totpDisabled', 'Chưa bật 2FA')}
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               {currentUser?.totp_enabled
-                ? 'Tài khoản của bạn được bảo vệ bằng mã OTP Google Authenticator / Authy.'
-                : 'Khuyến nghị kích hoạt 2FA trong mục Cài đặt để ngăn chặn truy cập trái phép.'}
+                ? t('userDashboard.totpProtected', 'Tài khoản của bạn được bảo vệ bằng mã OTP Google Authenticator / Authy.')
+                : t('userDashboard.totpRecommend', 'Khuyến nghị kích hoạt 2FA trong mục Cài đặt để ngăn chặn truy cập trái phép.')}
             </p>
           </div>
         </div>
@@ -326,7 +326,7 @@ export const UserDashboardPage: React.FC<{
             href="#/settings"
             className="px-3.5 py-1.5 text-xs font-semibold bg-muted hover:bg-accent border border-border rounded-md text-foreground transition-colors shrink-0"
           >
-            Quản lý 2FA
+            {t('userDashboard.manage2fa', 'Quản lý 2FA')}
           </a>
         ) : (
           <button
@@ -334,7 +334,7 @@ export const UserDashboardPage: React.FC<{
             className="px-3.5 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors shrink-0 cursor-pointer flex items-center gap-1.5 shadow-sm"
           >
             <QrCode className="w-3.5 h-3.5" />
-            Kích hoạt 2FA ngay
+            {t('userDashboard.activate2faNow', 'Kích hoạt 2FA ngay')}
           </button>
         )}
       </div>
@@ -346,7 +346,7 @@ export const UserDashboardPage: React.FC<{
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-blue-500" />
-                <h3 className="text-sm font-bold text-foreground">Kích hoạt Google Authenticator / Authy</h3>
+                <h3 className="text-sm font-bold text-foreground">{t('userDashboard.activateTotpModalTitle', 'Kích hoạt Google Authenticator / Authy')}</h3>
               </div>
               <button
                 onClick={() => setIs2faModalOpen(false)}
@@ -370,21 +370,21 @@ export const UserDashboardPage: React.FC<{
             <form onSubmit={handleActivate2fa} className="space-y-3 text-xs">
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
-                  1. Mật khẩu tài khoản (Bắt buộc xác thực)
+                  {t('userDashboard.stepPassword', '1. Mật khẩu tài khoản (Bắt buộc xác thực)')}
                 </label>
                 <input
                   type="password"
                   required
                   value={totpPassword}
                   onChange={(e) => setTotpPassword(e.target.value)}
-                  placeholder="Nhập mật khẩu hiện tại..."
+                  placeholder={t('userDashboard.passwordPlaceholder', 'Nhập mật khẩu hiện tại...')}
                   className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
-                  2. Mã 6 chữ số trên ứng dụng Authenticator
+                  {t('userDashboard.stepTotpCode', '2. Mã 6 chữ số trên ứng dụng Authenticator')}
                 </label>
                 <input
                   type="text"
@@ -404,14 +404,14 @@ export const UserDashboardPage: React.FC<{
                   onClick={() => setIs2faModalOpen(false)}
                   className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded"
                 >
-                  Hủy
+                  {t('common.cancel', 'Hủy')}
                 </button>
                 <button
                   type="submit"
                   disabled={totpLoading || !totpPassword || totpCode.length !== 6}
                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-semibold cursor-pointer"
                 >
-                  {totpLoading ? 'Đang xác minh...' : 'Xác nhận & Bật 2FA'}
+                  {totpLoading ? t('common.verifying', 'Đang xác minh...') : t('userDashboard.confirmAndEnableTotp', 'Xác nhận & Bật 2FA')}
                 </button>
               </div>
             </form>

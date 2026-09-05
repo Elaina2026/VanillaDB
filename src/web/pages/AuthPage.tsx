@@ -51,7 +51,7 @@ export const AuthPage: React.FC = () => {
       });
       refetchStatus();
     } catch (err: any) {
-      setError(err.message || 'Passkey authentication failed');
+      setError(err.message || t('auth.passkeyFailed', 'Passkey authentication failed'));
     } finally {
       setLoading(false);
     }
@@ -69,7 +69,7 @@ export const AuthPage: React.FC = () => {
       });
       refetchStatus();
     } catch (err: any) {
-      setError(err.message || 'Mã 2FA không chính xác');
+      setError(err.message || t('auth.invalid2fa', 'Mã 2FA không chính xác'));
     } finally {
       setLoading(false);
     }
@@ -80,11 +80,11 @@ export const AuthPage: React.FC = () => {
     setRecoveryStatus(null);
 
     if (recoveryNewPassword.length < 6) {
-      setRecoveryStatus({ type: 'error', message: 'Mật khẩu mới phải có tối thiểu 6 ký tự' });
+      setRecoveryStatus({ type: 'error', message: t('auth.recoveryPasswordMin', 'Mật khẩu mới phải có tối thiểu 6 ký tự') });
       return;
     }
     if (recoveryNewPassword !== recoveryConfirmPassword) {
-      setRecoveryStatus({ type: 'error', message: 'Mật khẩu xác nhận không khớp' });
+      setRecoveryStatus({ type: 'error', message: t('auth.passwordMismatch', 'Mật khẩu xác nhận không khớp') });
       return;
     }
 
@@ -101,7 +101,7 @@ export const AuthPage: React.FC = () => {
 
       setRecoveryStatus({
         type: 'success',
-        message: res?.message || 'Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay với mật khẩu mới.'
+        message: res?.message || t('auth.recoverySuccess', 'Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay với mật khẩu mới.')
       });
       setTimeout(() => {
         setIsRecoveryOpen(false);
@@ -112,7 +112,7 @@ export const AuthPage: React.FC = () => {
         setRecoveryStatus(null);
       }, 3000);
     } catch (err: any) {
-      setRecoveryStatus({ type: 'error', message: err.message || 'Khôi phục tài khoản thất bại' });
+      setRecoveryStatus({ type: 'error', message: err.message || t('auth.recoveryFailed', 'Khôi phục tài khoản thất bại') });
     } finally {
       setRecoveryLoading(false);
     }
@@ -282,9 +282,9 @@ export const AuthPage: React.FC = () => {
                   setRecoveryIdentifier(username);
                   setIsRecoveryOpen(true);
                 }}
-                className="text-[11px] text-blue-500 hover:text-blue-400 hover:underline transition-colors"
+                className="text-[11px] text-blue-500 hover:text-blue-400 hover:underline transition-colors cursor-pointer"
               >
-                Mất điện thoại? Khôi phục bằng mã dự phòng (Backup Code)
+                {t('auth.lost2faRecovery', 'Lost phone? Recover using backup code')}
               </button>
             </div>
           </form>
@@ -310,7 +310,7 @@ export const AuthPage: React.FC = () => {
 
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">
-                {authMode === 'register' ? t('auth.username', 'Username (Optional)') : t('auth.username', 'Username or Email')}
+                {authMode === 'register' ? t('auth.username', 'Username (Optional)') : t('auth.usernameOrEmail', 'Username or Email')}
               </label>
               <div className="relative">
                 <User className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
@@ -319,7 +319,7 @@ export const AuthPage: React.FC = () => {
                   required={authMode !== 'register'}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder={authMode === 'register' ? 'johndoe' : 'admin or user@example.com'}
+                  placeholder={authMode === 'register' ? 'johndoe' : t('auth.usernameOrEmailPlaceholder', 'admin or user@example.com')}
                   className="w-full pl-9 pr-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500"
                 />
               </div>
@@ -401,7 +401,7 @@ export const AuthPage: React.FC = () => {
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
                 <Shield className="w-5 h-5 text-amber-500" />
-                <h3 className="text-sm font-bold text-foreground">Khôi Phục Mật Khẩu Bằng Mã 2FA</h3>
+                <h3 className="text-sm font-bold text-foreground">{t('auth.recoveryModalTitle', 'Khôi Phục Mật Khẩu Bằng Mã 2FA')}</h3>
               </div>
               <button
                 onClick={() => setIsRecoveryOpen(false)}
@@ -412,7 +412,7 @@ export const AuthPage: React.FC = () => {
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Nhập tên tài khoản hoặc email kèm một trong 6 mã dự phòng (định dạng <code className="text-foreground font-mono">XXXX-XXXX</code>) đã được cấp khi kích hoạt 2FA.
+              {t('auth.recoveryModalDesc', 'Nhập tên tài khoản hoặc email kèm một trong 6 mã dự phòng (định dạng XXXX-XXXX) đã được cấp khi kích hoạt 2FA.')}
             </p>
 
             {recoveryStatus && (
@@ -434,31 +434,31 @@ export const AuthPage: React.FC = () => {
 
             <form onSubmit={handleRecoverySubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Tên tài khoản hoặc Email</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">{t('auth.usernameOrEmail', 'Tên tài khoản hoặc Email')}</label>
                 <input
                   type="text"
                   required
                   value={recoveryIdentifier}
                   onChange={(e) => setRecoveryIdentifier(e.target.value)}
-                  placeholder="admin hoặc user@example.com"
+                  placeholder={t('auth.usernameOrEmailPlaceholder', 'admin hoặc user@example.com')}
                   className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Mã dự phòng (Backup Code: XXXX-XXXX)</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">{t('auth.backupCodeLabel', 'Mã dự phòng (Backup Code: XXXX-XXXX)')}</label>
                 <input
                   type="text"
                   required
                   value={recoveryBackupCode}
                   onChange={(e) => setRecoveryBackupCode(e.target.value.toUpperCase())}
-                  placeholder="VD: 7T9K-4MP2"
+                  placeholder={t('auth.backupCodePlaceholder', 'VD: 7T9K-4MP2')}
                   className="w-full px-3 py-1.5 text-center font-mono font-bold tracking-wider bg-background border border-border rounded-md text-foreground"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Mật khẩu mới (Tối thiểu 6 ký tự)</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">{t('auth.newPasswordMin', 'Mật khẩu mới (Tối thiểu 6 ký tự)')}</label>
                 <input
                   type="password"
                   required
@@ -470,7 +470,7 @@ export const AuthPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Xác nhận mật khẩu mới</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">{t('auth.confirmNewPassword', 'Xác nhận mật khẩu mới')}</label>
                 <input
                   type="password"
                   required
@@ -487,14 +487,14 @@ export const AuthPage: React.FC = () => {
                   onClick={() => setIsRecoveryOpen(false)}
                   className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded"
                 >
-                  Hủy
+                  {t('common.cancel', 'Hủy')}
                 </button>
                 <button
                   type="submit"
                   disabled={recoveryLoading || !recoveryIdentifier || !recoveryBackupCode || !recoveryNewPassword || !recoveryConfirmPassword}
                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-semibold"
                 >
-                  {recoveryLoading ? 'Đang xác thực...' : 'Đặt lại mật khẩu'}
+                  {recoveryLoading ? t('common.verifying', 'Đang xác thực...') : t('auth.resetPassword', 'Đặt lại mật khẩu')}
                 </button>
               </div>
             </form>

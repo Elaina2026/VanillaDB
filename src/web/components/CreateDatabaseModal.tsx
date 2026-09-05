@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Database, UploadCloud } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
+import { useI18n } from '../hooks/useI18n.js';
 import type { DatabaseRecord } from '@shared/index.js';
 
 export const CreateDatabaseModal: React.FC<{
@@ -9,6 +10,7 @@ export const CreateDatabaseModal: React.FC<{
   onClose: () => void;
   onSuccess: (db: DatabaseRecord) => void;
 }> = ({ isOpen, onClose, onSuccess }) => {
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [maxSizeMb, setMaxSizeMb] = useState<string>('');
@@ -78,7 +80,7 @@ export const CreateDatabaseModal: React.FC<{
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Database className="w-4 h-4 text-blue-500" />
-            <h2 className="text-sm font-bold">Create Database</h2>
+            <h2 className="text-sm font-bold">{t('modal.createDb.title', 'Create Database')}</h2>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-accent rounded text-muted-foreground">
             <X className="w-4 h-4" />
@@ -93,11 +95,11 @@ export const CreateDatabaseModal: React.FC<{
           )}
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Database Name</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">{t('modal.createDb.name', 'Database Name')}</label>
             <input
               type="text"
               required={!importFile}
-              placeholder={importFile ? "Auto-derived from file or enter custom name..." : "e.g. Discord Bot Production"}
+              placeholder={importFile ? "Auto-derived from file or enter custom name..." : t('modal.createDb.namePlaceholder', 'e.g. Discord Bot Production')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500"
@@ -105,10 +107,10 @@ export const CreateDatabaseModal: React.FC<{
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Description (Optional)</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">{t('modal.createDb.desc', 'Description (Optional)')}</label>
             <textarea
               rows={2}
-              placeholder="Brief description for team context..."
+              placeholder={t('modal.createDb.descPlaceholder', 'Brief description for team context...')}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500"
@@ -116,21 +118,21 @@ export const CreateDatabaseModal: React.FC<{
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Disk Storage Quota (MB, Optional)</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">{t('modal.createDb.quota', 'Disk Storage Quota (MB, Optional)')}</label>
             <input
               type="number"
               min={1}
-              placeholder="e.g. 500 (Leave empty for unlimited)"
+              placeholder={t('modal.createDb.quotaPlaceholder', 'e.g. 500 (Leave empty for unlimited)')}
               value={maxSizeMb}
               onChange={(e) => setMaxSizeMb(e.target.value)}
               className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500 font-mono"
             />
-            <p className="text-[10px] text-muted-foreground mt-0.5">Maximum size limit. Rejects write statements if exceeded.</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{t('modal.createDb.quotaHint', 'Maximum size limit. Rejects write statements if exceeded.')}</p>
           </div>
 
           <div className="pt-1">
             <label className="block text-xs font-medium text-muted-foreground mb-1">
-              Initialize with Dump / File (Optional)
+              {t('modal.createDb.tabUpload', 'Upload SQLite File')} / Dump
             </label>
             <div className="border border-dashed border-border rounded-lg p-3 bg-muted/20 hover:bg-muted/40 transition-colors">
               <input
@@ -158,14 +160,14 @@ export const CreateDatabaseModal: React.FC<{
               onClick={onClose}
               className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md font-medium text-muted-foreground"
             >
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </button>
             <button
               type="submit"
               disabled={createMutation.isPending || (!name.trim() && !importFile)}
               className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md font-semibold transition-colors"
             >
-              {createMutation.isPending ? 'Creating...' : (importFile ? 'Import & Create' : 'Create Database')}
+              {createMutation.isPending ? t('common.creating', 'Creating...') : (importFile ? 'Import & Create' : t('modal.createDb.submit', 'Create Database'))}
             </button>
           </div>
         </form>

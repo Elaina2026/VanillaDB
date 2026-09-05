@@ -431,14 +431,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
-                title="Toggle theme (Light / Dark)"
+                title={t('shortcuts.toggleTheme', 'Switch light / dark theme')}
               >
                 {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
               </button>
               <button
                 onClick={logout}
                 className="p-1 hover:bg-red-500/10 hover:text-red-500 rounded text-muted-foreground"
-                title="Sign out"
+                title={t('auth.signOut', 'Sign Out')}
               >
                 <LogOut className="w-3.5 h-3.5" />
               </button>

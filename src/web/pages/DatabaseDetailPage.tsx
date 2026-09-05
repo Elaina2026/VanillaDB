@@ -816,16 +816,16 @@ export const DatabaseDetailPage: React.FC<{
               {stats?.database.owner_username ? (
                 <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded font-medium">
                   <User className="w-2.5 h-2.5" />
-                  {stats.database.owner_username === currentUser?.username ? 'You' : stats.database.owner_username}
+                  {stats.database.owner_username === currentUser?.username ? t('common.you', 'You') : stats.database.owner_username}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-muted text-muted-foreground border border-border rounded font-medium">
-                  System
+                  {t('common.system', 'System')}
                 </span>
               )}
             </div>
             <p className="text-[11px] text-muted-foreground truncate max-w-xs sm:max-w-md">
-              {stats?.database.description || 'Native SQLite Engine (WAL Mode)'}
+              {stats?.database.description || t('db.defaultDescription', 'Native SQLite Engine (WAL Mode)')}
             </p>
           </div>
         </div>
@@ -833,11 +833,11 @@ export const DatabaseDetailPage: React.FC<{
         <div className="flex items-center gap-2 text-xs">
           {stats?.database.max_size_mb ? (
             <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded font-mono font-medium">
-              Quota: {stats.database.max_size_mb} MB
+              {t('db.quota', 'Quota:')} {stats.database.max_size_mb} MB
             </span>
           ) : null}
           <span className="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-medium">
-            WAL Active
+            {t('db.walActive', 'WAL Active')}
           </span>
           <span className="text-[10px] text-muted-foreground font-mono">
             {formatBytes(totalDbStorage)}
@@ -872,7 +872,7 @@ export const DatabaseDetailPage: React.FC<{
                 <div className="text-2xl font-bold text-foreground">{stats?.tableCount ?? 0} {t('schema.tableCount', 'Tables')}</div>
                 <div className="text-[10px] text-muted-foreground flex justify-between mt-1">
                   <span>{stats?.indexCount ?? 0} {t('schema.indexCount', 'Indexes')}</span>
-                  <span>{stats?.viewCount ?? 0} Views</span>
+                  <span>{stats?.viewCount ?? 0} {t('schema.viewCount', 'Views')}</span>
                 </div>
               </div>
 
@@ -885,8 +885,8 @@ export const DatabaseDetailPage: React.FC<{
                   {totalPages > 0 ? `${100 - fragmentationPercent}%` : '100%'}
                 </div>
                 <div className="text-[10px] text-muted-foreground flex justify-between mt-1">
-                  <span>{activePages} Active pages</span>
-                  <span>{freePages} Free pages</span>
+                  <span>{activePages} {t('db.activePages', 'Active pages')}</span>
+                  <span>{freePages} {t('db.freePages', 'Free pages')}</span>
                 </div>
               </div>
 
@@ -1144,7 +1144,7 @@ export const DatabaseDetailPage: React.FC<{
 
               {/* Interactive SVG Gradient Timeline Area Chart */}
               {isMetricsLoading ? (
-                <div className="py-16 text-center text-xs text-muted-foreground font-mono">Loading request metrics timeline...</div>
+                <div className="py-16 text-center text-xs text-muted-foreground font-mono">{t('db.loadingMetrics', 'Loading request metrics timeline...')}</div>
               ) : (
                 <div className="space-y-4">
                   <div className="min-h-[220px] w-full pt-2">
@@ -1154,23 +1154,23 @@ export const DatabaseDetailPage: React.FC<{
                   {/* Summary row */}
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1 text-xs">
                     <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-md">
-                      <div className="text-muted-foreground text-[10px]">SELECT Queries</div>
+                      <div className="text-muted-foreground text-[10px]">{t('db.selectQueries', 'SELECT Queries')}</div>
                       <div className="text-base font-bold text-blue-500 font-mono">{metricsStats?.totalSelect ?? 0}</div>
                     </div>
                     <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-md">
-                      <div className="text-muted-foreground text-[10px]">INSERT Statements</div>
+                      <div className="text-muted-foreground text-[10px]">{t('db.insertStatements', 'INSERT Statements')}</div>
                       <div className="text-base font-bold text-emerald-500 font-mono">{metricsStats?.totalInsert ?? 0}</div>
                     </div>
                     <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-md">
-                      <div className="text-muted-foreground text-[10px]">UPDATE Statements</div>
+                      <div className="text-muted-foreground text-[10px]">{t('db.updateStatements', 'UPDATE Statements')}</div>
                       <div className="text-base font-bold text-amber-500 font-mono">{metricsStats?.totalUpdate ?? 0}</div>
                     </div>
                     <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-md">
-                      <div className="text-muted-foreground text-[10px]">DELETE Statements</div>
+                      <div className="text-muted-foreground text-[10px]">{t('db.deleteStatements', 'DELETE Statements')}</div>
                       <div className="text-base font-bold text-red-500 font-mono">{metricsStats?.totalDelete ?? 0}</div>
                     </div>
                     <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-md">
-                      <div className="text-muted-foreground text-[10px]">DDL / Migrations</div>
+                      <div className="text-muted-foreground text-[10px]">{t('db.ddlMigrations', 'DDL / Migrations')}</div>
                       <div className="text-base font-bold text-purple-500 font-mono">{metricsStats?.totalDdl ?? 0}</div>
                     </div>
                   </div>
@@ -1192,10 +1192,10 @@ export const DatabaseDetailPage: React.FC<{
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono px-2.5 py-1 bg-muted rounded border border-border text-foreground">
-                    Page Size: {storageStats?.pageSize || 4096} bytes
+                    {t('db.pageSize', 'Page Size:')} {storageStats?.pageSize || 4096} bytes
                   </span>
                   <span className="text-xs font-mono px-2.5 py-1 bg-muted rounded border border-border text-foreground">
-                    Pages: {storageStats?.pageCount || 0}
+                    {t('db.pages', 'Pages:')} {storageStats?.pageCount || 0}
                   </span>
                 </div>
               </div>
@@ -1371,7 +1371,7 @@ export const DatabaseDetailPage: React.FC<{
                 <div className="flex items-center gap-3">
                   <span className="font-mono text-sm font-bold text-foreground">{selectedTable}</span>
                   <span className="text-xs text-muted-foreground">
-                    {tableRows?.rowCount ?? 0} rows displayed
+                    {tableRows?.rowCount ?? 0} {t('tables.rowsDisplayed', 'rows displayed')}
                   </span>
                 </div>
 
@@ -1384,9 +1384,9 @@ export const DatabaseDetailPage: React.FC<{
                         onClick={() => {
                           setConfirmConfig({
                             isOpen: true,
-                            title: 'Delete Selected Rows?',
-                            message: `Are you sure you want to delete ${selectedRowIds.length} selected row(s)? This action cannot be undone.`,
-                            confirmText: `Delete ${selectedRowIds.length} Rows`,
+                            title: t('tables.deleteSelectedTitle', 'Delete Selected Rows?'),
+                            message: t('tables.confirmDeleteSelected', 'Are you sure you want to delete selected row(s)? This action cannot be undone.'),
+                            confirmText: `${t('common.delete', 'Delete')} (${selectedRowIds.length})`,
                             variant: 'danger',
                             isLoading: deleteBulkMutation.isPending,
                             onConfirm: () => {
@@ -1399,7 +1399,7 @@ export const DatabaseDetailPage: React.FC<{
                         className="flex items-center gap-1.5 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold shadow-sm transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        Delete ({selectedRowIds.length})
+                        {t('common.delete', 'Delete')} ({selectedRowIds.length})
                       </button>
                     )}
 
@@ -1409,7 +1409,7 @@ export const DatabaseDetailPage: React.FC<{
                       className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      Insert Row
+                      {t('tables.insertRow', 'Insert Row')}
                     </button>
 
                     {/* Rename Table */}
@@ -1497,19 +1497,19 @@ export const DatabaseDetailPage: React.FC<{
                 {!selectedTable ? (
                   <div className="p-8 text-center text-xs text-muted-foreground flex flex-col items-center justify-center h-full gap-2">
                     <TableIcon className="w-8 h-8 opacity-40" />
-                    <div>No tables created yet.</div>
+                    <div>{t('tables.noTablesYet', 'No tables created yet.')}</div>
                     <button
                       onClick={() => setIsCreateTableOpen(true)}
                       className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium mt-1"
                     >
-                      Create First Table
+                      {t('tables.createFirstTable', 'Create First Table')}
                     </button>
                   </div>
                 ) : isRowsLoading ? (
-                  <div className="p-8 text-center text-xs text-muted-foreground">Loading rows...</div>
+                  <div className="p-8 text-center text-xs text-muted-foreground">{t('tables.loadingRows', 'Loading rows...')}</div>
                 ) : !tableRows?.rows?.length ? (
                   <div className="p-8 text-center text-xs text-muted-foreground">
-                    Table is empty. Use "Insert Row" or SQL Editor to add data.
+                    {t('tables.emptyTableDesc', 'Table is empty. Use "Insert Row" or SQL Editor to add data.')}
                   </div>
                 ) : (
                   <table className="w-full text-left text-xs border-collapse font-mono bg-card text-foreground">
@@ -1534,7 +1534,7 @@ export const DatabaseDetailPage: React.FC<{
                           />
                         </th>
                         {/* Row Action Column */}
-                        <th className="w-16 py-2.5 px-2 border-r border-border text-center">Actions</th>
+                        <th className="w-16 py-2.5 px-2 border-r border-border text-center">{t('common.actions', 'Actions')}</th>
                         {tableRows.columns.map((col) => (
                           <th key={col} className="py-2.5 px-3 font-semibold text-blue-500 dark:text-blue-400 border-r border-border last:border-r-0">
                             {col}
@@ -1577,7 +1577,7 @@ export const DatabaseDetailPage: React.FC<{
                                 <button
                                   onClick={() => setEditingRow(row)}
                                   className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors"
-                                  title="Edit Row"
+                                  title={t('tables.editRow', 'Edit Row')}
                                 >
                                   <Edit2 className="w-3 h-3" />
                                 </button>
@@ -1585,9 +1585,9 @@ export const DatabaseDetailPage: React.FC<{
                                   onClick={() => {
                                     setConfirmConfig({
                                       isOpen: true,
-                                      title: 'Delete Row?',
-                                      message: `Are you sure you want to delete row with ${primaryKeyCol} = "${pkVal}"?`,
-                                      confirmText: 'Delete Row',
+                                      title: t('tables.deleteRowTitle', 'Delete Row?'),
+                                      message: `${t('tables.confirmDelete', 'Are you sure you want to delete this row?')} (${primaryKeyCol} = "${pkVal}")`,
+                                      confirmText: t('tables.deleteRow', 'Delete Row'),
                                       variant: 'danger',
                                       isLoading: deleteBulkMutation.isPending,
                                       onConfirm: () => {
@@ -1597,7 +1597,7 @@ export const DatabaseDetailPage: React.FC<{
                                     });
                                   }}
                                   className="p-1 hover:bg-red-500/20 rounded text-muted-foreground hover:text-red-500 transition-colors"
-                                  title="Delete Row"
+                                  title={t('tables.deleteRow', 'Delete Row')}
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </button>
@@ -1631,7 +1631,7 @@ export const DatabaseDetailPage: React.FC<{
 
               {/* Table Pagination */}
               <div className="h-10 border-t border-border px-4 flex items-center justify-between text-xs text-muted-foreground shrink-0 bg-muted/10">
-                <span>Offset: {tableOffset}</span>
+                <span>{t('tables.offset', 'Offset:')} {tableOffset}</span>
                 <div className="flex items-center gap-2">
                   <button
                     disabled={tableOffset === 0}
@@ -1641,7 +1641,7 @@ export const DatabaseDetailPage: React.FC<{
                     }}
                     className="px-2 py-1 bg-background border border-border hover:bg-accent disabled:opacity-50 rounded"
                   >
-                    Previous
+                    {t('common.prev', 'Previous')}
                   </button>
                   <button
                     disabled={!tableRows?.rows || tableRows.rows.length < tableLimit}
@@ -1651,7 +1651,7 @@ export const DatabaseDetailPage: React.FC<{
                     }}
                     className="px-2 py-1 bg-background border border-border hover:bg-accent disabled:opacity-50 rounded"
                   >
-                    Next
+                    {t('common.next', 'Next')}
                   </button>
                 </div>
               </div>
@@ -2085,7 +2085,7 @@ export const DatabaseDetailPage: React.FC<{
                       <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-mono rounded flex items-start gap-2">
                         <XCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                         <div>
-                          <div className="font-bold">SQLite Execution Error</div>
+                          <div className="font-bold">{t('editor.execError', 'SQLite Execution Error')}</div>
                           <div className="mt-0.5">{queryError}</div>
                         </div>
                       </div>
@@ -2103,12 +2103,12 @@ export const DatabaseDetailPage: React.FC<{
                             {explainResult.analysis.hasFullTableScan ? (
                               <>
                                 <AlertTriangle className="w-4 h-4 text-amber-500" />
-                                <span>Slow Query Warning: Full Table Scan Detected</span>
+                                <span>{t('editor.slowQueryWarning', 'Slow Query Warning: Full Table Scan Detected')}</span>
                               </>
                             ) : (
                               <>
                                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                                <span>Optimized Execution Plan</span>
+                                <span>{t('editor.optimizedPlan', 'Optimized Execution Plan')}</span>
                               </>
                             )}
                           </div>
@@ -2118,7 +2118,7 @@ export const DatabaseDetailPage: React.FC<{
                         {/* Step-by-step query execution tree */}
                         <div className="border border-border rounded-lg overflow-hidden">
                           <div className="bg-muted/50 px-3 py-1.5 border-b border-border text-muted-foreground font-semibold text-[11px]">
-                            EXPLAIN QUERY PLAN Details
+                            {t('editor.explainPlanDetails', 'EXPLAIN QUERY PLAN Details')}
                           </div>
                           <div className="divide-y divide-border bg-card">
                             {explainResult.plan.map((step, idx) => (
@@ -2145,7 +2145,7 @@ export const DatabaseDetailPage: React.FC<{
                     ) : !queryResult ? (
                       <div className="p-8 text-center text-xs text-muted-foreground font-mono flex flex-col items-center justify-center h-full gap-2">
                         <Terminal className="w-8 h-8 opacity-30" />
-                        <span>Press "Run" or press Ctrl+Enter to execute SQL statement.</span>
+                        <span>{t('editor.pressRunToExecute', 'Press "Run" or press Ctrl+Enter to execute SQL statement.')}</span>
                       </div>
                     ) : 'rows' in queryResult ? (
                       <table className="w-full text-left text-xs border-collapse font-mono bg-card text-foreground">
@@ -2162,7 +2162,7 @@ export const DatabaseDetailPage: React.FC<{
                           {queryResult.rows.length === 0 ? (
                             <tr>
                               <td colSpan={queryResult.columns.length} className="py-6 text-center text-muted-foreground">
-                                (0 rows returned)
+                                {t('editor.zeroRows', '(0 rows returned)')}
                               </td>
                             </tr>
                           ) : (
@@ -2292,14 +2292,14 @@ export const DatabaseDetailPage: React.FC<{
                   <UploadCloud className="w-6 h-6 text-blue-500" />
                 </div>
                 <div>
-                  <span className="text-xs font-semibold text-foreground">Click to upload files</span>
-                  <span className="text-xs text-muted-foreground"> or drag and drop</span>
+                  <span className="text-xs font-semibold text-foreground">{t('storage.clickToUpload', 'Click to upload files')}</span>
+                  <span className="text-xs text-muted-foreground">{t('storage.orDragAndDrop', ' or drag and drop')}</span>
                 </div>
-                <p className="text-[10px] text-muted-foreground">Images, Videos, Audio, Documents (Max 1GB per file)</p>
+                <p className="text-[10px] text-muted-foreground">{t('storage.fileTypesHint', 'Images, Videos, Audio, Documents (Max 1GB per file)')}</p>
               </label>
               {isUploading && (
                 <div className="mt-3 text-xs text-blue-500 font-medium flex items-center justify-center gap-1.5">
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Uploading file(s)...
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" /> {t('storage.uploading', 'Uploading file(s)...')}
                 </div>
               )}
             </div>
@@ -2307,14 +2307,14 @@ export const DatabaseDetailPage: React.FC<{
             {/* Files Grid / List */}
             <div className="space-y-3">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Stored Files ({files.length})
+                {t('storage.storedFiles', 'Stored Files')} ({files.length})
               </h4>
 
               {isFilesLoading ? (
-                <div className="p-8 text-center text-xs text-muted-foreground">Loading files...</div>
+                <div className="p-8 text-center text-xs text-muted-foreground">{t('storage.loadingFiles', 'Loading files...')}</div>
               ) : files.length === 0 ? (
                 <div className="p-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-lg bg-card/50">
-                  No files uploaded yet. Drag and drop files above to store media.
+                  {t('storage.noFiles', 'No files uploaded yet. Drag and drop files above to store media.')}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -2466,7 +2466,7 @@ export const DatabaseDetailPage: React.FC<{
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Open Importer / Exporter
+                {t('importExport.openModal', 'Open Importer / Exporter')}
               </button>
             </div>
 
@@ -2479,8 +2479,8 @@ export const DatabaseDetailPage: React.FC<{
                       <Download className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-foreground">Direct Database Export</h4>
-                      <p className="text-xs text-muted-foreground">Download instant snapshots of this database</p>
+                      <h4 className="text-sm font-bold text-foreground">{t('importExport.directExport', 'Direct Database Export')}</h4>
+                      <p className="text-xs text-muted-foreground">{t('importExport.directExportDesc', 'Download instant snapshots of this database')}</p>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground pt-2">
@@ -2511,8 +2511,8 @@ export const DatabaseDetailPage: React.FC<{
                       <UploadCloud className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-foreground">Multi-Dialect Data Ingestion</h4>
-                      <p className="text-xs text-muted-foreground">Upload and auto-convert external databases</p>
+                      <h4 className="text-sm font-bold text-foreground">{t('importExport.ingestionTitle', 'Multi-Dialect Data Ingestion')}</h4>
+                      <p className="text-xs text-muted-foreground">{t('importExport.ingestionDesc', 'Upload and auto-convert external databases')}</p>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground pt-2">
@@ -2525,7 +2525,7 @@ export const DatabaseDetailPage: React.FC<{
                     className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-1.5"
                   >
                     <UploadCloud className="w-4 h-4" />
-                    Upload & Ingest File
+                    {t('importExport.uploadAndIngest', 'Upload & Ingest File')}
                   </button>
                 </div>
               </div>
@@ -2540,17 +2540,17 @@ export const DatabaseDetailPage: React.FC<{
               <div>
                 <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                   <Radio className="w-5 h-5 text-blue-500" />
-                  Realtime Event Stream
+                  {t('realtime.title', 'Realtime Event Stream')}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Server-Sent Events (SSE) stream for table mutations and schema changes.
+                  {t('realtime.desc', 'Server-Sent Events (SSE) stream for table mutations and schema changes.')}
                 </p>
               </div>
 
               <div className="flex items-center gap-3">
                 <input
                   type="text"
-                  placeholder="Filter by table name..."
+                  placeholder={t('realtime.filterTablePlaceholder', 'Filter by table name...')}
                   value={realtimeTableFilter}
                   onChange={(e) => setRealtimeTableFilter(e.target.value)}
                   className="px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground placeholder:text-muted-foreground w-48"
@@ -2565,7 +2565,7 @@ export const DatabaseDetailPage: React.FC<{
                   }`}
                 >
                   <Radio className={`w-3.5 h-3.5 ${isRealtimeListening ? 'animate-pulse' : ''}`} />
-                  {isRealtimeListening ? 'Disconnect Stream' : 'Connect Live Stream'}
+                  {isRealtimeListening ? t('realtime.disconnect', 'Disconnect Stream') : t('realtime.connect', 'Connect Live Stream')}
                 </button>
 
                 {realtimeEvents.length > 0 && (
@@ -2573,7 +2573,7 @@ export const DatabaseDetailPage: React.FC<{
                     onClick={() => setRealtimeEvents([])}
                     className="px-2.5 py-1.5 text-xs border border-border hover:bg-accent text-muted-foreground hover:text-foreground rounded-md transition-colors"
                   >
-                    Clear Feed
+                    {t('realtime.clearFeed', 'Clear Feed')}
                   </button>
                 )}
               </div>
@@ -2585,12 +2585,12 @@ export const DatabaseDetailPage: React.FC<{
                 <div className="bg-card border border-border rounded-lg p-12 text-center">
                   <Radio className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
                   <p className="text-sm font-semibold text-foreground">
-                    {isRealtimeListening ? 'Waiting for database mutations...' : 'Realtime Stream is disconnected'}
+                    {isRealtimeListening ? t('realtime.waiting', 'Waiting for database mutations...') : t('realtime.disconnected', 'Realtime Stream is disconnected')}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
                     {isRealtimeListening
-                      ? 'Perform an INSERT, UPDATE, or DELETE via SQL Editor, REST API, or Client SDK to see live events.'
-                      : 'Click "Connect Live Stream" to open an SSE listener and watch live events.'}
+                      ? t('realtime.noEvents', 'Perform an INSERT, UPDATE, or DELETE via SQL Editor, REST API, or Client SDK to see live events.')
+                      : t('realtime.waiting', 'Click "Connect Live Stream" to open an SSE listener and watch live events.')}
                   </p>
                 </div>
               ) : (
@@ -2753,7 +2753,7 @@ export const DatabaseDetailPage: React.FC<{
                       onClick={() => setIsCreateWebhookOpen(false)}
                       className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md"
                     >
-                      Cancel
+                      {t('common.cancel', 'Cancel')}
                     </button>
                     <button
                       disabled={!webhookName.trim() || !webhookUrl.trim() || webhookEvents.length === 0 || createWebhookMutation.isPending}
@@ -2768,7 +2768,7 @@ export const DatabaseDetailPage: React.FC<{
                       }
                       className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
                     >
-                      {createWebhookMutation.isPending ? 'Saving...' : 'Save Webhook'}
+                      {createWebhookMutation.isPending ? t('common.saving', 'Saving...') : t('webhooks.save', 'Save Webhook')}
                     </button>
                   </div>
                 </div>
@@ -2780,9 +2780,9 @@ export const DatabaseDetailPage: React.FC<{
               {webhooks.length === 0 ? (
                 <div className="bg-card border border-border rounded-lg p-12 text-center">
                   <WebhookIcon className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
-                  <p className="text-sm font-semibold text-foreground">No Webhooks configured</p>
+                  <p className="text-sm font-semibold text-foreground">{t('webhooks.noWebhooks', 'No webhooks configured for this database.')}</p>
                   <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                    Configure webhooks to receive real-time push alerts on external systems.
+                    {t('webhooks.noWebhooksDesc', 'Configure webhooks to receive real-time push alerts on external systems.')}
                   </p>
                 </div>
               ) : (
@@ -2886,8 +2886,8 @@ export const DatabaseDetailPage: React.FC<{
           <div className="max-w-5xl mx-auto space-y-4">
             <div className="flex items-center justify-between pb-1">
               <div>
-                <h3 className="text-sm font-bold text-foreground">Schema Browser</h3>
-                <p className="text-xs text-muted-foreground">Inspect tables, columns, indexes, foreign keys, and full-text search indexes.</p>
+                <h3 className="text-sm font-bold text-foreground">{t('schema.browserTitle', 'Schema Browser')}</h3>
+                <p className="text-xs text-muted-foreground">{t('schema.browserDesc', 'Inspect tables, columns, indexes, foreign keys, and full-text search indexes.')}</p>
               </div>
               <div className="flex items-center gap-2">
                 {/* View Mode Toggle: Cards vs ERD */}
@@ -2898,7 +2898,7 @@ export const DatabaseDetailPage: React.FC<{
                       schemaViewMode === 'cards' ? 'bg-card text-foreground font-semibold shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    Table Cards
+                    {t('schema.tableCards', 'Table Cards')}
                   </button>
                   <button
                     onClick={() => setSchemaViewMode('erd')}
@@ -2906,7 +2906,7 @@ export const DatabaseDetailPage: React.FC<{
                       schemaViewMode === 'erd' ? 'bg-card text-foreground font-semibold shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    ERD Diagram
+                    {t('schema.erdDiagram', 'ERD Diagram')}
                   </button>
                 </div>
 
@@ -2922,14 +2922,14 @@ export const DatabaseDetailPage: React.FC<{
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded text-xs font-semibold shadow-sm transition-colors"
                 >
                   <FileText className="w-3.5 h-3.5 text-purple-500" />
-                  <span>Setup FTS5 Search</span>
+                  <span>{t('schema.setupFts', 'Setup FTS5 Search')}</span>
                 </button>
                 <button
                   onClick={() => setIsCreateTableOpen(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Create Table</span>
+                  <span>{t('schema.createTable', 'Create Table')}</span>
                 </button>
               </div>
             </div>
@@ -2937,7 +2937,7 @@ export const DatabaseDetailPage: React.FC<{
             {isSchemaLoading ? (
               <div className="flex flex-col items-center justify-center p-12 bg-card border border-border rounded-lg text-muted-foreground">
                 <RefreshCw className="w-6 h-6 animate-spin mb-2 text-blue-500" />
-                <span className="text-xs">Loading database schema...</span>
+                <span className="text-xs">{t('schema.loading', 'Loading database schema...')}</span>
               </div>
             ) : schema.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-12 bg-card border border-border rounded-lg text-center space-y-3">
@@ -2945,9 +2945,9 @@ export const DatabaseDetailPage: React.FC<{
                   <Layers className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold">No Schema Objects Found</h3>
+                  <h3 className="text-sm font-semibold">{t('schema.noObjects', 'No Schema Objects Found')}</h3>
                   <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                    This database has no tables or views defined yet. Create your first table or run SQL migrations to inspect the schema.
+                    {t('schema.noObjectsDesc', 'This database has no tables or views defined yet. Create your first table or run SQL migrations to inspect the schema.')}
                   </p>
                 </div>
                 <button
@@ -2955,7 +2955,7 @@ export const DatabaseDetailPage: React.FC<{
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Create Table
+                  {t('schema.createTable', 'Create Table')}
                 </button>
               </div>
             ) : schemaViewMode === 'erd' ? (
@@ -3099,17 +3099,17 @@ export const DatabaseDetailPage: React.FC<{
                 <div>
                   <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <Key className="w-4 h-4 text-blue-500" />
-                    Unified Database API & Master Token Access
+                    {t('api.unifiedTitle', 'Unified Database API & Master Token Access')}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Chỉ cần 1 Database Base URL duy nhất. Mọi quyền truy cập (Query, Batch, Realtime SSE, Media Storage) được điều khiển và kích hoạt trực tiếp thông qua API Token.
+                    {t('api.unifiedDesc', 'Single unified Database Base URL. All access rights (Query, Batch, Realtime SSE, Media Storage) are controlled directly via API Tokens.')}
                   </p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
                 <div>
-                  <span className="text-muted-foreground block text-[11px] font-sans font-medium">1. Database API Base URL (Duy nhất)</span>
+                  <span className="text-muted-foreground block text-[11px] font-sans font-medium">{t('api.baseUrlTitle', '1. Database API Base URL (Unified)')}</span>
                   <div className="flex items-center justify-between p-2.5 bg-muted/60 border border-border rounded mt-1.5">
                     <span className="truncate text-blue-400 font-semibold">{window.location.origin}/v1/databases/{databaseId}</span>
                     <button
@@ -3123,7 +3123,7 @@ export const DatabaseDetailPage: React.FC<{
                 </div>
 
                 <div>
-                  <span className="text-muted-foreground block text-[11px] font-sans font-medium">2. API Token Authorization Header</span>
+                  <span className="text-muted-foreground block text-[11px] font-sans font-medium">{t('api.authHeaderTitle', '2. API Token Authorization Header')}</span>
                   <div className="flex items-center justify-between p-2.5 bg-muted/60 border border-border rounded mt-1.5">
                     <span className="truncate text-foreground">Authorization: Bearer <span className="text-emerald-400 font-semibold">vdb_live_...</span></span>
                     <button
@@ -3140,7 +3140,7 @@ export const DatabaseDetailPage: React.FC<{
               {/* Feature capabilities unlocked by Key */}
               <div className="pt-3 border-t border-border space-y-2">
                 <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                  Các tính năng tự động kích hoạt theo Token Permissions:
+                  {t('api.featuresTitle', 'Features automatically unlocked by Token Permissions:')}
                 </span>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <div className="p-2 bg-muted/40 border border-border rounded">
@@ -3288,15 +3288,15 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
           <div className="max-w-5xl mx-auto space-y-4">
             <div className="flex items-center justify-between pb-2">
               <div>
-                <h3 className="text-sm font-bold text-foreground">API Tokens</h3>
-                <p className="text-xs text-muted-foreground">Unlimited tokens for external bots and services.</p>
+                <h3 className="text-sm font-bold text-foreground">{t('tokens.title', 'API Tokens')}</h3>
+                <p className="text-xs text-muted-foreground">{t('tokens.desc', 'Unlimited tokens for external bots and services.')}</p>
               </div>
               <button
                 onClick={() => onOpenCreateToken(databaseId)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Create Token
+                {t('tokens.createToken', 'Create Token')}
               </button>
             </div>
 
@@ -3310,17 +3310,17 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                         {tok.token_prefix}••••••••{tok.token_last_chars}
                       </span>
                       {tok.revoked_at ? (
-                        <span className="text-[10px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded font-medium">Revoked</span>
+                        <span className="text-[10px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded font-medium">{t('tokens.revoked', 'Revoked')}</span>
                       ) : (
-                        <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded font-medium">Active</span>
+                        <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded font-medium">{t('common.active', 'Active')}</span>
                       )}
                     </div>
                     <div className="text-[11px] text-muted-foreground flex items-center gap-3 mt-1.5">
-                      <span>Permissions: <strong className="text-foreground">{tok.permissions.join(', ')}</strong></span>
+                      <span>{t('tokens.permissions', 'Permissions')}: <strong className="text-foreground">{tok.permissions.join(', ')}</strong></span>
                       <span>•</span>
-                      <span>Last used: {formatTimeAgo(tok.last_used_at)}</span>
+                      <span>{t('tokens.lastUsed', 'Last used')}: {formatTimeAgo(tok.last_used_at)}</span>
                       <span>•</span>
-                      <span>Created: {formatDate(tok.created_at)}</span>
+                      <span>{t('common.created', 'Created At')}: {formatDate(tok.created_at)}</span>
                     </div>
                   </div>
 
@@ -3330,7 +3330,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                         onClick={() => revokeTokenMutation.mutate(tok.id)}
                         className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-muted-foreground transition-colors"
                       >
-                        Revoke
+                        {t('tokens.revoke', 'Revoke')}
                       </button>
                     )}
                     <button
@@ -3465,7 +3465,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                         {job.sql_query}
                       </pre>
                       <div className="text-[10px] text-muted-foreground flex items-center gap-2">
-                        <span>{t('jobs.lastRun', 'Last Run')}: {job.last_run_at ? formatDate(job.last_run_at) : 'Never'}</span>
+                        <span>{t('jobs.lastRun', 'Last Run')}: {job.last_run_at ? formatDate(job.last_run_at) : t('jobs.never', 'Never')}</span>
                         <span>•</span>
                         <span>{t('jobs.nextRun', 'Next Run')}: {job.next_run_at ? formatDate(job.next_run_at) : '—'}</span>
                       </div>
@@ -3572,9 +3572,9 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                         onClick={() => {
                           setConfirmConfig({
                             isOpen: true,
-                            title: 'Delete Backup Snapshot?',
-                            message: `Are you sure you want to delete backup file "${bkp.filename}"?`,
-                            confirmText: 'Delete Backup',
+                            title: t('backups.deleteTitle', 'Delete Backup Snapshot?'),
+                            message: `${t('common.delete', 'Delete')} "${bkp.filename}"?`,
+                            confirmText: t('common.delete', 'Delete'),
                             variant: 'danger',
                             isLoading: deleteBackupMutation.isPending,
                             onConfirm: () => {
