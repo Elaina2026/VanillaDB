@@ -24,22 +24,35 @@ export const App: React.FC = () => {
   const { theme, setTheme, toggleTheme } = useTheme();
 
   // URL Hash routing: #/overview, #/telemetry, #/users, #/databases, #/databases/:id, #/databases/:id/:tab, #/activity, #/settings
+  // Auth sub-routes: #/login, #/register, #/reset-password
   const parseHash = () => {
-    const hash = window.location.hash.replace(/^#\/?/, '') || 'overview';
-    const parts = hash.split('/').filter(Boolean);
+    const raw = window.location.hash.replace(/^#\/?/, '');
+    const parts = raw.split('/').filter(Boolean);
+    const first = parts[0] || '';
 
     if (parts[0] === 'databases' && parts[1]) {
       return {
         tab: 'databases',
         databaseId: parts[1],
         dbTab: parts[2] || 'overview',
+        authSubRoute: null,
+      };
+    }
+
+    if (['login', 'register', 'reset-password'].includes(first)) {
+      return {
+        tab: 'overview',
+        databaseId: null,
+        dbTab: 'overview',
+        authSubRoute: first as 'login' | 'register' | 'reset-password',
       };
     }
 
     return {
-      tab: parts[0] || 'overview',
+      tab: first || 'overview',
       databaseId: null,
       dbTab: 'overview',
+      authSubRoute: null,
     };
   };
 
@@ -52,6 +65,13 @@ export const App: React.FC = () => {
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
+
+  // When authenticated, if URL hash is still #/login, #/register, or #/reset-password, redirect to #/overview
+  useEffect(() => {
+    if (authenticated && route.authSubRoute) {
+      window.location.hash = '/overview';
+    }
+  }, [authenticated, route.authSubRoute]);
 
   const navigateTo = (tab: string, dbId: string | null = null, dbTab: string = 'overview') => {
     if (dbId) {
@@ -136,7 +156,12 @@ export const App: React.FC = () => {
   }
 
   if (!authenticated) {
-    return <AuthPage />;
+    return (
+      <AuthPage
+        initialMode={route.authSubRoute === 'reset-password' ? 'reset-password' : route.authSubRoute === 'register' ? 'register' : 'login'}
+        onNavigate={(subRoute) => navigateTo(subRoute)}
+      />
+    );
   }
 
   const validTabs = ['overview', 'telemetry', 'users', 'databases', 'activity', 'settings', 'shortcuts'];

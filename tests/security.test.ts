@@ -54,6 +54,18 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
           },
         });
       }
+      if (loginRes.statusCode === 200 && loginRes.json().data?.require2fa) {
+        const { generateTotpCode } = await import('../src/server/utils/totp.js');
+        const metaDb = (await import('../src/server/db/metadata.js')).getMetadataDb();
+        const row = metaDb.prepare("SELECT totp_secret FROM users WHERE username = 'VanillaDatabase' OR username = 'admin_test'").get() as any;
+        const tempToken = loginRes.json().data.tempToken;
+        const otp = generateTotpCode(row.totp_secret);
+        loginRes = await app.inject({
+          method: 'POST',
+          url: '/api/auth/login/2fa',
+          payload: { tempToken, code: otp },
+        });
+      }
       expect(loginRes.statusCode).toBe(200);
       adminCookie = `vdb_session=${loginRes.cookies.find((c: any) => c.name === 'vdb_session').value}`;
     }
@@ -100,11 +112,11 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
       expect(user.role).toBe('user'); // Enforced 'user'
       expect(user.role).not.toBe('super_admin');
 
-      // Verify in DB directly
+      // Verify in DB directly: should be user role and system default max_databases (2)
       const metaDb = getMetadataDb();
       const row = metaDb.prepare('SELECT role, max_databases FROM users WHERE id = ?').get(user.id) as any;
       expect(row.role).toBe('user');
-      expect(row.max_databases).toBe(5);
+      expect(row.max_databases).toBe(2);
     });
 
     it('should prevent duplicate registration with mixed-case email addresses', async () => {
@@ -394,6 +406,46 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
       });
       expect(newLogin.statusCode).toBe(200);
       expect(newLogin.json().data.require2fa).toBe(true);
+
+      // 8. Test dual recovery using dynamic 6-digit TOTP code
+      const currentOtp = generateTotpCode(secret);
+      const totpRecovery = await app.inject({
+        method: 'POST',
+        url: '/api/auth/recovery/reset-password',
+        payload: {
+          usernameOrEmail: `backup_${runId}@test.com`,
+          totpCode: currentOtp,
+          newPassword: 'PasswordResetWithTotp123!',
+        },
+      });
+      expect(totpRecovery.statusCode).toBe(200);
+      expect(totpRecovery.json().data.method).toBe('totp');
+
+      // 9. Verify backup codes query endpoint (used vs unused status)
+      const listCodesRes = await app.inject({
+        method: 'GET',
+        url: '/api/auth/2fa/backup-codes',
+        headers: { cookie },
+      });
+      expect(listCodesRes.statusCode).toBe(200);
+      const codesList = listCodesRes.json().data.codes;
+      expect(codesList.length).toBe(6);
+      expect(codesList[0].used).toBe(true);
+      expect(codesList[1].used).toBe(false);
+
+      // 10. Regenerate backup codes with password verification
+      const regenRes = await app.inject({
+        method: 'POST',
+        url: '/api/auth/2fa/regenerate-backup-codes',
+        headers: { cookie },
+        payload: {
+          password: 'PasswordResetWithTotp123!',
+        },
+      });
+      expect(regenRes.statusCode).toBe(200);
+      expect(regenRes.json().data.total).toBe(6);
+      expect(regenRes.json().data.remaining).toBe(6);
+      expect(regenRes.json().data.backupCodes.length).toBe(6);
     });
   });
 
@@ -1047,6 +1099,130 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
 
       // Cleanup
       databaseService.deleteDatabase(quotaDbId);
+    });
+  });
+
+  // =========================================================================
+  // GROUP 9: DATA LEAK PREVENTION & TRANSPORT HARDENING
+  // =========================================================================
+  describe('Group 9: Data Leak Prevention & Transport Hardening', () => {
+    it('Leak Defense: Profile update must NOT return totp_secret or totp_temp_secret', async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/api/auth/profile',
+        headers: { cookie: adminCookie },
+        payload: { avatar_url: 'https://example.com/safe-avatar.png' },
+      });
+      expect(res.statusCode).toBe(200);
+      const data = res.json().data;
+      expect(data.totp_secret).toBeUndefined();
+      expect(data.totp_temp_secret).toBeUndefined();
+    });
+
+    it('CORS Defense: Origin reflection with credentials must be blocked for untrusted origins', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/databases',
+        headers: {
+          cookie: adminCookie,
+          origin: 'https://malicious-attacker-site.com',
+        },
+      });
+      const allowOrigin = res.headers['access-control-allow-origin'];
+      expect(allowOrigin === undefined || allowOrigin === 'false' || allowOrigin !== 'https://malicious-attacker-site.com').toBe(true);
+    });
+
+    it('XSS Defense: Viewing SVG/HTML file must enforce CSP sandbox', async () => {
+      const svgPayload = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+      const boundary = '----BoundarySvgTest';
+      const body = Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="test.svg"\r\nContent-Type: image/svg+xml\r\n\r\n`),
+        svgPayload,
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+
+      const upload = await app.inject({
+        method: 'POST',
+        url: `/api/admin/databases/${adminDbId}/files`,
+        headers: {
+          cookie: adminCookie,
+          'content-type': `multipart/form-data; boundary=${boundary}`,
+        },
+        payload: body,
+      });
+      const fileId = upload.json().data.id;
+
+      const view = await app.inject({
+        method: 'GET',
+        url: `/v1/files/${fileId}/view`,
+        headers: { cookie: adminCookie },
+      });
+      expect(view.statusCode).toBe(200);
+      expect(view.headers['content-security-policy']).toBe("default-src 'none'; sandbox");
+    });
+
+    it('MIME Defense: Partial content (Range 206) must include nosniff header', async () => {
+      const files = await app.inject({
+        method: 'GET',
+        url: `/api/admin/databases/${adminDbId}/files`,
+        headers: { cookie: adminCookie },
+      });
+      const fileId = files.json().data[0]?.id;
+      if (!fileId) return;
+
+      const rangeRes = await app.inject({
+        method: 'GET',
+        url: `/v1/files/${fileId}/view`,
+        headers: {
+          cookie: adminCookie,
+          range: 'bytes=0-5',
+        },
+      });
+      expect(rangeRes.statusCode).toBe(206);
+      expect(rangeRes.headers['x-content-type-options']).toBe('nosniff');
+    });
+
+    it('RBAC Defense: Viewer role must not see plaintext Webhook signing secret', async () => {
+      // 1. Create a webhook with secret
+      await app.inject({
+        method: 'POST',
+        url: `/api/admin/databases/${adminDbId}/webhooks`,
+        headers: { cookie: adminCookie },
+        payload: {
+          name: 'Security Hook Test',
+          url: 'https://example.com/webhook',
+          secret: 'super_secret_webhook_signing_key_123',
+          events: ['insert'],
+        },
+      });
+
+      // 2. Register viewer user
+      const viewerEmail = `hook_viewer_${runId}@test.com`;
+      const reg = await app.inject({
+        method: 'POST',
+        url: '/api/auth/register',
+        payload: { email: viewerEmail, username: `hook_viewer_${runId}`, password: 'Password123!' },
+      });
+      const viewerCookie = `vdb_session=${reg.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+
+      // 3. Invite viewer to adminDbId with 'viewer' role
+      await app.inject({
+        method: 'POST',
+        url: `/api/admin/databases/${adminDbId}/members`,
+        headers: { cookie: adminCookie },
+        payload: { emailOrUsername: viewerEmail, role: 'viewer' },
+      });
+
+      // 4. Viewer lists webhooks: secret must be sanitized
+      const viewerList = await app.inject({
+        method: 'GET',
+        url: `/api/admin/databases/${adminDbId}/webhooks`,
+        headers: { cookie: viewerCookie },
+      });
+      expect(viewerList.statusCode).toBe(200);
+      for (const hook of viewerList.json().data) {
+        expect(hook.secret).toBeUndefined();
+      }
     });
   });
 });

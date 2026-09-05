@@ -44,6 +44,7 @@ export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, fileP
     reply.header('Accept-Ranges', 'bytes');
     reply.header('Content-Length', chunksize);
     reply.header('Content-Type', mimeType);
+    reply.header('X-Content-Type-Options', 'nosniff');
 
     if (fileBuffer) {
       const sliced = fileBuffer.subarray(start, end + 1);
@@ -599,6 +600,11 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     const filePath = storageService.getStoragePath(file.database_id, file.filename);
     if (!fs.existsSync(filePath)) {
       return reply.status(404).send({ success: false, error: { code: 'FILE_MISSING_DISK', message: 'File not found on disk' } });
+    }
+
+    // Defensive isolation for potentially executable active content (SVG/HTML)
+    if (file.mime_type === 'image/svg+xml' || file.mime_type === 'text/html') {
+      reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
     }
 
     return streamFileHelper(req, reply, filePath, file.mime_type, file.size_bytes);

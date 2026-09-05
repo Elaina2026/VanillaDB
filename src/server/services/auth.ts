@@ -2,6 +2,7 @@ import argon2 from 'argon2';
 import crypto from 'crypto';
 import { nanoid } from 'nanoid';
 import { getMetadataDb } from '../db/metadata.js';
+import { systemService } from './system.js';
 import type { UserRecord, UserRole } from '../../../shared/index.js';
 
 export interface SessionUser {
@@ -89,8 +90,11 @@ export class AuthService {
     rateLimitPerMinute?: number;
   }): Promise<UserRecord> {
     const role = data.role || 'user';
-    const maxDatabases = data.maxDatabases !== undefined ? data.maxDatabases : 5;
-    const rateLimit = data.rateLimitPerMinute !== undefined ? data.rateLimitPerMinute : 60;
+    const settings = systemService.getSettings();
+    const defaultMaxDb = settings.default_user_max_databases ?? 2;
+    const defaultRateLimit = settings.default_user_rate_limit ?? 180;
+    const maxDatabases = data.maxDatabases !== undefined ? data.maxDatabases : defaultMaxDb;
+    const rateLimit = data.rateLimitPerMinute !== undefined ? data.rateLimitPerMinute : defaultRateLimit;
     return this.createAdminUser(data.username, data.password, role, maxDatabases, rateLimit, data.email, data.avatarUrl);
   }
 
@@ -119,10 +123,10 @@ export class AuthService {
     }));
   }
 
-  public getUserById(userId: string): (UserRecord & { totp_secret?: string; totp_temp_secret?: string }) | null {
+  public getUserById(userId: string): UserRecord | null {
     const metaDb = getMetadataDb();
     const u = metaDb.prepare(`
-      SELECT u.id, u.username, u.email, u.avatar_url, u.role, u.max_databases, u.rate_limit_per_minute, u.status, u.totp_enabled, u.totp_secret, u.totp_temp_secret, u.created_at, u.updated_at,
+      SELECT u.id, u.username, u.email, u.avatar_url, u.role, u.max_databases, u.rate_limit_per_minute, u.status, u.totp_enabled, u.created_at, u.updated_at,
              (SELECT COUNT(*) FROM databases d WHERE d.owner_id = u.id) as database_count
       FROM users u
       WHERE u.id = ?
@@ -139,11 +143,19 @@ export class AuthService {
       rate_limit_per_minute: u.rate_limit_per_minute ?? 60,
       status: u.status || 'active',
       totp_enabled: Boolean(u.totp_enabled),
-      totp_secret: u.totp_secret || undefined,
-      totp_temp_secret: u.totp_temp_secret || undefined,
       database_count: Number(u.database_count || 0),
       created_at: u.created_at,
       updated_at: u.updated_at,
+    };
+  }
+
+  public getTotpSecretInternal(userId: string): { totp_secret?: string; totp_temp_secret?: string } | null {
+    const metaDb = getMetadataDb();
+    const row = metaDb.prepare('SELECT totp_secret, totp_temp_secret FROM users WHERE id = ?').get(userId) as any;
+    if (!row) return null;
+    return {
+      totp_secret: row.totp_secret || undefined,
+      totp_temp_secret: row.totp_temp_secret || undefined,
     };
   }
 

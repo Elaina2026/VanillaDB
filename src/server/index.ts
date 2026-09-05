@@ -68,9 +68,19 @@ export async function buildApp() {
     },
   });
 
-  // CORS configuration
+  // CORS configuration: only reflect origin when explicit allowlist is configured, or permit when settings allow
   await app.register(cors, {
-    origin: config.corsOrigins.length > 0 ? config.corsOrigins : true,
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (config.corsOrigins.length > 0) {
+        return cb(null, config.corsOrigins.includes(origin));
+      }
+      const settings = systemService.getSettings();
+      if (settings.enable_cors_all) {
+        return cb(null, true);
+      }
+      return cb(null, false);
+    },
     credentials: true,
   });
 
@@ -123,11 +133,17 @@ export async function buildApp() {
       statusCode,
     }, `API Request error: ${error.message}`);
 
+    // Sanitize 500 error messages in production to prevent leaking internal database schemas or server details
+    let clientMessage = error.message || 'An internal server error occurred';
+    if (!isDebug && statusCode >= 500) {
+      clientMessage = 'An internal server error occurred. Please contact administrator or inspect system audit logs.';
+    }
+
     reply.status(statusCode).send({
       success: false,
       error: {
         code: error.code || 'INTERNAL_SERVER_ERROR',
-        message: error.message || 'An internal server error occurred',
+        message: clientMessage,
         requestId: req.id,
         ...(isDebug && settings.enable_stack_traces ? { stack: error.stack } : {}),
       },

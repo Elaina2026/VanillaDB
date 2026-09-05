@@ -14,7 +14,7 @@
     "build:server": "tsc -p tsconfig.server.json",
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node --no-warnings dist/src/server/index.js",
-    "test": "vitest run",
+    "test": "vitest run --fileParallelism=false",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "admin:reset": "node --no-warnings dist/src/server/cli.js",
     "benchmark": "tsx src/server/benchmark.ts"

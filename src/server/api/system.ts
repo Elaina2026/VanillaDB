@@ -26,6 +26,7 @@ export const systemRoutes: FastifyPluginAsync = async (fastify) => {
       max_upload_size_mb: z.number().int().min(1).max(500).optional(),
       default_user_rate_limit: z.number().int().min(0).optional(),
       default_user_max_databases: z.number().int().min(0).optional(),
+      default_user_max_disk_mb: z.number().int().min(1).optional(),
       enable_query_logging: z.boolean().optional(),
       log_sql: z.boolean().optional(),
       debug_mode: z.boolean().optional(),

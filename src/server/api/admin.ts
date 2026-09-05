@@ -12,6 +12,7 @@ import { webhookService } from '../services/webhook.js';
 import { realtimeService } from '../services/realtime.js';
 import { activityService } from '../services/activity.js';
 import { authService } from '../services/auth.js';
+import { systemService } from '../services/system.js';
 import { jobSchedulerService } from '../services/jobScheduler.js';
 import { databaseMembersService } from '../services/members.js';
 import { requireAdminAuth, requireRole } from '../middleware/auth.js';
@@ -74,7 +75,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      const record = databaseService.createDatabase(parsed.data.name, parsed.data.description, req.adminUser?.userId, parsed.data.maxSizeMb);
+      const isSuperAdmin = req.adminUser?.role === 'super_admin';
+      const effectiveMaxSizeMb = parsed.data.maxSizeMb !== undefined
+        ? parsed.data.maxSizeMb
+        : (isSuperAdmin ? null : (systemService.getSettings().default_user_max_disk_mb ?? 200));
+
+      const record = databaseService.createDatabase(parsed.data.name, parsed.data.description, req.adminUser?.userId, effectiveMaxSizeMb);
       activityService.recordAudit({
         user: req.adminUser!.username,
         action: 'database.create',
@@ -1055,8 +1061,17 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = req.params as { id: string };
     const dbRecord = requireDatabaseAccess(req, reply, id, 'viewer');
     if (!dbRecord) return;
+    const userRole = req.adminUser?.role;
+    const isElevated = userRole === 'super_admin' || userRole === 'admin';
+    const memberRole = databaseMembersService.getUserDatabaseRole(id, req.adminUser!.userId, req.adminUser!.role);
+    const canSeeSecret = isElevated || memberRole === 'owner' || memberRole === 'admin';
+
     const list = webhookService.listWebhooks(id);
-    return reply.send({ success: true, data: list });
+    const sanitized = list.map(w => ({
+      ...w,
+      secret: canSeeSecret ? w.secret : undefined,
+    }));
+    return reply.send({ success: true, data: sanitized });
   });
 
   fastify.post('/databases/:id/webhooks', async (req, reply) => {
@@ -1516,7 +1531,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const description = (data.fields?.description as any)?.value;
     const dbName = (explicitName || filename.replace(/\.[^/.]+$/, '')).trim();
 
-    const record = databaseService.createDatabase(dbName, description || `Imported from ${filename}`, req.adminUser?.userId);
+    const isSuperAdmin = req.adminUser?.role === 'super_admin';
+    const defaultDiskMb = isSuperAdmin ? null : (systemService.getSettings().default_user_max_disk_mb ?? 200);
+    const record = databaseService.createDatabase(dbName, description || `Imported from ${filename}`, req.adminUser?.userId, defaultDiskMb);
     const id = record.id;
     const ext = filename.split('.').pop()?.toLowerCase() || '';
 
@@ -1593,12 +1610,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/users', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+    const settings = systemService.getSettings();
     const Schema = z.object({
       username: z.string().min(3).max(50),
       password: z.string().min(6).max(128),
       role: z.enum(['super_admin', 'admin', 'user']).default('user'),
-      maxDatabases: z.number().int().min(0).default(5),
-      rateLimitPerMinute: z.number().int().min(0).default(60),
+      maxDatabases: z.number().int().min(0).default(settings.default_user_max_databases ?? 2),
+      rateLimitPerMinute: z.number().int().min(0).default(settings.default_user_rate_limit ?? 180),
     });
 
     const parsed = Schema.safeParse(req.body);

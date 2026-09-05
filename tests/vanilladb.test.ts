@@ -70,6 +70,20 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
         });
       }
 
+      // If account has 2FA enabled, complete step-up challenge using stored secret
+      if (loginRes.statusCode === 200 && loginRes.json().data?.require2fa) {
+        const { generateTotpCode } = await import('../src/server/utils/totp.js');
+        const metaDb = (await import('../src/server/db/metadata.js')).getMetadataDb();
+        const row = metaDb.prepare("SELECT totp_secret FROM users WHERE username = 'VanillaDatabase' OR username = 'admin_test'").get() as any;
+        const tempToken = loginRes.json().data.tempToken;
+        const otp = generateTotpCode(row.totp_secret);
+        loginRes = await app.inject({
+          method: 'POST',
+          url: '/api/auth/login/2fa',
+          payload: { tempToken, code: otp },
+        });
+      }
+
       expect(loginRes.statusCode).toBe(200);
       const cookies = loginRes.cookies;
       const session = cookies.find((c: any) => c.name === 'vdb_session');

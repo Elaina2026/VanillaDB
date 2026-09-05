@@ -323,8 +323,12 @@ function runMigrations(db: DatabaseSync): void {
           try {
             db.exec(stmt);
           } catch (stmtErr: any) {
-            // Ignore duplicate column errors if table was already created with the column
-            if (!stmtErr.message?.includes('duplicate column name')) {
+            // Ignore duplicate column errors or table already exists if previously applied partially
+            const msg = stmtErr.message || '';
+            if (
+              !msg.includes('duplicate column name') &&
+              !msg.includes('already exists')
+            ) {
               throw stmtErr;
             }
           }
@@ -337,6 +341,7 @@ function runMigrations(db: DatabaseSync): void {
         db.exec('COMMIT;');
       } catch (err) {
         db.exec('ROLLBACK;');
+        logger.error({ err, migration: m.name, version: m.version }, 'Migration failed');
         throw err;
       }
     }

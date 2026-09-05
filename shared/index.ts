@@ -303,6 +303,7 @@ export interface SystemSettings {
   max_upload_size_mb: number;
   default_user_rate_limit: number;
   default_user_max_databases: number;
+  default_user_max_disk_mb: number;
   enable_query_logging: boolean;
   log_sql: boolean;
   debug_mode: boolean;

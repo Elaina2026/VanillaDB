@@ -35,7 +35,10 @@ import {
   UploadCloud,
   X,
   Copy,
-  Download
+  Download,
+  RefreshCw,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../hooks/useAuth.js';
@@ -114,6 +117,49 @@ export const SettingsPage: React.FC = () => {
     queryFn: () => apiRequest('/api/auth/webauthn/credentials'),
     enabled: activeTab === 'account',
   });
+
+  // 2FA Backup codes query (detailed status: used vs active)
+  const { data: backupCodesData, refetch: refetchBackupCodes, isLoading: isBackupCodesLoading } = useQuery<{
+    enabled: boolean;
+    total: number;
+    remaining: number;
+    codes: Array<{ code: string; used: boolean; usedAt?: number | null }>;
+  }>({
+    queryKey: ['totpBackupCodes'],
+    queryFn: async () => {
+      const res = await apiRequest('/api/auth/2fa/backup-codes');
+      return res?.data || res;
+    },
+    enabled: activeTab === 'account' && !!currentUser?.totp_enabled,
+  });
+
+  const [isRegenerateModalOpen, setIsRegenerateModalOpen] = useState(false);
+  const [regeneratePassword, setRegeneratePassword] = useState('');
+  const [regenerateStatus, setRegenerateStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [showCodesInSettings, setShowCodesInSettings] = useState(false);
+
+  const handleRegenerateBackupCodes = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegenerateStatus(null);
+    setIsRegenerating(true);
+    try {
+      const res: any = await apiRequest('/api/auth/2fa/regenerate-backup-codes', {
+        method: 'POST',
+        body: JSON.stringify({ password: regeneratePassword }),
+      });
+      const codes = res?.data?.backupCodes || res?.backupCodes || [];
+      refetchBackupCodes();
+      setIsRegenerateModalOpen(false);
+      setRegeneratePassword('');
+      setGeneratedBackupCodes(codes);
+      setIsBackupCodesModalOpen(true);
+    } catch (err: any) {
+      setRegenerateStatus({ type: 'error', message: err.message || 'Tái tạo mã dự phòng thất bại' });
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   const [passkeyStatus, setPasskeyStatus] = useState<string | null>(null);
 
@@ -302,8 +348,9 @@ export const SettingsPage: React.FC = () => {
     backup_schedule: 'daily',
     backup_retention: 10,
     max_upload_size_mb: 50,
-    default_user_rate_limit: 60,
-    default_user_max_databases: 5,
+    default_user_rate_limit: 180,
+    default_user_max_databases: 2,
+    default_user_max_disk_mb: 200,
     enable_query_logging: true,
     log_sql: false,
     debug_mode: false,
@@ -731,7 +778,7 @@ export const SettingsPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.maxDbsPerUser', 'Default Max Databases per User')}</label>
               <input
@@ -739,12 +786,28 @@ export const SettingsPage: React.FC = () => {
                 min={1}
                 max={1000}
                 disabled={!isSuperAdminOrAdmin}
-                value={current.default_user_max_databases || 5}
-                onChange={(e) => setForm({ ...form, default_user_max_databases: parseInt(e.target.value, 10) || 5 })}
+                value={current.default_user_max_databases ?? 2}
+                onChange={(e) => setForm({ ...form, default_user_max_databases: parseInt(e.target.value, 10) || 2 })}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
               />
               <span className="text-[10px] text-muted-foreground mt-1 block">
                 {t('settings.maxDbsPerUserDesc', 'Users with role `user` cannot create more databases than this quota.')}
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.maxDiskPerUser', 'Default Disk Quota per Database (MB)')}</label>
+              <input
+                type="number"
+                min={1}
+                max={10000}
+                disabled={!isSuperAdminOrAdmin}
+                value={current.default_user_max_disk_mb ?? 200}
+                onChange={(e) => setForm({ ...form, default_user_max_disk_mb: parseInt(e.target.value, 10) || 200 })}
+                className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
+              />
+              <span className="text-[10px] text-muted-foreground mt-1 block">
+                {t('settings.maxDiskPerUserDesc', 'Maximum storage capacity allocated to each database created by standard users.')}
               </span>
             </div>
 
@@ -755,7 +818,7 @@ export const SettingsPage: React.FC = () => {
                 min={0}
                 max={10000}
                 disabled={!isSuperAdminOrAdmin}
-                value={current.default_user_rate_limit || 60}
+                value={current.default_user_rate_limit ?? 180}
                 onChange={(e) => setForm({ ...form, default_user_rate_limit: parseInt(e.target.value, 10) || 0 })}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
               />
@@ -1148,7 +1211,162 @@ export const SettingsPage: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Detailed 2FA Backup Codes Management Section */}
+            {currentUser?.totp_enabled && (
+              <div className="bg-muted/30 border border-border/80 rounded-lg p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-amber-500" />
+                      {t('settings.backupCodesTitle', '2FA Backup Recovery Codes')}
+                      {backupCodesData && (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                          {backupCodesData.remaining} / {backupCodesData.total} {t('settings.backupCodesRemaining', 'remaining / active')}
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {t('settings.backupCodesDesc', 'Single-use emergency codes to reset your password if you lose your phone or Authenticator app.')}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowCodesInSettings(!showCodesInSettings)}
+                      className="px-2.5 py-1.5 bg-muted hover:bg-accent border border-border rounded text-[11px] font-medium text-foreground flex items-center gap-1 cursor-pointer"
+                    >
+                      {showCodesInSettings ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      <span>{showCodesInSettings ? 'Ẩn mã' : 'Xem mã'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRegenerateStatus(null);
+                        setRegeneratePassword('');
+                        setIsRegenerateModalOpen(true);
+                      }}
+                      className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded text-[11px] font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>{t('settings.regenerateCodes', 'Regenerate Backup Codes')}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Codes list / status pills */}
+                {isBackupCodesLoading ? (
+                  <div className="text-center py-4 text-xs text-muted-foreground font-mono">
+                    Đang tải danh sách mã dự phòng...
+                  </div>
+                ) : backupCodesData && backupCodesData.codes.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 font-mono text-xs">
+                    {backupCodesData.codes.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-2 rounded border flex items-center justify-between transition-all ${
+                          item.used
+                            ? 'bg-muted/40 border-dashed border-border/70 text-muted-foreground/50 line-through'
+                            : 'bg-background border-border text-foreground font-semibold shadow-2xs'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="text-[10px] text-muted-foreground select-none">{idx + 1}.</span>
+                          <span className="tracking-wider">
+                            {showCodesInSettings
+                              ? item.code
+                              : item.code.substring(0, 4) + '-••••'}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[9px] px-1.5 py-0.2 rounded font-sans font-medium uppercase tracking-tight ${
+                            item.used
+                              ? 'bg-red-500/10 text-red-500/80 border border-red-500/20'
+                              : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                          }`}
+                        >
+                          {item.used ? t('settings.codeStatusUsed', 'Used') : t('settings.codeStatusActive', 'Active')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-3 text-xs text-muted-foreground">
+                    Chưa tìm thấy mã dự phòng. Bấm &quot;Tạo mã dự phòng mới&quot; để sinh 6 mã khôi phục.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Modal Tạo Lại Mã Dự Phòng 2FA (Yêu cầu mật khẩu tài khoản) */}
+          {isRegenerateModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-border pb-3">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-amber-500" />
+                    <h3 className="text-sm font-bold text-foreground">
+                      {t('settings.regenerateModalTitle', 'Tạo mới bộ mã dự phòng 2FA')}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setIsRegenerateModalOpen(false)}
+                    className="p-1 text-muted-foreground hover:text-foreground rounded cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {t('settings.regenerateModalDesc', 'Khi tạo mới, toàn bộ các mã dự phòng hiện tại sẽ bị vô hiệu hoá vĩnh viễn. Vui lòng nhập mật khẩu tài khoản để xác thực.')}
+                </p>
+
+                {regenerateStatus && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-md flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{regenerateStatus.message}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleRegenerateBackupCodes} className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      {t('settings.currentPassword', 'Current Password')}
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      autoFocus
+                      value={regeneratePassword}
+                      onChange={(e) => setRegeneratePassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => setIsRegenerateModalOpen(false)}
+                      className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded cursor-pointer"
+                    >
+                      {t('common.cancel', 'Hủy')}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isRegenerating || !regeneratePassword}
+                      className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
+                      <span>{isRegenerating ? t('settings.regenerating', 'Đang tạo mới...') : t('settings.regenerateCodes', 'Tạo mã mới')}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
           {/* Change Password Form Card */}
           <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
