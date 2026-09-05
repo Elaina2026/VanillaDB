@@ -33,7 +33,6 @@ import {
   QrCode,
   ShieldCheck,
   UploadCloud,
-  Check,
   X,
   Copy,
   Download
@@ -195,11 +194,11 @@ export const SettingsPage: React.FC = () => {
     e.preventDefault();
     setTotpStatus(null);
     try {
-      const res = await apiRequest('/api/auth/2fa/activate', {
+      const res: any = await apiRequest('/api/auth/2fa/activate', {
         method: 'POST',
         body: JSON.stringify({ password: totpVerifyPassword, code: totpVerifyCode.trim() }),
       });
-      const codes = res?.data?.backupCodes || [];
+      const codes = res?.backupCodes || res?.data?.backupCodes || [];
       refetchAuthStatus();
       setIs2faModalOpen(false);
       setGeneratedBackupCodes(codes);
@@ -226,12 +225,38 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleCopyBackupCodes = () => {
+  const handleCopyBackupCodes = async () => {
     if (!generatedBackupCodes.length) return;
     const text = generatedBackupCodes.join('\n');
-    navigator.clipboard.writeText(text);
-    setCopiedBackupCodes(true);
-    setTimeout(() => setCopiedBackupCodes(false), 2500);
+    let success = false;
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        success = true;
+      } catch {
+        // fallback to execCommand
+      }
+    }
+    if (!success) {
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        success = document.execCommand('copy');
+        document.body.removeChild(textArea);
+      } catch {
+        success = false;
+      }
+    }
+    if (success) {
+      setCopiedBackupCodes(true);
+      setTimeout(() => setCopiedBackupCodes(false), 2500);
+    }
   };
 
   const handleDownloadBackupCodes = () => {
@@ -244,7 +269,9 @@ export const SettingsPage: React.FC = () => {
     const a = document.createElement('a');
     a.href = url;
     a.download = `vanilladb-backup-codes-${currentUser?.username || 'user'}.txt`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 

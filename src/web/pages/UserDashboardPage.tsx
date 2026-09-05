@@ -5,6 +5,7 @@ import {
   Layers,
   HardDrive,
   ShieldCheck,
+  Shield,
   Plus,
   ArrowRight,
   Clock,
@@ -14,7 +15,10 @@ import {
   Lock,
   Key,
   X,
-  QrCode
+  QrCode,
+  Copy,
+  Check,
+  Download
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatDate } from '../lib/utils.js';
@@ -31,6 +35,9 @@ export const UserDashboardPage: React.FC<{
 
   // 2FA modal state for Dashboard
   const [is2faModalOpen, setIs2faModalOpen] = useState(false);
+  const [isBackupCodesModalOpen, setIsBackupCodesModalOpen] = useState(false);
+  const [generatedBackupCodes, setGeneratedBackupCodes] = useState<string[]>([]);
+  const [copiedBackupCodes, setCopiedBackupCodes] = useState(false);
   const [qrCodeData, setQrCodeData] = useState<{ secret: string; otpauthUri: string; qrDataUrl: string } | null>(null);
   const [totpPassword, setTotpPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
@@ -56,18 +63,70 @@ export const UserDashboardPage: React.FC<{
     setTotpError(null);
     setTotpLoading(true);
     try {
-      await apiRequest('/api/auth/2fa/activate', {
+      const res: any = await apiRequest('/api/auth/2fa/activate', {
         method: 'POST',
         body: JSON.stringify({ password: totpPassword, code: totpCode.trim() }),
       });
+      const codes = res?.backupCodes || res?.data?.backupCodes || [];
       refetchAuthStatus();
       setIs2faModalOpen(false);
-      alert(t('settings.activate2faSuccessTitle', 'Đã kích hoạt bảo mật 2 lớp (2FA) thành công!'));
+      setGeneratedBackupCodes(codes);
+      setIsBackupCodesModalOpen(true);
     } catch (err: any) {
       setTotpError(err.message || t('settings.activate2faFailed', 'Kích hoạt 2FA thất bại'));
     } finally {
       setTotpLoading(false);
     }
+  };
+
+  const handleCopyBackupCodes = async () => {
+    if (!generatedBackupCodes.length) return;
+    const text = generatedBackupCodes.join('\n');
+    let success = false;
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        success = true;
+      } catch {
+        // fallback to execCommand
+      }
+    }
+    if (!success) {
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        success = document.execCommand('copy');
+        document.body.removeChild(textArea);
+      } catch {
+        success = false;
+      }
+    }
+    if (success) {
+      setCopiedBackupCodes(true);
+      setTimeout(() => setCopiedBackupCodes(false), 2500);
+    }
+  };
+
+  const handleDownloadBackupCodes = () => {
+    if (!generatedBackupCodes.length) return;
+    const content = `VANILLADATABASE 2FA BACKUP RECOVERY CODES\nGenerated: ${new Date().toISOString()}\nAccount: ${currentUser?.username || 'user'}\n\nKeep these codes safe! Each code can be used once to reset your password if you lose access to your authenticator app:\n\n` +
+      generatedBackupCodes.map((c, i) => `${i + 1}. ${c}`).join('\n') +
+      '\n\nNotice: Keep this file offline and confidential.';
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vanilladb-backup-codes-${currentUser?.username || 'user'}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const { data: stats, isLoading } = useQuery<UserDashboardStats>({
@@ -415,6 +474,74 @@ export const UserDashboardPage: React.FC<{
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Hiển Thị 6 Mã Dự Phòng Khi Kích Hoạt 2FA Thành Công */}
+      {isBackupCodesModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                <h3 className="text-sm font-bold text-foreground">{t('settings.activate2faSuccessTitle', 'Kích hoạt 2FA thành công!')}</h3>
+              </div>
+              <button
+                onClick={() => setIsBackupCodesModalOpen(false)}
+                className="p-1 text-muted-foreground hover:text-foreground rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs rounded-lg space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <Shield className="w-4 h-4" />
+                {t('settings.backupCodesWarningTitle', 'Lưu trữ 6 mã dự phòng này ở nơi an toàn!')}
+              </p>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                {t('settings.backupCodesWarningDesc', 'Nếu bạn làm mất điện thoại hoặc không thể truy cập ứng dụng Authenticator, bạn có thể dùng một trong các mã này để đặt lại mật khẩu và khôi phục tài khoản. Mỗi mã chỉ dùng được 1 lần.')}
+              </p>
+            </div>
+
+            {/* Grid 6 backup codes */}
+            <div className="grid grid-cols-2 gap-2 p-3 bg-muted/50 rounded-lg border border-border font-mono text-center text-xs font-bold text-foreground tracking-wider select-all">
+              {generatedBackupCodes.map((code, idx) => (
+                <div key={idx} className="p-2 bg-background border border-border rounded shadow-xs">
+                  {code}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleCopyBackupCodes}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-muted hover:bg-accent border border-border text-foreground rounded text-xs font-medium transition-colors cursor-pointer"
+              >
+                {copiedBackupCodes ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedBackupCodes ? t('common.copied', 'Đã sao chép!') : t('settings.copyAllBackupCodes', 'Sao chép tất cả')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadBackupCodes}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-muted hover:bg-accent border border-border text-foreground rounded text-xs font-medium transition-colors cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-blue-500" />
+                <span>{t('settings.downloadBackupCodes', 'Tải về (.txt)')}</span>
+              </button>
+            </div>
+
+            <div className="pt-2 border-t border-border flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsBackupCodesModalOpen(false)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+              >
+                {t('settings.backupCodesSavedConfirm', 'Tôi đã lưu mã an toàn')}
+              </button>
+            </div>
           </div>
         </div>
       )}

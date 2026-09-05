@@ -35,6 +35,7 @@ export interface DatabaseRecord {
   description: string | null;
   filename: string;
   max_size_mb?: number | null; // Max disk quota in MB (null = unlimited)
+  size_bytes?: number;
   owner_id?: string | null;
   owner_username?: string | null;
   access_role?: MemberRole;

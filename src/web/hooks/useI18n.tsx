@@ -959,6 +959,22 @@ const translations: Record<Language, Record<string, string>> = {
     'shortcuts.global': 'Global & Navigation Hotkeys',
     'shortcuts.database': 'Database Workspace Tabs',
     'shortcuts.editor': 'SQL Console & Data Table',
+
+    // Error & Offline Page
+    'error.offlineTitle': 'Server Disconnected (503 Server Offline)',
+    'error.404Title': '404 - Page Not Found',
+    'error.generalTitle': 'System Error Occurred',
+    'error.offlineDesc': 'Unable to connect to VanillaDatabase server. The server might be down, restarting, or your internet is interrupted.',
+    'error.404Desc': 'The page or resource you are looking for does not exist, was renamed, or you lack access permission.',
+    'error.generalDesc': 'The system encountered an unexpected issue during processing. Please try again shortly.',
+    'error.autoRetryIn': 'Auto retrying in:',
+    'error.checking': 'Checking connection...',
+    'error.retryNow': 'Retry Connection Now',
+    'error.goHome': 'Back to Overview',
+    'error.goBack': 'Go back previous page',
+    'error.listDatabases': 'Databases List',
+    'error.liveTelemetry': 'Live Telemetry',
+    'error.activityLogs': 'Activity Logs',
   },
   vi: {
     // Brand & Header
@@ -1909,6 +1925,22 @@ const translations: Record<Language, Record<string, string>> = {
     'shortcuts.global': 'Phím tắt Toàn cục & Điều hướng',
     'shortcuts.database': 'Phím tắt Tab Workspace Database',
     'shortcuts.editor': 'Phím tắt SQL Console & Bảng dữ liệu',
+
+    // Error & Offline Page
+    'error.offlineTitle': 'Mất kết nối máy chủ (503 Server Offline)',
+    'error.404Title': '404 - Không tìm thấy trang',
+    'error.generalTitle': 'Đã xảy ra lỗi hệ thống',
+    'error.offlineDesc': 'Không thể kết nối đến máy chủ VanillaDatabase. Máy chủ có thể đang tắt, đang khởi động lại hoặc mạng của bạn bị gián đoạn.',
+    'error.404Desc': 'Trang hoặc tài nguyên dữ liệu bạn đang tìm kiếm không tồn tại, đã bị đổi tên hoặc bạn không có quyền truy cập.',
+    'error.generalDesc': 'Hệ thống gặp sự cố không mong muốn trong quá trình xử lý. Vui lòng thử lại sau giây lát.',
+    'error.autoRetryIn': 'Tự động thử lại sau:',
+    'error.checking': 'Đang kiểm tra kết nối...',
+    'error.retryNow': 'Thử kết nối lại ngay',
+    'error.goHome': 'Về Trang Tổng quan',
+    'error.goBack': 'Quay lại trang trước',
+    'error.listDatabases': 'Danh sách Databases',
+    'error.liveTelemetry': 'Live Telemetry',
+    'error.activityLogs': 'Activity Logs',
   },
 };
 

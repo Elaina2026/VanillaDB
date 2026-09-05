@@ -19,6 +19,20 @@ export function getMetadataDb(): DatabaseSync {
     PRAGMA synchronous = NORMAL;
   `);
 
+  // Ensure base critical tables exist immediately before full migrations
+  metaDb.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  `);
+
   runMigrations(metaDb);
   return metaDb;
 }

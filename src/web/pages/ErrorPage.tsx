@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, ArrowLeft, Home, WifiOff, AlertTriangle, Compass, ShieldAlert, Terminal } from 'lucide-react';
 import { LogoIcon } from '../components/LogoIcon.js';
+import { useI18n } from '../hooks/useI18n.js';
 
 interface ErrorPageProps {
   type?: '404' | 'offline' | 'error';
@@ -17,6 +18,7 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
   onRetry,
   onGoHome,
 }) => {
+  const { t } = useI18n();
   const [isChecking, setIsChecking] = useState(false);
   const [countdown, setCountdown] = useState(10);
 
@@ -56,16 +58,16 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
   const isOffline = type === 'offline';
 
   const defaultTitle = isOffline
-    ? 'Mất kết nối máy chủ (503 Server Offline)'
+    ? t('error.offlineTitle', 'Mất kết nối máy chủ (503 Server Offline)')
     : is404
-    ? '404 - Không tìm thấy trang'
-    : 'Đã xảy ra lỗi hệ thống';
+    ? t('error.404Title', '404 - Không tìm thấy trang')
+    : t('error.generalTitle', 'Đã xảy ra lỗi hệ thống');
 
   const defaultMessage = isOffline
-    ? 'Không thể kết nối đến máy chủ VanillaDatabase. Máy chủ có thể đang tắt, đang khởi động lại hoặc mạng của bạn bị gián đoạn.'
+    ? t('error.offlineDesc', 'Không thể kết nối đến máy chủ VanillaDatabase. Máy chủ có thể đang tắt, đang khởi động lại hoặc mạng của bạn bị gián đoạn.')
     : is404
-    ? 'Trang hoặc tài nguyên dữ liệu bạn đang tìm kiếm không tồn tại, đã bị đổi tên hoặc bạn không có quyền truy cập.'
-    : 'Hệ thống gặp sự cố không mong muốn trong quá trình xử lý. Vui lòng thử lại sau giây lát.';
+    ? t('error.404Desc', 'Trang hoặc tài nguyên dữ liệu bạn đang tìm kiếm không tồn tại, đã bị đổi tên hoặc bạn không có quyền truy cập.')
+    : t('error.generalDesc', 'Hệ thống gặp sự cố không mong muốn trong quá trình xử lý. Vui lòng thử lại sau giây lát.');
 
   const handleHomeClick = () => {
     if (onGoHome) {
@@ -130,7 +132,7 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
           <div className="p-3 bg-card border border-border rounded-xl text-xs font-mono flex items-center justify-between text-muted-foreground shadow-sm max-w-xs mx-auto">
             <span className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-              Tự động thử lại sau:
+              {t('error.autoRetryIn', 'Tự động thử lại sau:')}
             </span>
             <span className="font-bold text-foreground bg-muted px-2.5 py-0.5 rounded-md border border-border">
               {countdown}s
@@ -147,7 +149,7 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-md transition-all cursor-pointer"
             >
               <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
-              {isChecking ? 'Đang kiểm tra kết nối...' : 'Thử kết nối lại ngay'}
+              {isChecking ? t('error.checking', 'Đang kiểm tra kết nối...') : t('error.retryNow', 'Thử kết nối lại ngay')}
             </button>
           ) : (
             <>
@@ -156,7 +158,7 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-md transition-all cursor-pointer"
               >
                 <Home className="w-4 h-4" />
-                Về Trang Tổng quan
+                {t('error.goHome', 'Về Trang Tổng quan')}
               </button>
 
               <button
@@ -170,7 +172,7 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-card border border-border hover:bg-accent text-foreground rounded-lg text-xs font-medium transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Quay lại trang trước
+                {t('error.goBack', 'Quay lại trang trước')}
               </button>
             </>
           )}
@@ -183,21 +185,21 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
               onClick={() => { window.location.hash = '/databases'; }}
               className="hover:text-blue-500 transition-colors underline underline-offset-2"
             >
-              Danh sách Databases
+              {t('error.listDatabases', 'Danh sách Databases')}
             </button>
             <span>•</span>
             <button
               onClick={() => { window.location.hash = '/telemetry'; }}
               className="hover:text-blue-500 transition-colors underline underline-offset-2"
             >
-              Live Telemetry
+              {t('error.liveTelemetry', 'Live Telemetry')}
             </button>
             <span>•</span>
             <button
               onClick={() => { window.location.hash = '/activity'; }}
               className="hover:text-blue-500 transition-colors underline underline-offset-2"
             >
-              Activity Logs
+              {t('error.activityLogs', 'Activity Logs')}
             </button>
           </div>
         )}

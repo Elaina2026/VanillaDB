@@ -279,36 +279,75 @@ export class SystemService {
   }
 
   public getSettings(): SystemSettings {
-    const metaDb = getMetadataDb();
-    const rows = metaDb.prepare('SELECT key, value FROM settings').all() as Array<{ key: string; value: string }>;
-    const map: Record<string, string> = {};
-    for (const r of rows) map[r.key] = r.value;
-
-    return {
-      instance_name: map.instance_name || 'VanillaDatabase Primary',
-      base_url: map.base_url || `http://${config.host}:${config.port}`,
-      default_journal_mode: map.default_journal_mode || 'wal',
-      default_busy_timeout: map.default_busy_timeout ? parseInt(map.default_busy_timeout, 10) : config.sqlBusyTimeoutMs,
-      default_synchronous: map.default_synchronous || 'normal',
-      default_foreign_keys: map.default_foreign_keys !== 'false',
-      default_cache_size: map.default_cache_size ? parseInt(map.default_cache_size, 10) : -2000,
-      default_auto_vacuum: map.default_auto_vacuum || 'none',
-      backup_schedule: map.backup_schedule || 'daily',
-      backup_retention: map.backup_retention ? parseInt(map.backup_retention, 10) : 10,
-      max_upload_size_mb: map.max_upload_size_mb ? parseInt(map.max_upload_size_mb, 10) : 50,
-      default_user_rate_limit: map.default_user_rate_limit ? parseInt(map.default_user_rate_limit, 10) : 60,
-      default_user_max_databases: map.default_user_max_databases ? parseInt(map.default_user_max_databases, 10) : 5,
-      enable_query_logging: map.enable_query_logging !== 'false',
-      log_sql: map.log_sql === 'true',
-      debug_mode: map.debug_mode === 'true',
-      log_level: (map.log_level as any) || config.logLevel || 'info',
-      enable_cors_all: map.enable_cors_all === 'true',
-      enable_stack_traces: map.enable_stack_traces === 'true',
-      enable_system_alerts: map.enable_system_alerts !== 'false',
-      alert_webhook_url: map.alert_webhook_url || '',
-      alert_cpu_threshold: map.alert_cpu_threshold ? parseInt(map.alert_cpu_threshold, 10) : 85,
-      alert_ram_threshold: map.alert_ram_threshold ? parseInt(map.alert_ram_threshold, 10) : 85,
+    const defaultSettings: SystemSettings = {
+      instance_name: 'VanillaDatabase Primary',
+      base_url: `http://${config.host}:${config.port}`,
+      default_journal_mode: 'wal',
+      default_busy_timeout: config.sqlBusyTimeoutMs,
+      default_synchronous: 'normal',
+      default_foreign_keys: true,
+      default_cache_size: -2000,
+      default_auto_vacuum: 'none',
+      backup_schedule: 'daily',
+      backup_retention: 10,
+      max_upload_size_mb: 50,
+      default_user_rate_limit: 60,
+      default_user_max_databases: 5,
+      enable_query_logging: true,
+      log_sql: false,
+      debug_mode: false,
+      log_level: (config.logLevel as any) || 'info',
+      enable_cors_all: false,
+      enable_stack_traces: false,
+      enable_system_alerts: true,
+      alert_webhook_url: '',
+      alert_cpu_threshold: 85,
+      alert_ram_threshold: 85,
     };
+
+    try {
+      const metaDb = getMetadataDb();
+      // Ensure settings table exists to prevent premature initialization race conditions
+      metaDb.exec(`
+        CREATE TABLE IF NOT EXISTS settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+      `);
+
+      const rows = metaDb.prepare('SELECT key, value FROM settings').all() as Array<{ key: string; value: string }>;
+      const map: Record<string, string> = {};
+      for (const r of rows) map[r.key] = r.value;
+
+      return {
+        instance_name: map.instance_name || defaultSettings.instance_name,
+        base_url: map.base_url || defaultSettings.base_url,
+        default_journal_mode: map.default_journal_mode || defaultSettings.default_journal_mode,
+        default_busy_timeout: map.default_busy_timeout ? parseInt(map.default_busy_timeout, 10) : defaultSettings.default_busy_timeout,
+        default_synchronous: map.default_synchronous || defaultSettings.default_synchronous,
+        default_foreign_keys: map.default_foreign_keys !== undefined ? map.default_foreign_keys !== 'false' : defaultSettings.default_foreign_keys,
+        default_cache_size: map.default_cache_size ? parseInt(map.default_cache_size, 10) : defaultSettings.default_cache_size,
+        default_auto_vacuum: (map.default_auto_vacuum as any) || defaultSettings.default_auto_vacuum,
+        backup_schedule: (map.backup_schedule as any) || defaultSettings.backup_schedule,
+        backup_retention: map.backup_retention ? parseInt(map.backup_retention, 10) : defaultSettings.backup_retention,
+        max_upload_size_mb: map.max_upload_size_mb ? parseInt(map.max_upload_size_mb, 10) : defaultSettings.max_upload_size_mb,
+        default_user_rate_limit: map.default_user_rate_limit ? parseInt(map.default_user_rate_limit, 10) : defaultSettings.default_user_rate_limit,
+        default_user_max_databases: map.default_user_max_databases ? parseInt(map.default_user_max_databases, 10) : defaultSettings.default_user_max_databases,
+        enable_query_logging: map.enable_query_logging !== undefined ? map.enable_query_logging !== 'false' : defaultSettings.enable_query_logging,
+        log_sql: map.log_sql === 'true',
+        debug_mode: map.debug_mode === 'true',
+        log_level: (map.log_level as any) || defaultSettings.log_level,
+        enable_cors_all: map.enable_cors_all === 'true',
+        enable_stack_traces: map.enable_stack_traces === 'true',
+        enable_system_alerts: map.enable_system_alerts !== undefined ? map.enable_system_alerts !== 'false' : defaultSettings.enable_system_alerts,
+        alert_webhook_url: map.alert_webhook_url || defaultSettings.alert_webhook_url,
+        alert_cpu_threshold: map.alert_cpu_threshold ? parseInt(map.alert_cpu_threshold, 10) : defaultSettings.alert_cpu_threshold,
+        alert_ram_threshold: map.alert_ram_threshold ? parseInt(map.alert_ram_threshold, 10) : defaultSettings.alert_ram_threshold,
+      };
+    } catch {
+      return defaultSettings;
+    }
   }
 
   public updateSettings(settings: Partial<SystemSettings>): SystemSettings {
