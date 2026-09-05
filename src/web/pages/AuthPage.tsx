@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, User, KeyRound, AlertCircle, Fingerprint, Mail, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { Lock, User, KeyRound, AlertCircle, Fingerprint, Mail, ShieldCheck, ArrowLeft, Shield, CheckCircle2, X } from 'lucide-react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
@@ -23,6 +23,15 @@ export const AuthPage: React.FC = () => {
   const [require2fa, setRequire2fa] = useState(false);
   const [tempToken, setTempToken] = useState('');
   const [totpCode, setTotpCode] = useState('');
+
+  // 2FA Recovery with Backup Code State
+  const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
+  const [recoveryIdentifier, setRecoveryIdentifier] = useState('');
+  const [recoveryBackupCode, setRecoveryBackupCode] = useState('');
+  const [recoveryNewPassword, setRecoveryNewPassword] = useState('');
+  const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState('');
+  const [recoveryStatus, setRecoveryStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -63,6 +72,49 @@ export const AuthPage: React.FC = () => {
       setError(err.message || 'Mã 2FA không chính xác');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRecoverySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryStatus(null);
+
+    if (recoveryNewPassword.length < 6) {
+      setRecoveryStatus({ type: 'error', message: 'Mật khẩu mới phải có tối thiểu 6 ký tự' });
+      return;
+    }
+    if (recoveryNewPassword !== recoveryConfirmPassword) {
+      setRecoveryStatus({ type: 'error', message: 'Mật khẩu xác nhận không khớp' });
+      return;
+    }
+
+    setRecoveryLoading(true);
+    try {
+      const res = await apiRequest('/api/auth/recovery/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          usernameOrEmail: recoveryIdentifier.trim(),
+          backupCode: recoveryBackupCode.trim(),
+          newPassword: recoveryNewPassword,
+        }),
+      });
+
+      setRecoveryStatus({
+        type: 'success',
+        message: res?.message || 'Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay với mật khẩu mới.'
+      });
+      setTimeout(() => {
+        setIsRecoveryOpen(false);
+        setRequire2fa(false);
+        setAuthMode('login');
+        setUsername(recoveryIdentifier.trim());
+        setPassword('');
+        setRecoveryStatus(null);
+      }, 3000);
+    } catch (err: any) {
+      setRecoveryStatus({ type: 'error', message: err.message || 'Khôi phục tài khoản thất bại' });
+    } finally {
+      setRecoveryLoading(false);
     }
   };
 
@@ -222,6 +274,19 @@ export const AuthPage: React.FC = () => {
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>{t('auth.backToLogin', 'Back to Sign In')}</span>
             </button>
+
+            <div className="pt-2 border-t border-border text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setRecoveryIdentifier(username);
+                  setIsRecoveryOpen(true);
+                }}
+                className="text-[11px] text-blue-500 hover:text-blue-400 hover:underline transition-colors"
+              >
+                Mất điện thoại? Khôi phục bằng mã dự phòng (Backup Code)
+              </button>
+            </div>
           </form>
         ) : (
           /* Normal Auth Form (Login / Register / Setup) */
@@ -328,6 +393,114 @@ export const AuthPage: React.FC = () => {
           </form>
         )}
       </div>
+
+      {/* Modal Khôi Phục Tài Khoản Bằng Mã Dự Phòng 2FA */}
+      {isRecoveryOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-amber-500" />
+                <h3 className="text-sm font-bold text-foreground">Khôi Phục Mật Khẩu Bằng Mã 2FA</h3>
+              </div>
+              <button
+                onClick={() => setIsRecoveryOpen(false)}
+                className="p-1 text-muted-foreground hover:text-foreground rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Nhập tên tài khoản hoặc email kèm một trong 6 mã dự phòng (định dạng <code className="text-foreground font-mono">XXXX-XXXX</code>) đã được cấp khi kích hoạt 2FA.
+            </p>
+
+            {recoveryStatus && (
+              <div
+                className={`p-3 rounded-md text-xs flex items-center gap-2 ${
+                  recoveryStatus.type === 'success'
+                    ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-500'
+                    : 'bg-red-500/10 border border-red-500/20 text-red-500'
+                }`}
+              >
+                {recoveryStatus.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                )}
+                <span>{recoveryStatus.message}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleRecoverySubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Tên tài khoản hoặc Email</label>
+                <input
+                  type="text"
+                  required
+                  value={recoveryIdentifier}
+                  onChange={(e) => setRecoveryIdentifier(e.target.value)}
+                  placeholder="admin hoặc user@example.com"
+                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Mã dự phòng (Backup Code: XXXX-XXXX)</label>
+                <input
+                  type="text"
+                  required
+                  value={recoveryBackupCode}
+                  onChange={(e) => setRecoveryBackupCode(e.target.value.toUpperCase())}
+                  placeholder="VD: 7T9K-4MP2"
+                  className="w-full px-3 py-1.5 text-center font-mono font-bold tracking-wider bg-background border border-border rounded-md text-foreground"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Mật khẩu mới (Tối thiểu 6 ký tự)</label>
+                <input
+                  type="password"
+                  required
+                  value={recoveryNewPassword}
+                  onChange={(e) => setRecoveryNewPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Xác nhận mật khẩu mới</label>
+                <input
+                  type="password"
+                  required
+                  value={recoveryConfirmPassword}
+                  onChange={(e) => setRecoveryConfirmPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsRecoveryOpen(false)}
+                  className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={recoveryLoading || !recoveryIdentifier || !recoveryBackupCode || !recoveryNewPassword || !recoveryConfirmPassword}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-semibold"
+                >
+                  {recoveryLoading ? 'Đang xác thực...' : 'Đặt lại mật khẩu'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

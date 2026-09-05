@@ -128,3 +128,23 @@ export async function generateQrCodeSvgDataUrl(text: string): Promise<string> {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 }
 
+/**
+ * Generate a set of 6 cryptographically secure backup recovery codes
+ * Format: 8 alphanumeric characters formatted as XXXX-XXXX
+ */
+export function generateBackupCodes(count = 6): string[] {
+  const codes: string[] = [];
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // base32 human friendly (no 0, 1, I, O)
+  for (let i = 0; i < count; i++) {
+    const bytes = crypto.randomBytes(8);
+    let part1 = '';
+    let part2 = '';
+    for (let j = 0; j < 4; j++) {
+      part1 += chars[bytes[j] % chars.length];
+      part2 += chars[bytes[j + 4] % chars.length];
+    }
+    codes.push(`${part1}-${part2}`);
+  }
+  return codes;
+}
+

@@ -289,6 +289,13 @@ function runMigrations(db: DatabaseSync): void {
         CREATE INDEX IF NOT EXISTS idx_db_invites_email ON database_invites(email);
         CREATE INDEX IF NOT EXISTS idx_db_invites_db ON database_invites(database_id);
       `
+    },
+    {
+      version: 11,
+      name: 'add_totp_backup_codes_to_users',
+      sql: `
+        ALTER TABLE users ADD COLUMN totp_backup_codes TEXT;
+      `
     }
   ];
 
@@ -308,7 +315,7 @@ function runMigrations(db: DatabaseSync): void {
             }
           }
         }
-        db.prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(
+        db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(
           m.version,
           m.name,
           Date.now()

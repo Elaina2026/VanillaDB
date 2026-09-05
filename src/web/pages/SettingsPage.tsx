@@ -34,7 +34,9 @@ import {
   ShieldCheck,
   UploadCloud,
   Check,
-  X
+  X,
+  Copy,
+  Download
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../hooks/useAuth.js';
@@ -62,6 +64,10 @@ export const SettingsPage: React.FC = () => {
   // 2FA Setup State
   const [is2faModalOpen, setIs2faModalOpen] = useState(false);
   const [isDisable2faModalOpen, setIsDisable2faModalOpen] = useState(false);
+  const [isBackupCodesModalOpen, setIsBackupCodesModalOpen] = useState(false);
+  const [generatedBackupCodes, setGeneratedBackupCodes] = useState<string[]>([]);
+  const [copiedBackupCodes, setCopiedBackupCodes] = useState(false);
+  const [disableSuccessNotice, setDisableSuccessNotice] = useState(false);
   const [qrCodeData, setQrCodeData] = useState<{ secret: string; otpauthUri: string; qrDataUrl: string } | null>(null);
   const [totpVerifyPassword, setTotpVerifyPassword] = useState('');
   const [totpVerifyCode, setTotpVerifyCode] = useState('');
@@ -189,13 +195,15 @@ export const SettingsPage: React.FC = () => {
     e.preventDefault();
     setTotpStatus(null);
     try {
-      await apiRequest('/api/auth/2fa/activate', {
+      const res = await apiRequest('/api/auth/2fa/activate', {
         method: 'POST',
         body: JSON.stringify({ password: totpVerifyPassword, code: totpVerifyCode.trim() }),
       });
+      const codes = res?.data?.backupCodes || [];
       refetchAuthStatus();
       setIs2faModalOpen(false);
-      alert('Đã kích hoạt bảo mật 2 lớp (2FA) thành công!');
+      setGeneratedBackupCodes(codes);
+      setIsBackupCodesModalOpen(true);
     } catch (err: any) {
       setTotpStatus({ type: 'error', message: err.message || 'Kích hoạt 2FA thất bại' });
     }
@@ -211,10 +219,33 @@ export const SettingsPage: React.FC = () => {
       });
       refetchAuthStatus();
       setIsDisable2faModalOpen(false);
-      alert('Đã tắt bảo mật 2 lớp (2FA)!');
+      setDisableSuccessNotice(true);
+      setTimeout(() => setDisableSuccessNotice(false), 5000);
     } catch (err: any) {
       setTotpStatus({ type: 'error', message: err.message || 'Tắt 2FA thất bại' });
     }
+  };
+
+  const handleCopyBackupCodes = () => {
+    if (!generatedBackupCodes.length) return;
+    const text = generatedBackupCodes.join('\n');
+    navigator.clipboard.writeText(text);
+    setCopiedBackupCodes(true);
+    setTimeout(() => setCopiedBackupCodes(false), 2500);
+  };
+
+  const handleDownloadBackupCodes = () => {
+    if (!generatedBackupCodes.length) return;
+    const content = `VANILLADATABASE 2FA BACKUP RECOVERY CODES\nGenerated: ${new Date().toISOString()}\nAccount: ${currentUser?.username || 'user'}\n\nKeep these codes safe! Each code can be used once to reset your password if you lose access to your authenticator app:\n\n` +
+      generatedBackupCodes.map((c, i) => `${i + 1}. ${c}`).join('\n') +
+      '\n\nNotice: Keep this file offline and confidential.';
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vanilladb-backup-codes-${currentUser?.username || 'user'}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -293,12 +324,14 @@ export const SettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto p-4 md:p-6 max-w-5xl mx-auto w-full space-y-6 select-none">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto pt-6 px-4 md:px-6 pb-12 max-w-5xl mx-auto w-full space-y-6 select-none">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border shrink-0">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-foreground">{t('settings.title', 'Platform Settings')}</h1>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">
+              {isSuperAdminOrAdmin ? t('settings.title', 'Platform Settings') : t('settings.userTitle', 'Account & Security Settings')}
+            </h1>
             <span className="text-[10px] px-2 py-0.5 bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded font-semibold uppercase tracking-wider">
               {currentUser?.role || 'user'}
             </span>
@@ -310,7 +343,9 @@ export const SettingsPage: React.FC = () => {
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {t('settings.desc', 'Configure SQLite engine parameters, backup frequency, alerting channels, and authentication credentials.')}
+            {isSuperAdminOrAdmin
+              ? t('settings.desc', 'Configure SQLite engine parameters, backup frequency, alerting channels, and authentication credentials.')
+              : t('settings.userDesc', 'Manage your personal profile, avatar, credentials, and Two-Factor Authentication.')}
           </p>
         </div>
 
@@ -327,6 +362,13 @@ export const SettingsPage: React.FC = () => {
       </div>
 
       {/* Notifications */}
+      {disableSuccessNotice && (
+        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-lg text-xs flex items-center gap-2 animate-in fade-in duration-150">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>Đã tắt bảo mật 2 lớp (2FA) thành công cho tài khoản của bạn.</span>
+        </div>
+      )}
+
       {saved && (
         <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-lg text-xs flex items-center gap-2 animate-in fade-in duration-150">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -341,40 +383,37 @@ export const SettingsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Navigation Tabs */}
-      <div className="flex items-center gap-1 border-b border-border overflow-x-auto pb-px">
-        {(isSuperAdminOrAdmin
-          ? [
-              { id: 'general', label: t('settings.tabGeneral', 'General & Platform'), icon: Server },
-              { id: 'engine', label: t('settings.tabEngine', 'SQLite Engine'), icon: Cpu },
-              { id: 'backups', label: t('settings.tabBackups', 'Backups & Storage'), icon: Archive },
-              { id: 'quotas', label: t('settings.tabQuotas', 'User Quotas & Limits'), icon: Gauge },
-              { id: 'alerts', label: t('settings.tabAlerts', 'System Alerting & Health'), icon: Bell },
-              { id: 'debug', label: t('settings.tabDebug', 'Diagnostics & Debugging'), icon: Bug },
-              { id: 'account', label: t('settings.tabAccount', 'My Account & Security'), icon: User },
-            ]
-          : [
-              { id: 'account', label: t('settings.tabAccount', 'My Account & Security'), icon: User },
-            ]
-        ).map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-3.5 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-colors cursor-pointer ${
-                isActive
-                  ? 'border-blue-600 text-blue-500 font-semibold'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Navigation Tabs (Only rendered for Admin roles with multiple tabs) */}
+      {isSuperAdminOrAdmin && (
+        <div className="flex items-center gap-1 border-b border-border overflow-x-auto pb-px shrink-0">
+          {[
+            { id: 'general', label: t('settings.tabGeneral', 'General & Platform'), icon: Server },
+            { id: 'engine', label: t('settings.tabEngine', 'SQLite Engine'), icon: Cpu },
+            { id: 'backups', label: t('settings.tabBackups', 'Backups & Storage'), icon: Archive },
+            { id: 'quotas', label: t('settings.tabQuotas', 'User Quotas & Limits'), icon: Gauge },
+            { id: 'alerts', label: t('settings.tabAlerts', 'System Alerting & Health'), icon: Bell },
+            { id: 'debug', label: t('settings.tabDebug', 'Diagnostics & Debugging'), icon: Bug },
+            { id: 'account', label: t('settings.tabAccount', 'My Account & Security'), icon: User },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-3.5 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-colors cursor-pointer ${
+                  isActive
+                    ? 'border-blue-600 text-blue-500 font-semibold'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* TAB 1: General & Platform */}
       {activeTab === 'general' && (
@@ -1297,6 +1336,74 @@ export const SettingsPage: React.FC = () => {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Hiển Thị 6 Mã Dự Phòng Khi Kích Hoạt 2FA Thành Công */}
+          {isBackupCodesModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-border pb-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                    <h3 className="text-sm font-bold text-foreground">Kích Hoạt 2FA Thành Công!</h3>
+                  </div>
+                  <button
+                    onClick={() => setIsBackupCodesModalOpen(false)}
+                    className="p-1 text-muted-foreground hover:text-foreground rounded"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs rounded-lg space-y-1">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <Shield className="w-4 h-4" />
+                    Lưu trữ 6 mã dự phòng này ở nơi an toàn!
+                  </p>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Nếu bạn mất điện thoại hoặc không thể truy cập ứng dụng Authenticator, bạn có thể dùng một trong các mã này để đặt lại mật khẩu và lấy lại tài khoản. Mỗi mã chỉ dùng được một lần.
+                  </p>
+                </div>
+
+                {/* Grid 6 backup codes */}
+                <div className="grid grid-cols-2 gap-2 p-3 bg-muted/50 rounded-lg border border-border font-mono text-center text-xs font-bold text-foreground tracking-wider select-all">
+                  {generatedBackupCodes.map((code, idx) => (
+                    <div key={idx} className="p-2 bg-background border border-border rounded shadow-xs">
+                      {code}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyBackupCodes}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-muted hover:bg-accent border border-border text-foreground rounded text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    {copiedBackupCodes ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedBackupCodes ? 'Đã sao chép!' : 'Sao chép tất cả'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadBackupCodes}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-muted hover:bg-accent border border-border text-foreground rounded text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Tải về máy (.txt)</span>
+                  </button>
+                </div>
+
+                <div className="pt-2 border-t border-border flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsBackupCodesModalOpen(false)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                  >
+                    Tôi đã lưu mã an toàn
+                  </button>
+                </div>
               </div>
             </div>
           )}

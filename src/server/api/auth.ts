@@ -8,7 +8,8 @@ import {
   generateTotpSecret,
   verifyTotpCode,
   getTotpAuthUri,
-  generateQrCodeSvgDataUrl
+  generateQrCodeSvgDataUrl,
+  generateBackupCodes
 } from '../utils/totp.js';
 import { config } from '../config/index.js';
 import { requireAdminAuth } from '../middleware/auth.js';
@@ -526,12 +527,16 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    // Commit 2FA activation
+    // Generate 6 backup recovery codes
+    const backupCodes = generateBackupCodes(6);
+    const backupCodesJson = JSON.stringify(backupCodes);
+
+    // Commit 2FA activation with backup codes
     metaDb.prepare(`
       UPDATE users
-      SET totp_secret = totp_temp_secret, totp_enabled = 1, totp_temp_secret = NULL, updated_at = ?
+      SET totp_secret = totp_temp_secret, totp_enabled = 1, totp_temp_secret = NULL, totp_backup_codes = ?, updated_at = ?
       WHERE id = ?
-    `).run(Date.now(), user.id);
+    `).run(backupCodesJson, Date.now(), user.id);
 
     activityService.recordAudit({
       user: user.username,
@@ -541,7 +546,13 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       requestId: req.id,
     });
 
-    return reply.send({ success: true, message: 'Đã kích hoạt bảo mật 2 lớp (2FA) thành công' });
+    return reply.send({
+      success: true,
+      message: 'Đã kích hoạt bảo mật 2 lớp (2FA) thành công',
+      data: {
+        backupCodes
+      }
+    });
   });
 
   // 2FA TOTP Disable: REQUIRES password + 6-digit TOTP code
@@ -591,7 +602,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     metaDb.prepare(`
       UPDATE users
-      SET totp_secret = NULL, totp_enabled = 0, totp_temp_secret = NULL, updated_at = ?
+      SET totp_secret = NULL, totp_enabled = 0, totp_temp_secret = NULL, totp_backup_codes = NULL, updated_at = ?
       WHERE id = ?
     `).run(Date.now(), user.id);
 
@@ -604,5 +615,92 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     return reply.send({ success: true, message: 'Đã tắt bảo mật 2 lớp (2FA)' });
+  });
+
+  // Reset password using 2FA Backup Recovery Code
+  fastify.post('/recovery/reset-password', async (req, reply) => {
+    const Schema = z.object({
+      usernameOrEmail: z.string().min(1, 'Username hoặc Email là bắt buộc'),
+      backupCode: z.string().min(8, 'Mã dự phòng hợp lệ là bắt buộc'),
+      newPassword: z.string().min(6, 'Mật khẩu mới phải có tối thiểu 6 ký tự').max(128),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Dữ liệu không hợp lệ' },
+      });
+    }
+
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const cleanId = parsed.data.usernameOrEmail.trim();
+    const cleanLower = cleanId.toLowerCase();
+    const cleanCode = parsed.data.backupCode.trim().toUpperCase();
+
+    const userRow = metaDb.prepare(`
+      SELECT id, username, email, totp_enabled, totp_backup_codes
+      FROM users
+      WHERE username = ? OR email = ? OR LOWER(email) = ? OR LOWER(username) = ?
+    `).get(cleanId, cleanId, cleanLower, cleanLower) as
+      | { id: string; username: string; email: string | null; totp_enabled: number; totp_backup_codes: string | null }
+      | undefined;
+
+    if (!userRow) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'Không tìm thấy tài khoản tương ứng' },
+      });
+    }
+
+    if (!userRow.totp_enabled || !userRow.totp_backup_codes) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'NO_BACKUP_CODES', message: 'Tài khoản chưa kích hoạt 2FA hoặc không có mã dự phòng' },
+      });
+    }
+
+    let codes: string[] = [];
+    try {
+      codes = JSON.parse(userRow.totp_backup_codes);
+      if (!Array.isArray(codes)) codes = [];
+    } catch {
+      codes = [];
+    }
+
+    const codeIndex = codes.findIndex(c => c.toUpperCase() === cleanCode);
+    if (codeIndex === -1) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_BACKUP_CODE', message: 'Mã dự phòng không chính xác hoặc đã được sử dụng' },
+      });
+    }
+
+    // Burn the used backup code
+    codes.splice(codeIndex, 1);
+    const updatedCodesJson = JSON.stringify(codes);
+    const newPasswordHash = await authService.hashPassword(parsed.data.newPassword);
+
+    metaDb.prepare(`
+      UPDATE users
+      SET password_hash = ?, totp_backup_codes = ?, updated_at = ?
+      WHERE id = ?
+    `).run(newPasswordHash, updatedCodesJson, Date.now(), userRow.id);
+
+    activityService.recordAudit({
+      user: userRow.username,
+      action: 'password_reset_backup_code',
+      resource: userRow.id,
+      result: 'success',
+      requestId: req.id,
+    });
+
+    return reply.send({
+      success: true,
+      message: 'Đặt lại mật khẩu thành công bằng mã dự phòng. Mã này đã bị huỷ.',
+      data: {
+        remainingBackupCodesCount: codes.length
+      }
+    });
   });
 };

@@ -251,6 +251,12 @@ const translations: Record<Language, Record<string, string>> = {
     'tables.deleteRow': 'Delete Row',
     'tables.confirmDelete': 'Are you sure you want to delete this row?',
     'tables.details': 'Row Details',
+    'tables.renameTable': 'Rename Table',
+    'tables.truncateTable': 'Truncate Table',
+    'tables.dropTable': 'Drop Table',
+    'tables.confirmTruncate': 'Are you sure you want to empty this table? All row records will be permanently purged.',
+    'tables.confirmDrop': 'Are you sure you want to permanently DROP this table and all its columns, data, and indexes?',
+    'tables.perPage': '/ page',
 
     // Media Storage
     'storage.title': 'Media & File Storage',
@@ -333,7 +339,7 @@ const translations: Record<Language, Record<string, string>> = {
     'backups.confirmRestore': 'Are you sure you want to restore this backup? Current unbacked changes will be overwritten.',
     'backups.noBackups': 'No backups found for this database.',
 
-    // Danger Zone Settings
+    // Danger Zone Settings & Maintenance
     'danger.title': 'Danger Zone Settings',
     'danger.desc': 'Irreversible actions that affect the lifecycle of this SQLite database.',
     'danger.renameTitle': 'Rename Database',
@@ -345,6 +351,38 @@ const translations: Record<Language, Record<string, string>> = {
     'danger.deleteTitle': 'Delete Database',
     'danger.deleteDesc': 'Permanently delete this SQLite database and all associated media files, tokens, and backups.',
     'danger.deleteButton': 'Delete Database Permanently',
+    'danger.confirmDelete': 'Type database name to confirm deletion:',
+
+    // Database Maintenance & Optimization
+    'maint.title': 'Database Maintenance & Performance Tuning',
+    'maint.desc': 'Defragment pages, reclaim free space, flush WAL buffers, and check database file integrity.',
+    'maint.vacuumTitle': 'VACUUM (Reclaim Free Space)',
+    'maint.vacuumDesc': 'Repacks the database file to discard empty pages and reduce disk size.',
+    'maint.runVacuum': 'Run VACUUM',
+    'maint.integrityTitle': 'PRAGMA integrity_check',
+    'maint.integrityDesc': 'Deep scans B-Tree structures and data pages for zero corruption.',
+    'maint.runIntegrity': 'Run Integrity Check',
+    'maint.walTitle': 'Flush WAL Buffer',
+    'maint.walDesc': 'Forces writes from the Write-Ahead Log into the main DB file and truncates it.',
+    'maint.runWal': 'Flush & Truncate WAL',
+    'maint.reindexTitle': 'REINDEX (Rebuild Indexes)',
+    'maint.reindexDesc': 'Rebuilds all indexes across all tables to optimize search speed.',
+    'maint.runReindex': 'Run REINDEX',
+    'maint.analyzeTitle': 'ANALYZE (Query Planner Stats)',
+    'maint.analyzeDesc': 'Computes table and index distributions to help query optimizer choose the fastest execution paths.',
+    'maint.runAnalyze': 'Run ANALYZE',
+    'maint.optimizeTitle': 'PRAGMA optimize',
+    'maint.optimizeDesc': 'Runs automatic low-overhead maintenance checks on SQLite database files.',
+    'maint.runOptimize': 'Run PRAGMA optimize',
+    'maint.cloneTitle': 'Database Cloning & Branching',
+    'maint.cloneDesc': 'Duplicate this database instance to create development or staging branches.',
+    'maint.cloneButton': 'Clone Database',
+    'maint.freePages': 'Free Pages',
+
+    // Quickstart & SDK
+    'quickstart.tsClient': 'TypeScript / Node.js SDK',
+    'quickstart.pyClient': 'Python Client',
+    'quickstart.curlCommands': 'cURL Commands',
 
     // Telemetry Page
     'telemetry.title': 'Live Telemetry & Metrics',
@@ -785,6 +823,12 @@ const translations: Record<Language, Record<string, string>> = {
     'tables.deleteRow': 'Xóa hàng dữ liệu',
     'tables.confirmDelete': 'Bạn có chắc chắn muốn xóa hàng dữ liệu này?',
     'tables.details': 'Chi tiết hàng dữ liệu',
+    'tables.renameTable': 'Đổi tên bảng',
+    'tables.truncateTable': 'Xóa sạch bảng (Truncate)',
+    'tables.dropTable': 'Xóa bảng (Drop Table)',
+    'tables.confirmTruncate': 'Bạn có chắc chắn muốn dọn sạch bảng này? Toàn bộ bản ghi sẽ bị xóa vĩnh viễn.',
+    'tables.confirmDrop': 'Bạn có chắc chắn muốn xóa hoàn toàn (DROP) bảng này cùng các cột, dữ liệu và chỉ mục liên quan?',
+    'tables.perPage': '/ trang',
 
     // Media Storage
     'storage.title': 'Kho lưu trữ Media & Tập tin',
@@ -867,7 +911,7 @@ const translations: Record<Language, Record<string, string>> = {
     'backups.confirmRestore': 'Bạn có chắc chắn muốn khôi phục bản sao lưu này? Mọi thay đổi chưa sao lưu sẽ bị ghi đè.',
     'backups.noBackups': 'Chưa có bản sao lưu nào cho cơ sở dữ liệu này.',
 
-    // Danger Zone Settings
+    // Danger Zone Settings & Maintenance
     'danger.title': 'Cấu hình nguy hiểm',
     'danger.desc': 'Các thao tác không thể hoàn tác ảnh hưởng trực tiếp đến sự tồn tại của database này.',
     'danger.renameTitle': 'Đổi tên cơ sở dữ liệu',
@@ -879,6 +923,38 @@ const translations: Record<Language, Record<string, string>> = {
     'danger.deleteTitle': 'Xóa cơ sở dữ liệu vĩnh viễn',
     'danger.deleteDesc': 'Xóa hoàn toàn tệp SQLite, toàn bộ tập tin media, token và các bản sao lưu liên quan.',
     'danger.deleteButton': 'Xác nhận xóa vĩnh viễn',
+    'danger.confirmDelete': 'Nhập đúng tên cơ sở dữ liệu để xác nhận xóa:',
+
+    // Database Maintenance & Optimization
+    'maint.title': 'Bảo trì & Tinh chỉnh hiệu năng Database',
+    'maint.desc': 'Chống phân mảnh trang dữ liệu, thu hồi dung lượng trống, đẩy bộ đệm WAL và kiểm tra toàn vẹn tệp SQLite.',
+    'maint.vacuumTitle': 'VACUUM (Thu hồi dung lượng trống)',
+    'maint.vacuumDesc': 'Tái đóng gói tệp SQLite để loại bỏ các trang dữ liệu trống và giải phóng ổ đĩa.',
+    'maint.runVacuum': 'Chạy VACUUM',
+    'maint.integrityTitle': 'PRAGMA integrity_check',
+    'maint.integrityDesc': 'Quét sâu cấu trúc cây B-Tree và các trang dữ liệu để đảm bảo không bị lỗi tệp.',
+    'maint.runIntegrity': 'Kiểm tra toàn vẹn',
+    'maint.walTitle': 'Làm sạch bộ đệm WAL (Flush WAL Buffer)',
+    'maint.walDesc': 'Ghi ép buộc dữ liệu từ Write-Ahead Log vào tệp DB chính và cắt ngắn tệp WAL.',
+    'maint.runWal': 'Đồng bộ & Cắt tệp WAL',
+    'maint.reindexTitle': 'REINDEX (Xây dựng lại chỉ mục)',
+    'maint.reindexDesc': 'Tái tạo toàn bộ chỉ mục trên tất cả các bảng để tối ưu tốc độ tìm kiếm.',
+    'maint.runReindex': 'Chạy REINDEX',
+    'maint.analyzeTitle': 'ANALYZE (Thống kê cho Query Planner)',
+    'maint.analyzeDesc': 'Tính toán phân bổ dữ liệu bảng và chỉ mục để SQLite tối ưu đường dẫn thực thi câu lệnh nhanh nhất.',
+    'maint.runAnalyze': 'Chạy ANALYZE',
+    'maint.optimizeTitle': 'PRAGMA optimize',
+    'maint.optimizeDesc': 'Chạy bảo trì tự động chi phí thấp cho các tệp cơ sở dữ liệu SQLite.',
+    'maint.runOptimize': 'Chạy PRAGMA optimize',
+    'maint.cloneTitle': 'Nhân bản & Tạo nhánh Database',
+    'maint.cloneDesc': 'Tạo một bản sao độc lập của database này phục vụ môi trường phát triển (Dev Branch) hoặc Staging.',
+    'maint.cloneButton': 'Nhân bản Database',
+    'maint.freePages': 'Trang trống',
+
+    // Quickstart & SDK
+    'quickstart.tsClient': 'SDK TypeScript / Node.js',
+    'quickstart.pyClient': 'Thư viện Python',
+    'quickstart.curlCommands': 'Lệnh gọi qua cURL',
 
     // Telemetry Page
     'telemetry.title': 'Giám sát Telemetry thời gian thực',

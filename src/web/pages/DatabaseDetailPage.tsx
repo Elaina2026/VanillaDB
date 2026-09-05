@@ -1421,7 +1421,7 @@ export const DatabaseDetailPage: React.FC<{
                       className="flex items-center gap-1 px-2.5 py-1 bg-background border border-border hover:bg-accent rounded text-xs font-medium transition-colors text-foreground"
                     >
                       <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
-                      Rename
+                      {t('tables.renameTable', 'Rename')}
                     </button>
 
                     {/* Truncate Table */}
@@ -1429,9 +1429,9 @@ export const DatabaseDetailPage: React.FC<{
                       onClick={() => {
                         setConfirmConfig({
                           isOpen: true,
-                          title: `Truncate Table "${selectedTable}"?`,
-                          message: `Are you sure you want to empty table "${selectedTable}"? All row records will be permanently purged.`,
-                          confirmText: 'Truncate Table',
+                          title: `${t('tables.truncateTable', 'Truncate Table')} "${selectedTable}"?`,
+                          message: t('tables.confirmTruncate', `Are you sure you want to empty table "${selectedTable}"? All row records will be permanently purged.`),
+                          confirmText: t('tables.truncateTable', 'Truncate Table'),
                           variant: 'danger',
                           isLoading: truncateTableMutation.isPending,
                           onConfirm: () => {
@@ -1443,7 +1443,7 @@ export const DatabaseDetailPage: React.FC<{
                       disabled={truncateTableMutation.isPending}
                       className="px-2.5 py-1 bg-background border border-border hover:bg-accent rounded text-xs font-medium transition-colors text-muted-foreground hover:text-red-500"
                     >
-                      Truncate
+                      {t('tables.truncateTable', 'Truncate')}
                     </button>
 
                     {/* Drop Table */}
@@ -1451,9 +1451,9 @@ export const DatabaseDetailPage: React.FC<{
                       onClick={() => {
                         setConfirmConfig({
                           isOpen: true,
-                          title: `Drop Table "${selectedTable}"?`,
-                          message: `Are you sure you want to permanently DROP table "${selectedTable}" and all its columns, data, and indexes?`,
-                          confirmText: 'Drop Table',
+                          title: `${t('tables.dropTable', 'Drop Table')} "${selectedTable}"?`,
+                          message: t('tables.confirmDrop', `Are you sure you want to permanently DROP table "${selectedTable}" and all its columns, data, and indexes?`),
+                          confirmText: t('tables.dropTable', 'Drop Table'),
                           variant: 'danger',
                           isLoading: dropTableMutation.isPending,
                           onConfirm: () => {
@@ -1464,7 +1464,7 @@ export const DatabaseDetailPage: React.FC<{
                       }}
                       disabled={dropTableMutation.isPending}
                       className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
-                      title="Drop Table"
+                      title={t('tables.dropTable', 'Drop Table')}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -1475,10 +1475,10 @@ export const DatabaseDetailPage: React.FC<{
                       onChange={(e) => setTableLimit(parseInt(e.target.value, 10))}
                       className="px-2 py-1 text-xs bg-background border border-border rounded text-foreground"
                     >
-                      <option value={25}>25 / page</option>
-                      <option value={50}>50 / page</option>
-                      <option value={100}>100 / page</option>
-                      <option value={250}>250 / page</option>
+                      <option value={25}>25 {t('tables.perPage', '/ page')}</option>
+                      <option value={50}>50 {t('tables.perPage', '/ page')}</option>
+                      <option value={100}>100 {t('tables.perPage', '/ page')}</option>
+                      <option value={250}>250 {t('tables.perPage', '/ page')}</option>
                     </select>
 
                     <button
@@ -3176,14 +3176,14 @@ export const DatabaseDetailPage: React.FC<{
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                   <Terminal className="w-4 h-4 text-blue-500" />
-                  Client SDK Quickstart (TypeScript / Node.js & Python)
+                  {t('quickstart.tsClient', 'Client SDK Quickstart (TypeScript / Node.js & Python)')}
                 </h3>
               </div>
 
               {/* Node / TS SDK */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-foreground">1. TypeScript / Node.js Client</span>
+                  <span className="text-xs font-semibold text-foreground">{t('quickstart.tsClient', '1. TypeScript / Node.js Client')}</span>
                   <span className="text-[11px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
                     npm i @nullex/vanilladb
                   </span>
@@ -3220,7 +3220,7 @@ console.log('Stream URL:', db.getFileUrl(file.id));`}
               {/* Python SDK */}
               <div className="space-y-2 pt-3 border-t border-border">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-foreground">2. Python Client</span>
+                  <span className="text-xs font-semibold text-foreground">{t('quickstart.pyClient', '2. Python Client')}</span>
                   <span className="text-[11px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
                     pip install vanilladb
                   </span>
@@ -3252,7 +3252,7 @@ print("File URL:", db.get_file_url(uploaded["id"]))`}
 
             {/* cURL Example */}
             <div className="bg-card border border-border rounded-lg p-5 space-y-4 shadow-sm">
-              <h3 className="text-sm font-semibold text-foreground">cURL Commands</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t('quickstart.curlCommands', 'cURL Commands')}</h3>
               <pre className="p-4 bg-muted/60 border border-border rounded text-xs font-mono overflow-x-auto text-foreground">
 {`# 1. Raw SQL Query
 curl -X POST "${window.location.origin}/v1/databases/${databaseId}/query" \\
@@ -3347,19 +3347,20 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
         )}
 
         {/* SCHEDULED JOBS TAB */}
+        {/* SCHEDULED JOBS TAB */}
         {activeTab === 'jobs' && (
           <div className="max-w-5xl mx-auto space-y-4">
             <div className="flex items-center justify-between pb-2">
               <div>
-                <h3 className="text-sm font-bold text-foreground">Scheduled SQL Jobs (Cron)</h3>
-                <p className="text-xs text-muted-foreground">Automated database routines, log purges, and maintenance tasks.</p>
+                <h3 className="text-sm font-bold text-foreground">{t('jobs.title', 'Scheduled SQL Jobs (Cron)')}</h3>
+                <p className="text-xs text-muted-foreground">{t('jobs.desc', 'Automated database routines, log purges, and maintenance tasks.')}</p>
               </div>
               <button
                 onClick={() => setIsCreateJobOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Create Job
+                {t('jobs.create', 'Create Job')}
               </button>
             </div>
 
@@ -3370,7 +3371,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   <div className="flex items-center justify-between border-b border-border pb-3">
                     <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                       <Clock className="w-4 h-4 text-blue-500" />
-                      Configure Scheduled SQL Job
+                      {t('jobs.create', 'Configure Scheduled SQL Job')}
                     </h3>
                     <button onClick={() => setIsCreateJobOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground">
                       <X className="w-4 h-4" />
@@ -3379,7 +3380,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
 
                   <div className="space-y-3 text-xs">
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Job Name</label>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">{t('jobs.name', 'Job Name')}</label>
                       <input
                         type="text"
                         placeholder="e.g. Daily Data Cleanup"
@@ -3390,7 +3391,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Cadence / Cron</label>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">{t('jobs.schedule', 'Cadence / Cron')}</label>
                       <select
                         value={jobCron}
                         onChange={(e) => setJobCron(e.target.value)}
@@ -3405,7 +3406,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">SQL Statements to Execute</label>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">{t('jobs.sql', 'SQL Statements to Execute')}</label>
                       <textarea
                         rows={4}
                         value={jobSql}
@@ -3420,14 +3421,14 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                       onClick={() => setIsCreateJobOpen(false)}
                       className="px-3 py-1.5 border border-border hover:bg-accent rounded text-muted-foreground text-xs"
                     >
-                      Cancel
+                      {t('common.cancel', 'Cancel')}
                     </button>
                     <button
                       disabled={!jobName.trim() || !jobSql.trim() || createJobMutation.isPending}
                       onClick={() => createJobMutation.mutate({ name: jobName, cron_expression: jobCron, sql_query: jobSql })}
-                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded font-semibold text-xs transition-colors"
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded font-semibold text-xs transition-colors cursor-pointer"
                     >
-                      {createJobMutation.isPending ? 'Saving...' : 'Save Job'}
+                      {createJobMutation.isPending ? t('common.saving', 'Saving...') : t('common.save', 'Save Job')}
                     </button>
                   </div>
                 </div>
@@ -3438,7 +3439,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
             <div className="space-y-3">
               {scheduledJobs.length === 0 ? (
                 <div className="p-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-lg bg-card/50">
-                  No scheduled jobs configured. Click "Create Job" to automate recurring SQL routines.
+                  {t('jobs.noJobs', 'No scheduled jobs configured. Click "Create Job" to automate recurring SQL routines.')}
                 </div>
               ) : (
                 scheduledJobs.map((job) => (
@@ -3452,11 +3453,11 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                         </span>
                         {job.last_status === 'success' ? (
                           <span className="text-[10px] px-1.5 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-semibold">
-                            Success
+                            {t('jobs.success', 'Success')}
                           </span>
                         ) : job.last_status === 'failed' ? (
                           <span className="text-[10px] px-1.5 py-0.2 bg-red-500/10 text-red-500 border border-red-500/20 rounded font-semibold">
-                            Failed
+                            {t('jobs.failed', 'Failed')}
                           </span>
                         ) : null}
                       </div>
@@ -3464,9 +3465,9 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                         {job.sql_query}
                       </pre>
                       <div className="text-[10px] text-muted-foreground flex items-center gap-2">
-                        <span>Last Run: {job.last_run_at ? formatDate(job.last_run_at) : 'Never'}</span>
+                        <span>{t('jobs.lastRun', 'Last Run')}: {job.last_run_at ? formatDate(job.last_run_at) : 'Never'}</span>
                         <span>•</span>
-                        <span>Next Run: {job.next_run_at ? formatDate(job.next_run_at) : '—'}</span>
+                        <span>{t('jobs.nextRun', 'Next Run')}: {job.next_run_at ? formatDate(job.next_run_at) : '—'}</span>
                       </div>
                     </div>
 
@@ -3474,15 +3475,15 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                       <button
                         onClick={() => runJobMutation.mutate(job.id)}
                         disabled={runJobMutation.isPending}
-                        className="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded font-medium transition-colors flex items-center gap-1"
+                        className="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded font-medium transition-colors flex items-center gap-1 cursor-pointer"
                       >
                         <Play className="w-3 h-3 fill-current" />
-                        Run Now
+                        {runJobMutation.isPending ? t('jobs.running', 'Running...') : t('jobs.runNow', 'Run Now')}
                       </button>
                       <button
                         onClick={() => deleteJobMutation.mutate(job.id)}
-                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
-                        title="Delete Job"
+                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
+                        title={t('common.delete', 'Delete Job')}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -3499,23 +3500,23 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
           <div className="max-w-5xl mx-auto space-y-4">
             <div className="flex items-center justify-between pb-2">
               <div>
-                <h3 className="text-sm font-bold text-foreground">Database Snapshots</h3>
-                <p className="text-xs text-muted-foreground">Safe WAL-consistent backup and restore points.</p>
+                <h3 className="text-sm font-bold text-foreground">{t('backups.title', 'Database Backups & Snapshots')}</h3>
+                <p className="text-xs text-muted-foreground">{t('backups.desc', 'Safe WAL-consistent backup and restore points.')}</p>
               </div>
               <button
                 onClick={() => createBackupMutation.mutate()}
                 disabled={createBackupMutation.isPending}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-medium transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-medium transition-colors cursor-pointer"
               >
                 <Archive className="w-3.5 h-3.5" />
-                Create Snapshot
+                {t('backups.create', 'Create Snapshot')}
               </button>
             </div>
 
             <div className="space-y-3">
               {backups.length === 0 ? (
                 <div className="p-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-lg bg-card/50">
-                  No snapshots taken yet. Create a backup before major schema updates.
+                  {t('backups.noBackups', 'No snapshots taken yet. Create a backup before major schema updates.')}
                 </div>
               ) : (
                 backups.map((bkp) => (
@@ -3550,9 +3551,9 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                         onClick={() => {
                           setConfirmConfig({
                             isOpen: true,
-                            title: 'Restore Database Snapshot?',
-                            message: `Are you sure you want to restore snapshot "${bkp.filename}"? Current database data will be overwritten with this backup snapshot.`,
-                            confirmText: 'Restore Backup',
+                            title: t('backups.restore', 'Restore Database Snapshot?'),
+                            message: t('backups.confirmRestore', `Are you sure you want to restore snapshot "${bkp.filename}"? Current database data will be overwritten with this backup snapshot.`),
+                            confirmText: t('backups.restore', 'Restore Backup'),
                             variant: 'warning',
                             isLoading: restoreBackupMutation.isPending,
                             onConfirm: () => {
@@ -3562,10 +3563,10 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                           });
                         }}
                         disabled={restoreBackupMutation.isPending}
-                        className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-foreground flex items-center gap-1 transition-colors"
+                        className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-foreground flex items-center gap-1 transition-colors cursor-pointer"
                       >
                         <RotateCcw className="w-3 h-3" />
-                        Restore
+                        {t('backups.restore', 'Restore')}
                       </button>
                       <button
                         onClick={() => {
@@ -3582,7 +3583,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                             },
                           });
                         }}
-                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -3676,10 +3677,10 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 <div>
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <Sliders className="w-4 h-4 text-blue-500" />
-                    Database Maintenance & Performance Tuning
+                    {t('maint.title', 'Database Maintenance & Performance Tuning')}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Defragment pages, reclaim free space, flush WAL buffers, and check database file integrity.
+                    {t('maint.desc', 'Defragment pages, reclaim free space, flush WAL buffers, and check database file integrity.')}
                   </p>
                 </div>
               </div>
@@ -3696,38 +3697,38 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 <div className="p-3.5 border border-border rounded-lg bg-muted/20 flex flex-col justify-between space-y-3">
                   <div>
                     <div className="flex items-center justify-between">
-                      <strong className="text-xs text-foreground">VACUUM (Reclaim Free Space)</strong>
+                      <strong className="text-xs text-foreground">{t('maint.vacuumTitle', 'VACUUM (Reclaim Free Space)')}</strong>
                       <span className="text-[10px] font-mono px-1.5 py-0.2 bg-muted rounded text-muted-foreground">
-                        {freePages} Free Pages
+                        {freePages} {t('maint.freePages', 'Free Pages')}
                       </span>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Repacks the database file to discard empty pages and reduce disk size.
+                      {t('maint.vacuumDesc', 'Repacks the database file to discard empty pages and reduce disk size.')}
                     </p>
                   </div>
                   <button
                     onClick={() => maintenanceMutation.mutate('vacuum')}
                     disabled={maintenanceMutation.isPending}
-                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
                   >
-                    Run VACUUM
+                    {t('maint.runVacuum', 'Run VACUUM')}
                   </button>
                 </div>
 
                 {/* Integrity Check */}
                 <div className="p-3.5 border border-border rounded-lg bg-muted/20 flex flex-col justify-between space-y-3">
                   <div>
-                    <strong className="text-xs text-foreground">PRAGMA integrity_check</strong>
+                    <strong className="text-xs text-foreground">{t('maint.integrityTitle', 'PRAGMA integrity_check')}</strong>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Deep scans B-Tree structures and data pages for zero corruption.
+                      {t('maint.integrityDesc', 'Deep scans B-Tree structures and data pages for zero corruption.')}
                     </p>
                   </div>
                   <button
                     onClick={() => maintenanceMutation.mutate('integrity_check')}
                     disabled={maintenanceMutation.isPending}
-                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
                   >
-                    Run Integrity Check
+                    {t('maint.runIntegrity', 'Run Integrity Check')}
                   </button>
                 </div>
 
@@ -3735,72 +3736,72 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 <div className="p-3.5 border border-border rounded-lg bg-muted/20 flex flex-col justify-between space-y-3">
                   <div>
                     <div className="flex items-center justify-between">
-                      <strong className="text-xs text-foreground">Flush WAL Buffer</strong>
+                      <strong className="text-xs text-foreground">{t('maint.walTitle', 'Flush WAL Buffer')}</strong>
                       <span className="text-[10px] font-mono px-1.5 py-0.2 bg-muted rounded text-muted-foreground">
                         {formatBytes(stats?.walSizeBytes || 0)} WAL
                       </span>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Forces writes from the Write-Ahead Log into the main DB file and truncates it.
+                      {t('maint.walDesc', 'Forces writes from the Write-Ahead Log into the main DB file and truncates it.')}
                     </p>
                   </div>
                   <button
                     onClick={() => maintenanceMutation.mutate('wal_checkpoint')}
                     disabled={maintenanceMutation.isPending}
-                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
                   >
-                    Flush & Truncate WAL
+                    {t('maint.runWal', 'Flush & Truncate WAL')}
                   </button>
                 </div>
 
                 {/* REINDEX */}
                 <div className="p-3.5 border border-border rounded-lg bg-muted/20 flex flex-col justify-between space-y-3">
                   <div>
-                    <strong className="text-xs text-foreground">REINDEX (Rebuild Indexes)</strong>
+                    <strong className="text-xs text-foreground">{t('maint.reindexTitle', 'REINDEX (Rebuild Indexes)')}</strong>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Rebuilds all indexes across all tables to optimize search speed.
+                      {t('maint.reindexDesc', 'Rebuilds all indexes across all tables to optimize search speed.')}
                     </p>
                   </div>
                   <button
                     onClick={() => maintenanceMutation.mutate('reindex')}
                     disabled={maintenanceMutation.isPending}
-                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
                   >
-                    Run REINDEX
+                    {t('maint.runReindex', 'Run REINDEX')}
                   </button>
                 </div>
 
                 {/* ANALYZE */}
                 <div className="p-3.5 border border-border rounded-lg bg-muted/20 flex flex-col justify-between space-y-3">
                   <div>
-                    <strong className="text-xs text-foreground">ANALYZE (Query Planner Stats)</strong>
+                    <strong className="text-xs text-foreground">{t('maint.analyzeTitle', 'ANALYZE (Query Planner Stats)')}</strong>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Computes table and index distributions to help query optimizer choose the fastest execution paths.
+                      {t('maint.analyzeDesc', 'Computes table and index distributions to help query optimizer choose the fastest execution paths.')}
                     </p>
                   </div>
                   <button
                     onClick={() => maintenanceMutation.mutate('analyze')}
                     disabled={maintenanceMutation.isPending}
-                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
                   >
-                    Run ANALYZE
+                    {t('maint.runAnalyze', 'Run ANALYZE')}
                   </button>
                 </div>
 
                 {/* OPTIMIZE */}
                 <div className="p-3.5 border border-border rounded-lg bg-muted/20 flex flex-col justify-between space-y-3">
                   <div>
-                    <strong className="text-xs text-foreground">PRAGMA optimize</strong>
+                    <strong className="text-xs text-foreground">{t('maint.optimizeTitle', 'PRAGMA optimize')}</strong>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Runs automatic low-overhead maintenance checks on SQLite database files.
+                      {t('maint.optimizeDesc', 'Runs automatic low-overhead maintenance checks on SQLite database files.')}
                     </p>
                   </div>
                   <button
                     onClick={() => maintenanceMutation.mutate('optimize')}
                     disabled={maintenanceMutation.isPending}
-                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors"
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
                   >
-                    Run PRAGMA optimize
+                    {t('maint.runOptimize', 'Run PRAGMA optimize')}
                   </button>
                 </div>
               </div>
@@ -3812,10 +3813,10 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 <div>
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <Layers className="w-4 h-4 text-purple-500" />
-                    Database Cloning & Branching
+                    {t('maint.cloneTitle', 'Database Cloning & Branching')}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Duplicate this database instance to create development or staging branches.
+                    {t('maint.cloneDesc', 'Duplicate this database instance to create development or staging branches.')}
                   </p>
                 </div>
                 <button
@@ -3823,10 +3824,10 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     setCloneNewName(`${currentDbName} (Dev Branch)`);
                     setIsCloneModalOpen(true);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Clone Database
+                  {t('maint.cloneButton', 'Clone Database')}
                 </button>
               </div>
             </div>
@@ -3835,15 +3836,15 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
             <div className="bg-card border border-red-500/30 rounded-xl p-5 space-y-4 shadow-sm">
               <div className="flex items-center gap-2 text-red-500 font-semibold text-sm">
                 <AlertTriangle className="w-4 h-4" />
-                Danger Zone
+                {t('danger.title', 'Danger Zone')}
               </div>
               <p className="text-xs text-muted-foreground">
-                Permanently delete this SQLite database instance, all associated WAL files, backups, and API tokens.
+                {t('danger.deleteDesc', 'Permanently delete this SQLite database instance, all associated WAL files, backups, and API tokens.')}
               </p>
 
               <div className="pt-3 border-t border-border space-y-3">
                 <label className="block text-xs font-medium">
-                  Type <strong className="text-red-500">{currentDbName}</strong> to confirm deletion:
+                  {t('danger.confirmDelete', 'Type database name to confirm deletion:')} <strong className="text-red-500">{currentDbName}</strong>
                 </label>
                 <div className="flex items-center gap-3">
                   <input
@@ -3856,9 +3857,9 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   <button
                     disabled={deleteConfirmName !== currentDbName || deleteDbMutation.isPending}
                     onClick={() => deleteDbMutation.mutate()}
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold transition-colors"
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold transition-colors cursor-pointer"
                   >
-                    Delete Database
+                    {t('danger.deleteButton', 'Delete Database')}
                   </button>
                 </div>
               </div>

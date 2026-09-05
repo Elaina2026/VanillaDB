@@ -307,6 +307,94 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
       });
       expect(wrongCode.statusCode).toBe(400);
     });
+
+    it('should generate 6 backup codes on 2FA activation and allow password recovery', async () => {
+      // 1. Create a user specifically for backup codes test
+      const reg = await app.inject({
+        method: 'POST',
+        url: '/api/auth/register',
+        payload: {
+          email: `backup_${runId}@test.com`,
+          username: `backup_user_${runId}`,
+          password: 'InitialPassword123!',
+        },
+      });
+      const cookie = `vdb_session=${reg.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+
+      // 2. Setup 2FA
+      const setup = await app.inject({
+        method: 'POST',
+        url: '/api/auth/2fa/setup',
+        headers: { cookie },
+      });
+      const secret = setup.json().data.secret;
+
+      // 3. Activate 2FA -> receive 6 backup recovery codes
+      const actRes = await app.inject({
+        method: 'POST',
+        url: '/api/auth/2fa/activate',
+        headers: { cookie },
+        payload: {
+          password: 'InitialPassword123!',
+          code: generateTotpCode(secret),
+        },
+      });
+      expect(actRes.statusCode).toBe(200);
+      const backupCodes: string[] = actRes.json().data.backupCodes;
+      expect(Array.isArray(backupCodes)).toBe(true);
+      expect(backupCodes.length).toBe(6);
+      expect(backupCodes[0]).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+
+      // 4. Test invalid backup code recovery
+      const badRecovery = await app.inject({
+        method: 'POST',
+        url: '/api/auth/recovery/reset-password',
+        payload: {
+          usernameOrEmail: `backup_${runId}@test.com`,
+          backupCode: 'INVALID-CODE',
+          newPassword: 'BrandNewPassword123!',
+        },
+      });
+      expect(badRecovery.statusCode).toBe(400);
+
+      // 5. Test valid backup code recovery
+      const chosenCode = backupCodes[0];
+      const okRecovery = await app.inject({
+        method: 'POST',
+        url: '/api/auth/recovery/reset-password',
+        payload: {
+          usernameOrEmail: `backup_${runId}@test.com`,
+          backupCode: chosenCode,
+          newPassword: 'BrandNewPassword123!',
+        },
+      });
+      expect(okRecovery.statusCode).toBe(200);
+      expect(okRecovery.json().data.remainingBackupCodesCount).toBe(5);
+
+      // 6. Test that consumed backup code is burned and cannot be reused
+      const reuseRecovery = await app.inject({
+        method: 'POST',
+        url: '/api/auth/recovery/reset-password',
+        payload: {
+          usernameOrEmail: `backup_${runId}@test.com`,
+          backupCode: chosenCode,
+          newPassword: 'AnotherPassword123!',
+        },
+      });
+      expect(reuseRecovery.statusCode).toBe(400);
+
+      // 7. Verify login succeeds with the newly recovered password
+      const newLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          username: `backup_user_${runId}`,
+          password: 'BrandNewPassword123!',
+        },
+      });
+      expect(newLogin.statusCode).toBe(200);
+      expect(newLogin.json().data.require2fa).toBe(true);
+    });
   });
 
   // =========================================================================
