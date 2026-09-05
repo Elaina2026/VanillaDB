@@ -76,6 +76,7 @@ Traditional managed cloud databases (such as free tiers on Supabase, Neon, or Pl
 - 📊 **Visual Query Profiler & Telemetry**: Analyze `EXPLAIN QUERY PLAN` outputs for full table scan detection, view system health telemetry (CPU, RAM, QPS, Latency, Network I/O), and inspect 24-hour request metrics.
 - 🔔 **Webhooks Engine**: Asynchronous HTTP POST event dispatcher with HMAC-SHA256 signature verification (`X-Vanilla-Signature`), customizable event filters, and native Discord/Slack embed formatting.
 - ⏰ **Automated Scheduled Backups**: Background cron scheduler supporting hourly, 6-hour, 12-hour, daily, and weekly automated encrypted snapshots with retention cleanup.
+- 🔐 **Dual-Factor Recovery & 2FA TOTP**: RFC 6238 TOTP authenticator app integration, one-time 6-digit challenge, persistent 8-character backup recovery codes with active/used lifecycle tracking, and dedicated `#/reset-password` recovery flow.
 - 💻 **Modern Web Dashboard**: Single-page dashboard built with React 19, Tailwind CSS, Monaco SQL Editor, and TanStack Table.
 
 ---

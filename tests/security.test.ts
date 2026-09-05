@@ -86,6 +86,18 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
         databaseService.deleteDatabase(adminDbId);
       } catch {}
     }
+    // Clean up all ephemeral test users and databases created during this security test run
+    try {
+      const metaDb = getMetadataDb();
+      const testUsers = metaDb.prepare("SELECT id FROM users WHERE username LIKE ? OR email LIKE ?").all(`%${runId}%`, `%${runId}%`) as any[];
+      for (const u of testUsers) {
+        authService.deleteUser(u.id);
+      }
+      const testDbs = metaDb.prepare("SELECT id FROM databases WHERE name LIKE ?").all(`%${runId}%`) as any[];
+      for (const d of testDbs) {
+        databaseService.deleteDatabase(d.id);
+      }
+    } catch {}
     dbManager.closeAll();
     if (app) await app.close();
   }, 30000);
@@ -512,7 +524,7 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
         method: 'POST',
         url: '/api/admin/databases',
         headers: { cookie: tenantACookie },
-        payload: { name: 'Tenant A Secrets Database' },
+        payload: { name: `Tenant A Secrets Database ${runId}` },
       });
       tenantADbId = dbA.json().data.id;
 
@@ -545,6 +557,12 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
       });
       tenantBCookie = `vdb_session=${regB.cookies.find((c: any) => c.name === 'vdb_session').value}`;
       tenantBUserId = regB.json().data.user.id;
+    });
+
+    afterAll(async () => {
+      try {
+        if (tenantADbId) databaseService.deleteDatabase(tenantADbId);
+      } catch {}
     });
 
     it('BOLA: Tenant B should be strictly forbidden from reading Tenant A table rows', async () => {
@@ -689,7 +707,7 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
         method: 'POST',
         url: '/api/admin/databases',
         headers: { cookie: tenantBCookie },
-        payload: { name: 'Tenant B Isolated DB' },
+        payload: { name: `Tenant B Isolated DB ${runId}` },
       });
       expect(dbB.statusCode).toBe(201);
       const tenantBDbId = dbB.json().data.id;
@@ -706,6 +724,11 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
       const metaDb = getMetadataDb();
       const checkRow = metaDb.prepare('SELECT status FROM database_invites WHERE id = ?').get(inviteId) as any;
       expect(checkRow.status).toBe('pending');
+
+      // 5. Cleanup Tenant B database
+      try {
+        databaseService.deleteDatabase(tenantBDbId);
+      } catch {}
     });
 
     it('Administrative Route Guard: Non-admin users should be rejected from system endpoints', async () => {

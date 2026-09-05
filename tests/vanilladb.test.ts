@@ -1143,6 +1143,12 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     // 10. Clean up
     try {
       databaseService.deleteDatabase(alphaDbId);
+      const { authService } = await import('../src/server/services/auth.js');
+      const metaDb = (await import('../src/server/db/metadata.js')).getMetadataDb();
+      const userAlpha = metaDb.prepare('SELECT id FROM users WHERE username = ?').get(alphaUsername) as any;
+      const userBeta = metaDb.prepare('SELECT id FROM users WHERE username = ?').get(betaUsername) as any;
+      if (userAlpha) authService.deleteUser(userAlpha.id);
+      if (userBeta) authService.deleteUser(userBeta.id);
     } catch {}
   });
 
@@ -1229,6 +1235,14 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     expect(login2faRes.statusCode).toBe(200);
     const finalSession = login2faRes.cookies.find((c: any) => c.name === 'vdb_session');
     expect(finalSession).toBeDefined();
+
+    // 7. Clean up 2FA user
+    try {
+      const { authService } = await import('../src/server/services/auth.js');
+      const metaDb = (await import('../src/server/db/metadata.js')).getMetadataDb();
+      const userTotp = metaDb.prepare('SELECT id FROM users WHERE username = ?').get(totpUsername) as any;
+      if (userTotp) authService.deleteUser(userTotp.id);
+    } catch {}
   });
 });
 

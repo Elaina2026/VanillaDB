@@ -51,6 +51,7 @@ Thay vì phải duy trì các máy chủ cơ sở dữ liệu nặng nề cho t�
 - 🔔 **Hệ thống Webhooks**: Tự động phát sự kiện POST bất đồng bộ kèm chữ ký xác thực HMAC-SHA256 (`X-Vanilla-Signature`), tùy biến lọc bảng và định dạng thông báo riêng cho Discord/Telegram/Slack.
 - ⏰ **Tác vụ định kỳ (Cron Jobs)**: Lên lịch hẹn giờ chạy câu lệnh SQL định kỳ dọn dẹp, bảo trì hoặc sao lưu dữ liệu tự động ngay trong SQLite.
 - 🔑 **WebAuthn / Passkeys**: Đăng nhập trang quản trị an toàn bằng vân tay, Touch ID hoặc Windows Hello không cần nhập mật khẩu.
+- 🔐 **Bảo mật 2FA & Khôi phục 2 lớp (Dual-Factor Recovery)**: Tích hợp mã OTP ứng dụng xác thực RFC 6238, cơ chế thử thách đăng nhập 6 số, 6 mã dự phòng (backup codes) theo dõi trạng thái active/used và trang khôi phục mật khẩu riêng biệt `#/reset-password`.
 - 🌐 **Hỗ trợ đa ngôn ngữ (i18n)**: Chuyển đổi linh hoạt giữa Tiếng Anh và Tiếng Việt toàn diện trên toàn bộ giao diện hệ thống.
 
 ---

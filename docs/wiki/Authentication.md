@@ -49,3 +49,23 @@ Each token can be assigned one or more permissions:
 ### Sliding-Window Rate Limiting
 - Configurable per-token (e.g. `rate_limit: 100` req/minute).
 - Enforced using an in-memory bucket map. Exceeding the rate limit returns `HTTP 429 Too Many Requests` with a clear retry timeout header.
+
+---
+
+## 4. Two-Factor Authentication (2FA) & Recovery
+
+VanillaDatabase features enterprise-grade two-factor authentication based on RFC 6238 TOTP:
+
+### Activation Flow
+1. `POST /api/auth/2fa/setup`: Generates an RFC 6238 compliant base32 secret and an SVG QR data URI.
+2. `POST /api/auth/2fa/activate`: Requires account password verification and a valid 6-digit TOTP code. Upon success, generates 6 cryptographically secure backup codes (`XXXX-XXXX`).
+
+### Backup Codes Lifecycle
+- Backup codes are stored with usage state: `[{ code, used: boolean, used_at?: number }]`.
+- Active vs burned codes are distinguished in the Settings dashboard.
+- Users can view, hide, copy, download, or regenerate backup codes (`POST /api/auth/2fa/regenerate-backup-codes`) using password confirmation.
+
+### Dual-Factor Account Recovery
+If an authenticator device is lost, accounts can be recovered via `POST /api/auth/recovery/reset-password`:
+- **Method 1 (TOTP)**: Validates identity using the 6-digit authenticator code.
+- **Method 2 (Backup Code)**: Validates and permanently burns an active single-use backup code. Comparisons use `crypto.timingSafeEqual` to eliminate timing attack vectors.
