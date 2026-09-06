@@ -475,6 +475,16 @@ export const UserDashboardPage: React.FC<{
             </div>
 
             <form onSubmit={handleActivate2fa} className="space-y-3 text-xs">
+              <input
+                type="text"
+                name="username"
+                autoComplete="username"
+                value={currentUser?.username || ''}
+                readOnly
+                tabIndex={-1}
+                aria-hidden="true"
+                className="sr-only pointer-events-none hidden"
+              />
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
                   {t('userDashboard.stepPassword', '1. Mật khẩu tài khoản (Bắt buộc xác thực)')}

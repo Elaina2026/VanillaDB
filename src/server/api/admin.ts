@@ -1919,21 +1919,41 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete('/databases/:id/members/:memberOrUserId', async (req, reply) => {
     const { id, memberOrUserId } = req.params as { id: string; memberOrUserId: string };
-    const db = requireDatabaseAccess(req, reply, id, 'admin');
+
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const targetMember = metaDb.prepare(
+      'SELECT * FROM database_members WHERE database_id = ? AND (id = ? OR user_id = ?)'
+    ).get(id, memberOrUserId, memberOrUserId) as { id: string; user_id: string; role: string } | undefined;
+
+    const currentUserId = req.adminUser?.userId;
+    const isSelf = Boolean(
+      (targetMember && targetMember.user_id === currentUserId) ||
+      memberOrUserId === currentUserId
+    );
+
+    const requiredRole = isSelf ? 'viewer' : 'admin';
+    const db = requireDatabaseAccess(req, reply, id, requiredRole);
     if (!db) return;
+
+    if (isSelf && db.owner_id === currentUserId) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'OWNER_CANNOT_LEAVE', message: 'Database owner cannot leave their own database.' }
+      });
+    }
 
     databaseMembersService.removeMember(id, memberOrUserId);
 
     activityService.recordAudit({
       user: req.adminUser!.username,
-      action: 'database.member_remove',
+      action: isSelf ? 'database.member_leave' : 'database.member_remove',
       resource: id,
       result: 'success',
       requestId: req.id,
-      details: JSON.stringify({ memberOrUserId }),
+      details: JSON.stringify({ memberOrUserId, isSelf }),
     });
 
-    return reply.send({ success: true });
+    return reply.send({ success: true, message: isSelf ? 'Successfully left database' : 'Member removed successfully' });
   });
 
   fastify.delete('/databases/:id/invites/:inviteId', async (req, reply) => {

@@ -18,7 +18,8 @@ import {
   ShieldAlert,
   SlidersHorizontal,
   AlertTriangle,
-  Mail
+  Mail,
+  UserMinus
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatTimeAgo } from '../lib/utils.js';
@@ -62,6 +63,16 @@ export const DatabasesPage: React.FC<{
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['databases'] });
       setDeletingDb(null);
+    },
+  });
+
+  const leaveDbMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/admin/databases/${id}/members/${currentUser?.userId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['databases'] });
     },
   });
 
@@ -403,6 +414,22 @@ export const DatabasesPage: React.FC<{
                         title={t('databases.deleteDatabase', 'Delete Database')}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    {/* Leave Shared Database Button */}
+                    {!canDeleteDb(db) && ((db as any).is_shared === 1 || (db.owner_id && db.owner_id !== currentUser?.userId)) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(t('members.leaveConfirm', 'Are you sure you want to leave this shared database?'))) {
+                            leaveDbMutation.mutate(db.id);
+                          }
+                        }}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 transition-all cursor-pointer"
+                        title={t('members.leave', 'Leave Database')}
+                      >
+                        <UserMinus className="w-3.5 h-3.5" />
                       </button>
                     )}
 

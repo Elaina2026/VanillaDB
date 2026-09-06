@@ -1546,6 +1546,16 @@ export const SettingsPage: React.FC = () => {
                 )}
 
                 <form onSubmit={handleRegenerateBackupCodes} className="space-y-3.5 text-xs">
+                  <input
+                    type="text"
+                    name="username"
+                    autoComplete="username"
+                    value={currentUser?.username || ''}
+                    readOnly
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    className="sr-only pointer-events-none hidden"
+                  />
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">
                       {t('settings.currentPassword', 'Current Password')}
@@ -1609,6 +1619,16 @@ export const SettingsPage: React.FC = () => {
             )}
 
             <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-md">
+              <input
+                type="text"
+                name="username"
+                autoComplete="username"
+                value={currentUser?.username || ''}
+                readOnly
+                tabIndex={-1}
+                aria-hidden="true"
+                className="sr-only pointer-events-none hidden"
+              />
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.currentPassword', 'Current Password')}</label>
                 <input
@@ -1690,6 +1710,16 @@ export const SettingsPage: React.FC = () => {
                 </div>
 
                 <form onSubmit={handleActivate2fa} className="space-y-3 text-xs">
+                  <input
+                    type="text"
+                    name="username"
+                    autoComplete="username"
+                    value={currentUser?.username || ''}
+                    readOnly
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    className="sr-only pointer-events-none hidden"
+                  />
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">
                       {t('settings.stepPassword', '1. Account Password (Required verification)')}
@@ -1761,6 +1791,16 @@ export const SettingsPage: React.FC = () => {
                 )}
 
                 <form onSubmit={handleDisable2fa} className="space-y-3 text-xs">
+                  <input
+                    type="text"
+                    name="username"
+                    autoComplete="username"
+                    value={currentUser?.username || ''}
+                    readOnly
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    className="sr-only pointer-events-none hidden"
+                  />
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.accountPassword', 'Account password')}</label>
                     <input

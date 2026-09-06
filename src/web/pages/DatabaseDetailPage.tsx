@@ -169,6 +169,7 @@ export const DatabaseDetailPage: React.FC<{
   const isSystemAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
   const dbAccessRole = stats?.database?.access_role;
   const canManageTokens = isSystemAdmin || dbAccessRole === 'owner' || dbAccessRole === 'admin';
+  const canManageMembers = isSystemAdmin || dbAccessRole === 'owner' || dbAccessRole === 'admin';
 
   const { data: tokens = [], isLoading: isTokensLoading, refetch: refetchTokens } = useQuery<ApiTokenRecord[]>({
     queryKey: ['dbTokens', databaseId],
@@ -240,9 +241,13 @@ export const DatabaseDetailPage: React.FC<{
       apiRequest(`/api/admin/databases/${databaseId}/members/${memberOrUserId}`, {
         method: 'DELETE',
       }),
-    onSuccess: () => {
-      refetchMembers();
-      refetchStats();
+    onSuccess: (_, memberOrUserId) => {
+      if (memberOrUserId === currentUser?.userId) {
+        onBack();
+      } else {
+        refetchMembers();
+        refetchStats();
+      }
     },
   });
 
@@ -3976,16 +3981,18 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 </p>
               </div>
 
-              <button
-                onClick={() => {
-                  setInviteStatus(null);
-                  setIsInviteModalOpen(true);
-                }}
-                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors flex items-center gap-2 self-start sm:self-auto cursor-pointer"
-              >
-                <UserPlus className="w-4 h-4" />
-                <span>{t('members.inviteBtn', 'Invite New Member')}</span>
-              </button>
+              {canManageMembers && (
+                <button
+                  onClick={() => {
+                    setInviteStatus(null);
+                    setIsInviteModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors flex items-center gap-2 self-start sm:self-auto cursor-pointer"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>{t('members.inviteBtn', 'Invite New Member')}</span>
+                </button>
+              )}
             </div>
 
             {/* Members List */}
@@ -4073,17 +4080,32 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                       </div>
 
                       <div>
-                        <button
-                          onClick={() => {
-                            if (confirm(`${t('members.removeConfirm', 'Are you sure you want to remove member permissions for')} ${member.username}?`)) {
-                              removeMemberMutation.mutate(member.user_id);
-                            }
-                          }}
-                          className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
-                          title="Remove Member"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canManageMembers ? (
+                          <button
+                            onClick={() => {
+                              if (confirm(`${t('members.removeConfirm', 'Are you sure you want to remove member permissions for')} ${member.username}?`)) {
+                                removeMemberMutation.mutate(member.user_id);
+                              }
+                            }}
+                            className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
+                            title={t('members.removeMember', 'Remove Member')}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : member.user_id === currentUser?.userId ? (
+                          <button
+                            onClick={() => {
+                              if (confirm(t('members.leaveConfirm', 'Are you sure you want to leave this shared database?'))) {
+                                removeMemberMutation.mutate(member.user_id);
+                              }
+                            }}
+                            className="px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10 border border-red-500/20 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                            title={t('members.leave', 'Leave Database')}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>{t('members.leave', 'Leave')}</span>
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   ))
@@ -4115,12 +4137,14 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                         </span>
                       </div>
 
-                      <button
-                        onClick={() => revokeInviteMutation.mutate(invite.id)}
-                        className="px-2.5 py-1 text-xs text-red-500 border border-red-500/20 hover:bg-red-500/10 rounded cursor-pointer"
-                      >
-                        {t('members.revoke', 'Revoke Invite')}
-                      </button>
+                      {canManageMembers && (
+                        <button
+                          onClick={() => revokeInviteMutation.mutate(invite.id)}
+                          className="px-2.5 py-1 text-xs text-red-500 border border-red-500/20 hover:bg-red-500/10 rounded cursor-pointer"
+                        >
+                          {t('members.revoke', 'Revoke Invite')}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
