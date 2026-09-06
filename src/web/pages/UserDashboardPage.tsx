@@ -482,6 +482,7 @@ export const UserDashboardPage: React.FC<{
                 <input
                   type="password"
                   required
+                  autoComplete="current-password"
                   value={totpPassword}
                   onChange={(e) => setTotpPassword(e.target.value)}
                   placeholder={t('userDashboard.passwordPlaceholder', 'Nhập mật khẩu hiện tại...')}
@@ -498,6 +499,7 @@ export const UserDashboardPage: React.FC<{
                   required
                   maxLength={6}
                   pattern="[0-9]{6}"
+                  autoComplete="one-time-code"
                   value={totpCode}
                   onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
                   placeholder="000000"

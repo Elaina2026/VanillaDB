@@ -69,6 +69,14 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Public User Self-Registration
   fastify.post('/register', async (req, reply) => {
+    const ip = req.ip || 'unknown';
+    if (!checkAuthRateLimit(`register:${ip}`, 15, 60 * 1000)) {
+      return reply.status(429).send({
+        success: false,
+        error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many registration attempts from this IP. Please wait 1 minute.' },
+      });
+    }
+
     if (!authService.hasAdminUser()) {
       return reply.status(400).send({
         success: false,
@@ -215,6 +223,14 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({
         success: false,
         error: { code: 'INVALID_CREDENTIALS', message: 'Username/Email and password required' },
+      });
+    }
+
+    const normUsername = parsed.data.username.trim().toLowerCase();
+    if (!checkAuthRateLimit(`login_user:${normUsername}`, 15, 60 * 1000)) {
+      return reply.status(429).send({
+        success: false,
+        error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts on this account. Please wait 1 minute.' },
       });
     }
 

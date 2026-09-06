@@ -509,12 +509,20 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
         req.headers.authorization = `Bearer ${queryToken}`;
       }
 
-      // Allow admin session cookie authentication for SSE
+      // Allow session cookie authentication for SSE with membership verification
       if (!req.headers.authorization && req.cookies?.vdb_session) {
         const user = authService.verifySessionCookie(req.cookies.vdb_session, config.sessionSecret);
         if (user) {
+          const targetDbId = (req.params as any).databaseId;
+          if (user.role !== 'super_admin' && user.role !== 'admin') {
+            const { databaseMembersService } = await import('../services/members.js');
+            const role = databaseMembersService.getUserDatabaseRole(targetDbId, user.userId, user.role);
+            if (!role) {
+              return reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied: you are not a member of this database' } });
+            }
+          }
           req.adminUser = user;
-          req.databaseId = (req.params as any).databaseId;
+          req.databaseId = targetDbId;
           return;
         }
       }

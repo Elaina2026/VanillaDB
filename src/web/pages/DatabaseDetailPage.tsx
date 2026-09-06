@@ -158,10 +158,14 @@ export const DatabaseDetailPage: React.FC<{
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/schema`),
   });
 
+  const isSystemAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
+  const dbAccessRole = stats?.database?.access_role;
+  const canManageTokens = isSystemAdmin || dbAccessRole === 'owner' || dbAccessRole === 'admin';
+
   const { data: tokens = [], isLoading: isTokensLoading, refetch: refetchTokens } = useQuery<ApiTokenRecord[]>({
     queryKey: ['dbTokens', databaseId],
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/tokens`),
-    enabled: activeTab === 'tokens' || activeTab === 'overview',
+    enabled: canManageTokens && (activeTab === 'tokens' || activeTab === 'overview'),
   });
 
   const { data: backups = [], isLoading: isBackupsLoading, refetch: refetchBackups } = useQuery<BackupRecord[]>({
@@ -3321,63 +3325,73 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
         {/* TOKENS TAB */}
         {activeTab === 'tokens' && (
           <div className="max-w-5xl mx-auto space-y-4">
-            <div className="flex items-center justify-between pb-2">
-              <div>
-                <h3 className="text-sm font-bold text-foreground">{t('tokens.title', 'API Tokens')}</h3>
-                <p className="text-xs text-muted-foreground">{t('tokens.desc', 'Unlimited tokens for external bots and services.')}</p>
+            {!canManageTokens ? (
+              <div className="bg-card border border-border rounded-lg p-8 text-center text-muted-foreground text-xs space-y-2">
+                <Shield className="w-8 h-8 text-amber-500 mx-auto mb-2 opacity-80" />
+                <p className="font-semibold text-foreground">{t('tokens.restrictedTitle', 'Quyền truy cập API Tokens bị giới hạn')}</p>
+                <p>{t('tokens.restrictedDesc', 'Chỉ chủ sở hữu hoặc quản trị viên cơ sở dữ liệu mới có thể xem và quản lý API Tokens.')}</p>
               </div>
-              <button
-                onClick={() => onOpenCreateToken(databaseId)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                {t('tokens.createToken', 'Create Token')}
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {tokens.map((tok) => (
-                <div key={tok.id} className="bg-card border border-border rounded-lg p-4 flex items-center justify-between shadow-sm">
+            ) : (
+              <>
+                <div className="flex items-center justify-between pb-2">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-semibold text-xs text-foreground">{tok.name}</h4>
-                      <span className="font-mono text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border">
-                        {tok.token_prefix}••••••••{tok.token_last_chars}
-                      </span>
-                      {tok.revoked_at ? (
-                        <span className="text-[10px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded font-medium">{t('tokens.revoked', 'Revoked')}</span>
-                      ) : (
-                        <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded font-medium">{t('common.active', 'Active')}</span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground flex items-center gap-3 mt-1.5">
-                      <span>{t('tokens.permissions', 'Permissions')}: <strong className="text-foreground">{tok.permissions.join(', ')}</strong></span>
-                      <span>•</span>
-                      <span>{t('tokens.lastUsed', 'Last used')}: {formatTimeAgo(tok.last_used_at, language)}</span>
-                      <span>•</span>
-                      <span>{t('common.created', 'Created At')}: {formatDate(tok.created_at, language)}</span>
-                    </div>
+                    <h3 className="text-sm font-bold text-foreground">{t('tokens.title', 'API Tokens')}</h3>
+                    <p className="text-xs text-muted-foreground">{t('tokens.desc', 'Unlimited tokens for external bots and services.')}</p>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    {!tok.revoked_at && (
-                      <button
-                        onClick={() => revokeTokenMutation.mutate(tok.id)}
-                        className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-muted-foreground transition-colors"
-                      >
-                        {t('tokens.revoke', 'Revoke')}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => deleteTokenMutation.mutate(tok.id)}
-                      className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => onOpenCreateToken(databaseId)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {t('tokens.createToken', 'Create Token')}
+                  </button>
                 </div>
-              ))}
-            </div>
+
+                <div className="space-y-3">
+                  {tokens.map((tok) => (
+                    <div key={tok.id} className="bg-card border border-border rounded-lg p-4 flex items-center justify-between shadow-sm">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold text-xs text-foreground">{tok.name}</h4>
+                          <span className="font-mono text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border">
+                            {tok.token_prefix}••••••••{tok.token_last_chars}
+                          </span>
+                          {tok.revoked_at ? (
+                            <span className="text-[10px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded font-medium">{t('tokens.revoked', 'Revoked')}</span>
+                          ) : (
+                            <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded font-medium">{t('common.active', 'Active')}</span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-3 mt-1.5">
+                          <span>{t('tokens.permissions', 'Permissions')}: <strong className="text-foreground">{tok.permissions.join(', ')}</strong></span>
+                          <span>•</span>
+                          <span>{t('tokens.lastUsed', 'Last used')}: {formatTimeAgo(tok.last_used_at, language)}</span>
+                          <span>•</span>
+                          <span>{t('common.created', 'Created At')}: {formatDate(tok.created_at, language)}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {!tok.revoked_at && (
+                          <button
+                            onClick={() => revokeTokenMutation.mutate(tok.id)}
+                            className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-muted-foreground transition-colors"
+                          >
+                            {t('tokens.revoke', 'Revoke')}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => deleteTokenMutation.mutate(tok.id)}
+                          className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
 

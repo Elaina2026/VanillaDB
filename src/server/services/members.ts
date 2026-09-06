@@ -1,6 +1,13 @@
 import { nanoid } from 'nanoid';
 import { getMetadataDb } from '../db/metadata.js';
-import type { DatabaseMemberRecord, DatabaseInviteRecord, MemberRole } from '../../../shared/index.js';
+import type {
+  DatabaseMemberRecord,
+  DatabaseInviteRecord,
+  MemberRole,
+  UserInboxResponse,
+  UserInboxInvite,
+  SystemAnnouncement,
+} from '../../../shared/index.js';
 
 export class DatabaseMembersService {
   /**
@@ -78,7 +85,8 @@ export class DatabaseMembersService {
   }
 
   /**
-   * Invite user by email or username to a database
+   * Invite user by email or username to a database.
+   * Creates a pending invitation for the recipient to explicitly Accept or Decline in their Inbox.
    */
   public inviteMember(
     databaseId: string,
@@ -88,15 +96,16 @@ export class DatabaseMembersService {
   ): { type: 'member' | 'invite'; record: any } {
     const metaDb = getMetadataDb();
     const now = Date.now();
+    const trimmedInput = emailOrUsername.trim();
 
-    // Check if target user already exists
-    const targetUser = metaDb.prepare('SELECT id, username, email, avatar_url FROM users WHERE username = ? OR email = ?').get(emailOrUsername, emailOrUsername) as
-      | { id: string; username: string; email: string | null; avatar_url: string | null }
-      | undefined;
-
-    // Check database owner
+    // Check database
     const db = metaDb.prepare('SELECT owner_id FROM databases WHERE id = ?').get(databaseId) as { owner_id: string | null } | undefined;
     if (!db) throw new Error('Database not found');
+
+    // Check if target user already exists
+    const targetUser = metaDb.prepare('SELECT id, username, email, avatar_url FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)').get(trimmedInput, trimmedInput) as
+      | { id: string; username: string; email: string | null; avatar_url: string | null }
+      | undefined;
 
     if (targetUser) {
       if (db.owner_id === targetUser.id) {
@@ -105,7 +114,7 @@ export class DatabaseMembersService {
 
       const existingMember = metaDb.prepare('SELECT id FROM database_members WHERE database_id = ? AND user_id = ?').get(databaseId, targetUser.id) as { id: string } | undefined;
       if (existingMember) {
-        // Update role
+        // Update existing member role directly
         metaDb.prepare('UPDATE database_members SET role = ?, updated_at = ? WHERE id = ?').run(role, now, existingMember.id);
         return {
           type: 'member',
@@ -124,32 +133,56 @@ export class DatabaseMembersService {
         };
       }
 
-      const memberId = `mem_${nanoid(16)}`;
+      // User exists but is not yet a member: create or update pending invitation for their inbox
+      const email = (targetUser.email || `${targetUser.username}@local`).toLowerCase();
+      const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
+      const existingInvite = metaDb.prepare("SELECT id FROM database_invites WHERE database_id = ? AND (user_id = ? OR LOWER(email) = LOWER(?)) AND status = 'pending'").get(databaseId, targetUser.id, email) as { id: string } | undefined;
+
+      if (existingInvite) {
+        metaDb.prepare('UPDATE database_invites SET role = ?, expires_at = ?, user_id = ?, username = ?, email = ? WHERE id = ?').run(role, expiresAt, targetUser.id, targetUser.username, email, existingInvite.id);
+        return {
+          type: 'invite',
+          record: {
+            id: existingInvite.id,
+            database_id: databaseId,
+            user_id: targetUser.id,
+            username: targetUser.username,
+            email,
+            role,
+            invited_by: invitedBy,
+            status: 'pending',
+            created_at: now,
+            expires_at: expiresAt,
+          },
+        };
+      }
+
+      const inviteId = `inv_${nanoid(16)}`;
       metaDb.prepare(`
-        INSERT INTO database_members (id, database_id, user_id, role, invited_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(memberId, databaseId, targetUser.id, role, invitedBy, now, now);
+        INSERT INTO database_invites (id, database_id, email, user_id, username, role, invited_by, status, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+      `).run(inviteId, databaseId, email, targetUser.id, targetUser.username, role, invitedBy, now, expiresAt);
 
       return {
-        type: 'member',
+        type: 'invite',
         record: {
-          id: memberId,
+          id: inviteId,
           database_id: databaseId,
           user_id: targetUser.id,
           username: targetUser.username,
-          email: targetUser.email,
-          avatar_url: targetUser.avatar_url,
+          email,
           role,
           invited_by: invitedBy,
+          status: 'pending',
           created_at: now,
-          updated_at: now,
+          expires_at: expiresAt,
         },
       };
     }
 
-    // If user does not exist yet, create a pending database invite by email
-    const email = emailOrUsername.toLowerCase();
-    const existingInvite = metaDb.prepare("SELECT id FROM database_invites WHERE database_id = ? AND email = ? AND status = 'pending'").get(databaseId, email) as { id: string } | undefined;
+    // User does not exist yet: create pending invite by email
+    const email = trimmedInput.toLowerCase();
+    const existingInvite = metaDb.prepare("SELECT id FROM database_invites WHERE database_id = ? AND LOWER(email) = ? AND status = 'pending'").get(databaseId, email) as { id: string } | undefined;
     const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
 
     if (existingInvite) {
@@ -191,6 +224,231 @@ export class DatabaseMembersService {
   }
 
   /**
+   * Accept an invitation from Inbox -> commits member to database_members
+   */
+  public acceptInvite(inviteId: string, userId: string): DatabaseMemberRecord {
+    const metaDb = getMetadataDb();
+    const now = Date.now();
+    const user = metaDb.prepare('SELECT id, username, email FROM users WHERE id = ?').get(userId) as { id: string; username: string; email: string | null } | undefined;
+    if (!user) throw new Error('User not found');
+
+    const invite = metaDb.prepare('SELECT * FROM database_invites WHERE id = ?').get(inviteId) as any;
+    if (!invite) throw new Error('Invitation not found');
+    if (invite.status !== 'pending') throw new Error(`Invitation is already ${invite.status}`);
+    if (invite.expires_at < now) throw new Error('Invitation has expired');
+
+    const userEmail = (user.email || '').toLowerCase();
+    const inviteEmail = (invite.email || '').toLowerCase();
+    const isMatchingUser =
+      invite.user_id === userId ||
+      (invite.username && invite.username.toLowerCase() === user.username.toLowerCase()) ||
+      (userEmail && inviteEmail && userEmail === inviteEmail);
+
+    if (!isMatchingUser) {
+      throw new Error('You do not have permission to accept this invitation');
+    }
+
+    const memberId = `mem_${nanoid(16)}`;
+    metaDb.prepare(`
+      INSERT INTO database_members (id, database_id, user_id, role, invited_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(database_id, user_id) DO UPDATE SET role = excluded.role, updated_at = excluded.updated_at
+    `).run(memberId, invite.database_id, userId, invite.role, invite.invited_by, now, now);
+
+    metaDb.prepare("UPDATE database_invites SET status = 'accepted', user_id = ? WHERE id = ?").run(userId, inviteId);
+
+    return {
+      id: memberId,
+      database_id: invite.database_id,
+      user_id: userId,
+      username: user.username,
+      email: user.email,
+      role: invite.role,
+      invited_by: invite.invited_by,
+      created_at: now,
+      updated_at: now,
+    };
+  }
+
+  /**
+   * Decline an invitation from Inbox
+   */
+  public declineInvite(inviteId: string, userId: string): void {
+    const metaDb = getMetadataDb();
+    const user = metaDb.prepare('SELECT id, username, email FROM users WHERE id = ?').get(userId) as { id: string; username: string; email: string | null } | undefined;
+    if (!user) throw new Error('User not found');
+
+    const invite = metaDb.prepare('SELECT * FROM database_invites WHERE id = ?').get(inviteId) as any;
+    if (!invite) throw new Error('Invitation not found');
+
+    const userEmail = (user.email || '').toLowerCase();
+    const inviteEmail = (invite.email || '').toLowerCase();
+    const isMatchingUser =
+      invite.user_id === userId ||
+      (invite.username && invite.username.toLowerCase() === user.username.toLowerCase()) ||
+      (userEmail && inviteEmail && userEmail === inviteEmail);
+
+    if (!isMatchingUser) {
+      throw new Error('You do not have permission to decline this invitation');
+    }
+
+    metaDb.prepare("UPDATE database_invites SET status = 'declined' WHERE id = ?").run(inviteId);
+  }
+
+  /**
+   * Get complete Inbox for a user: pending database invites and active announcements
+   */
+  public getUserInbox(userId: string): UserInboxResponse {
+    const metaDb = getMetadataDb();
+    const now = Date.now();
+    const user = metaDb.prepare('SELECT id, username, email FROM users WHERE id = ?').get(userId) as { id: string; username: string; email: string | null } | undefined;
+    if (!user) return { invites: [], announcements: [], unreadCount: 0 };
+
+    const email = (user.email || '').toLowerCase();
+    const invites = metaDb.prepare(`
+      SELECT i.id, i.database_id, i.role, i.invited_by, i.status, i.created_at, i.expires_at,
+             d.name as database_name, d.description as database_description,
+             u.avatar_url as invited_by_avatar
+      FROM database_invites i
+      JOIN databases d ON i.database_id = d.id
+      LEFT JOIN users u ON i.invited_by = u.username OR i.invited_by = u.id
+      WHERE (i.user_id = ? OR LOWER(i.email) = ? OR LOWER(i.username) = LOWER(?))
+        AND i.status = 'pending'
+        AND i.expires_at > ?
+      ORDER BY i.created_at DESC
+    `).all(userId, email, user.username, now) as any[];
+
+    const announcements = metaDb.prepare(`
+      SELECT a.id, a.title, a.message, a.type, a.author_id, a.author_username,
+             a.created_at, a.expires_at, a.pinned,
+             CASE WHEN ura.read_at IS NOT NULL THEN 1 ELSE 0 END as is_read
+      FROM system_announcements a
+      LEFT JOIN user_read_announcements ura ON a.id = ura.announcement_id AND ura.user_id = ?
+      WHERE a.expires_at IS NULL OR a.expires_at > ?
+      ORDER BY a.pinned DESC, a.created_at DESC
+    `).all(userId, now) as any[];
+
+    const formattedInvites: UserInboxInvite[] = invites.map(i => ({
+      id: i.id,
+      database_id: i.database_id,
+      database_name: i.database_name,
+      database_description: i.database_description || null,
+      role: i.role as MemberRole,
+      invited_by: i.invited_by,
+      invited_by_avatar: i.invited_by_avatar || null,
+      created_at: i.created_at,
+      expires_at: i.expires_at,
+      status: i.status,
+    }));
+
+    const formattedAnnouncements: SystemAnnouncement[] = announcements.map(a => ({
+      id: a.id,
+      title: a.title,
+      message: a.message,
+      type: a.type,
+      author_id: a.author_id,
+      author_username: a.author_username,
+      created_at: a.created_at,
+      expires_at: a.expires_at || null,
+      pinned: Boolean(a.pinned),
+      is_read: Boolean(a.is_read),
+    }));
+
+    const unreadAnnouncementsCount = formattedAnnouncements.filter(a => !a.is_read).length;
+    const unreadCount = formattedInvites.length + unreadAnnouncementsCount;
+
+    return {
+      invites: formattedInvites,
+      announcements: formattedAnnouncements,
+      unreadCount,
+    };
+  }
+
+  /**
+   * Mark an announcement as read by a user
+   */
+  public markAnnouncementRead(announcementId: string, userId: string): void {
+    const metaDb = getMetadataDb();
+    const now = Date.now();
+    metaDb.prepare(`
+      INSERT INTO user_read_announcements (user_id, announcement_id, read_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id, announcement_id) DO UPDATE SET read_at = excluded.read_at
+    `).run(userId, announcementId, now);
+  }
+
+  /**
+   * Mark all active announcements as read by a user
+   */
+  public markAllAnnouncementsRead(userId: string): void {
+    const metaDb = getMetadataDb();
+    const now = Date.now();
+    const announcements = metaDb.prepare(`
+      SELECT id FROM system_announcements WHERE expires_at IS NULL OR expires_at > ?
+    `).all(now) as Array<{ id: string }>;
+
+    const insert = metaDb.prepare(`
+      INSERT INTO user_read_announcements (user_id, announcement_id, read_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id, announcement_id) DO NOTHING
+    `);
+
+    try {
+      metaDb.exec('BEGIN TRANSACTION;');
+      for (const a of announcements) {
+        insert.run(userId, a.id, now);
+      }
+      metaDb.exec('COMMIT;');
+    } catch {
+      try {
+        metaDb.exec('ROLLBACK;');
+      } catch {}
+    }
+  }
+
+  /**
+   * Create a system announcement (admin/super_admin)
+   */
+  public createAnnouncement(
+    title: string,
+    message: string,
+    type: 'announcement' | 'maintenance' | 'security' | 'update' = 'announcement',
+    authorId: string,
+    authorUsername: string,
+    expiresAt?: number | null,
+    pinned: boolean = false
+  ): SystemAnnouncement {
+    const metaDb = getMetadataDb();
+    const id = `ann_${nanoid(16)}`;
+    const now = Date.now();
+    metaDb.prepare(`
+      INSERT INTO system_announcements (id, title, message, type, author_id, author_username, created_at, expires_at, pinned)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, title, message, type, authorId, authorUsername, now, expiresAt || null, pinned ? 1 : 0);
+
+    return {
+      id,
+      title,
+      message,
+      type,
+      author_id: authorId,
+      author_username: authorUsername,
+      created_at: now,
+      expires_at: expiresAt || null,
+      pinned,
+      is_read: true,
+    };
+  }
+
+  /**
+   * Delete an announcement
+   */
+  public deleteAnnouncement(announcementId: string): void {
+    const metaDb = getMetadataDb();
+    metaDb.prepare('DELETE FROM system_announcements WHERE id = ?').run(announcementId);
+  }
+
+  /**
    * Remove member from database
    */
   public removeMember(databaseId: string, memberOrUserId: string): boolean {
@@ -213,26 +471,13 @@ export class DatabaseMembersService {
    */
   public claimPendingInvites(userId: string, email: string): number {
     const metaDb = getMetadataDb();
-    const now = Date.now();
-    const invites = metaDb.prepare("SELECT id, database_id, role, invited_by FROM database_invites WHERE email = ? AND status = 'pending' AND expires_at > ?").all(email.toLowerCase(), now) as Array<{
-      id: string;
-      database_id: string;
-      role: string;
-      invited_by: string;
-    }>;
-
-    for (const inv of invites) {
-      const memberId = `mem_${nanoid(16)}`;
-      try {
-        metaDb.prepare(`
-          INSERT INTO database_members (id, database_id, user_id, role, invited_by, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(memberId, inv.database_id, userId, inv.role, inv.invited_by, now, now);
-        metaDb.prepare("UPDATE database_invites SET status = 'accepted' WHERE id = ?").run(inv.id);
-      } catch {}
-    }
-
-    return invites.length;
+    const user = metaDb.prepare('SELECT username FROM users WHERE id = ?').get(userId) as { username: string } | undefined;
+    const res = metaDb.prepare(`
+      UPDATE database_invites
+      SET user_id = ?, username = COALESCE(username, ?)
+      WHERE LOWER(email) = ? AND status = 'pending'
+    `).run(userId, user?.username || null, email.toLowerCase());
+    return Number(res.changes);
   }
 }
 

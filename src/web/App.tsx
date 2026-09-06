@@ -12,6 +12,7 @@ import { DatabaseDetailPage } from './pages/DatabaseDetailPage.js';
 import { ActivityPage } from './pages/ActivityPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { ShortcutsPage } from './pages/ShortcutsPage.js';
+import { InboxPage } from './pages/InboxPage.js';
 import { CreateDatabaseModal } from './components/CreateDatabaseModal.js';
 import { CreateTokenModal } from './components/CreateTokenModal.js';
 import { CommandPalette } from './components/CommandPalette.js';
@@ -164,7 +165,7 @@ export const App: React.FC = () => {
     );
   }
 
-  const validTabs = ['overview', 'telemetry', 'users', 'databases', 'activity', 'settings', 'shortcuts'];
+  const validTabs = ['overview', 'telemetry', 'users', 'databases', 'activity', 'settings', 'shortcuts', 'inbox'];
   const isInvalidTab = !route.databaseId && !validTabs.includes(route.tab);
 
   if (isInvalidTab) {
@@ -189,6 +190,8 @@ export const App: React.FC = () => {
           onBack={() => navigateTo('databases')}
           onOpenCreateToken={(dbId) => setCreateTokenDbId(dbId)}
         />
+      ) : route.tab === 'inbox' ? (
+        <InboxPage onSelectDatabase={(id) => navigateTo('databases', id)} />
       ) : route.tab === 'overview' ? (
         user?.role === 'user' ? (
           <UserDashboardPage

@@ -248,9 +248,21 @@ export class DatabaseService {
     return newRecord;
   }
 
-  public getDatabaseOverviewStats(databaseId: string): DatabaseOverviewStats {
+  public getDatabaseOverviewStats(databaseId: string, userId?: string, systemRole?: string): DatabaseOverviewStats {
     const dbRecord = this.getDatabase(databaseId);
     if (!dbRecord) throw new Error(`Database not found: ${databaseId}`);
+
+    if (userId) {
+      if (systemRole === 'super_admin' || systemRole === 'admin' || dbRecord.owner_id === userId) {
+        dbRecord.access_role = 'owner';
+        dbRecord.is_shared = false;
+      } else {
+        const metaDb = getMetadataDb();
+        const member = metaDb.prepare('SELECT role FROM database_members WHERE database_id = ? AND user_id = ?').get(databaseId, userId) as { role: any } | undefined;
+        dbRecord.access_role = member?.role || 'viewer';
+        dbRecord.is_shared = true;
+      }
+    }
 
     const db = dbManager.get(databaseId);
     const dbPath = dbManager.resolveDatabasePath(databaseId);

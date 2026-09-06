@@ -1118,8 +1118,39 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
       },
     });
     expect(inviteRes.statusCode).toBe(201);
+    const inviteData = inviteRes.json().data;
 
-    // 8. Beta lists databases -> Now sees Alpha's database marked as shared
+    // 8. Inbox Invitation Enforcement: Before accepting, Beta lists databases -> must NOT see Alpha's database yet
+    const betaListBeforeAccept = await app.inject({
+      method: 'GET',
+      url: '/api/admin/databases',
+      headers: { cookie: betaSessionCookie },
+    });
+    expect(betaListBeforeAccept.statusCode).toBe(200);
+    expect(betaListBeforeAccept.json().data.some((d: any) => d.id === alphaDbId)).toBe(false);
+
+    // 9. Inbox Verification: Beta checks inbox -> sees pending invitation with unread count
+    const betaInboxRes = await app.inject({
+      method: 'GET',
+      url: '/api/admin/inbox',
+      headers: { cookie: betaSessionCookie },
+    });
+    expect(betaInboxRes.statusCode).toBe(200);
+    const betaInbox = betaInboxRes.json().data;
+    expect(betaInbox.unreadCount).toBeGreaterThanOrEqual(1);
+    const pendingInvite = betaInbox.invites.find((i: any) => i.database_id === alphaDbId);
+    expect(pendingInvite).toBeDefined();
+    expect(pendingInvite.role).toBe('viewer');
+
+    // 10. Beta explicitly accepts the invitation
+    const acceptRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/inbox/invites/${pendingInvite.id}/accept`,
+      headers: { cookie: betaSessionCookie },
+    });
+    expect(acceptRes.statusCode).toBe(200);
+
+    // 11. Beta lists databases -> Now sees Alpha's database marked as shared!
     const betaSharedList = await app.inject({
       method: 'GET',
       url: '/api/admin/databases',
@@ -1131,7 +1162,61 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     expect(foundShared.is_shared).toBe(true);
     expect(foundShared.access_role).toBe('viewer');
 
-    // 9. Beta user dashboard stats
+    // 12. Non-admin viewer attempting to GET /tokens -> 403 Forbidden
+    const viewerTokensForbidden = await app.inject({
+      method: 'GET',
+      url: `/api/admin/databases/${alphaDbId}/tokens`,
+      headers: { cookie: betaSessionCookie },
+    });
+    expect(viewerTokensForbidden.statusCode).toBe(403);
+
+    // 13. System Announcements Test: Admin broadcasts maintenance alert
+    const annRes = await app.inject({
+      method: 'POST',
+      url: '/api/admin/announcements',
+      headers: { cookie: adminCookie },
+      payload: {
+        title: 'Bảo trì hệ thống tối nay',
+        message: 'Hệ thống sẽ bảo trì nâng cấp trong vòng 15 phút.',
+        type: 'maintenance',
+        expiresInDays: 3,
+        pinned: true,
+      },
+    });
+    expect(annRes.statusCode).toBe(201);
+    const ann = annRes.json().data;
+
+    // Beta checks inbox -> sees maintenance alert as unread
+    const betaInboxWithAnn = await app.inject({
+      method: 'GET',
+      url: '/api/admin/inbox',
+      headers: { cookie: betaSessionCookie },
+    });
+    const foundAnn = betaInboxWithAnn.json().data.announcements.find((a: any) => a.id === ann.id);
+    expect(foundAnn).toBeDefined();
+    expect(foundAnn.is_read).toBe(false);
+
+    // Beta marks announcement as read
+    const markReadRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/inbox/announcements/${ann.id}/read`,
+      headers: { cookie: betaSessionCookie },
+    });
+    expect(markReadRes.statusCode).toBe(200);
+
+    // Non-admin user Beta attempting to create announcement -> 403 Forbidden
+    const createAnnForbidden = await app.inject({
+      method: 'POST',
+      url: '/api/admin/announcements',
+      headers: { cookie: betaSessionCookie },
+      payload: {
+        title: 'Hacked',
+        message: 'Illegal broadcast',
+      },
+    });
+    expect(createAnnForbidden.statusCode).toBe(403);
+
+    // 14. Beta user dashboard stats
     const betaDashboard = await app.inject({
       method: 'GET',
       url: '/api/admin/user/dashboard',
@@ -1142,7 +1227,7 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     expect(betaDashboard.json().data.maxStorageMb).toBe(200);
     expect(Array.isArray(betaDashboard.json().data.rateLimitWarnings)).toBe(true);
 
-    // 10. Clean up
+    // 15. Clean up
     try {
       databaseService.deleteDatabase(alphaDbId);
       const { authService } = await import('../src/server/services/auth.js');

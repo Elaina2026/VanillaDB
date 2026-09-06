@@ -363,6 +363,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
                       autoFocus
                       maxLength={6}
                       pattern="[0-9]{6}"
+                      autoComplete="one-time-code"
                       value={totpCode}
                       onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
                       placeholder="000000"
@@ -443,6 +444,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
                 <input
                   type="text"
                   required
+                  autoComplete="username"
                   value={recoveryIdentifier}
                   onChange={(e) => setRecoveryIdentifier(e.target.value)}
                   placeholder={t('auth.usernameOrEmailPlaceholder', 'admin or user@example.com')}
@@ -490,6 +492,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
                     type="text"
                     required
                     maxLength={6}
+                    autoComplete="one-time-code"
                     value={recoveryTotpCode}
                     onChange={(e) => setRecoveryTotpCode(e.target.value.replace(/\D/g, ''))}
                     placeholder="000000"
@@ -505,6 +508,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
                   <input
                     type="text"
                     required
+                    autoComplete="off"
                     value={recoveryBackupCode}
                     onChange={(e) => setRecoveryBackupCode(e.target.value.toUpperCase())}
                     placeholder={t('auth.backupCodePlaceholder', 'VD: 7T9K-4MP2')}
@@ -522,6 +526,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
                 <input
                   type="password"
                   required
+                  autoComplete="new-password"
                   value={recoveryNewPassword}
                   onChange={(e) => setRecoveryNewPassword(e.target.value)}
                   placeholder="••••••••••••"
@@ -537,6 +542,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
                 <input
                   type="password"
                   required
+                  autoComplete="new-password"
                   value={recoveryConfirmPassword}
                   onChange={(e) => setRecoveryConfirmPassword(e.target.value)}
                   placeholder="••••••••••••"
@@ -573,6 +579,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
                   <input
                     type="email"
                     required={authMode === 'register'}
+                    autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="user@example.com"
@@ -591,6 +598,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
                 <input
                   type="text"
                   required={authMode !== 'register'}
+                  autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder={authMode === 'register' ? 'johndoe' : t('auth.usernameOrEmailPlaceholder', 'admin or user@example.com')}
@@ -620,6 +628,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
                 <input
                   type="password"
                   required
+                  autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
@@ -636,6 +645,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
                   <input
                     type="password"
                     required
+                    autoComplete="new-password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••••••"

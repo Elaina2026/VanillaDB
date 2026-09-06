@@ -103,7 +103,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = req.params as { id: string };
     const db = requireDatabaseAccess(req, reply, id);
     if (!db) return;
-    const stats = databaseService.getDatabaseOverviewStats(id);
+    const stats = databaseService.getDatabaseOverviewStats(id, req.adminUser?.userId, req.adminUser?.role);
     return reply.send({ success: true, data: stats });
   });
 
@@ -606,9 +606,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Role enforcement: viewer can only run SELECT statements
     const user = req.adminUser!;
+    let isViewer = false;
     if (user.role !== 'super_admin' && user.role !== 'admin') {
       const memberRole = databaseMembersService.getUserDatabaseRole(id, user.userId, user.role);
       if (memberRole === 'viewer') {
+        isViewer = true;
         const cleanSql = parsed.data.sql.trim().toUpperCase();
         if (!cleanSql.startsWith('SELECT') && !cleanSql.startsWith('WITH') && !cleanSql.startsWith('EXPLAIN')) {
           return reply.status(403).send({
@@ -621,7 +623,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     const startTime = performance.now();
     try {
-      const result = dbManager.executeSql(id, parsed.data.sql, parsed.data.params);
+      const result = dbManager.executeSql(id, parsed.data.sql, parsed.data.params, { readonly: isViewer });
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
 
       activityService.recordActivity({
@@ -1101,8 +1103,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const Schema = z.object({
       name: z.string().min(1).max(100),
       url: z.string().url().refine(
-        u => u.startsWith('http://') || u.startsWith('https://'),
-        'Webhook URL must use HTTP or HTTPS protocol'
+        u => {
+          const check = webhookService.constructor as any;
+          return (u.startsWith('http://') || u.startsWith('https://')) && !u.includes('169.254.169.254') && !u.includes('metadata.google.internal');
+        },
+        'Webhook URL must use HTTP or HTTPS protocol and not target cloud metadata endpoints'
       ),
       secret: z.string().optional(),
       events: z.array(z.string()).min(1),
@@ -1202,6 +1207,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/webhooks/:webhookId/reset-failures', async (req, reply) => {
     const { webhookId } = req.params as { webhookId: string };
     const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const hook = metaDb.prepare('SELECT database_id FROM webhooks WHERE id = ?').get(webhookId) as { database_id: string } | undefined;
+    if (!hook) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Webhook not found' } });
+    }
+    const dbRecord = requireDatabaseAccess(req, reply, hook.database_id, 'admin');
+    if (!dbRecord) return;
+
     metaDb.prepare('UPDATE webhooks SET failure_count = 0 WHERE id = ?').run(webhookId);
     return reply.send({ success: true, message: 'Failure count reset to 0' });
   });
@@ -2008,5 +2020,120 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         rateLimitWarnings,
       },
     });
+  });
+
+  // User Inbox (Pending Database Invites & System Announcements)
+  fastify.get('/inbox', async (req, reply) => {
+    const user = req.adminUser;
+    if (!user) return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } });
+    const inbox = databaseMembersService.getUserInbox(user.userId);
+    return reply.send({ success: true, data: inbox });
+  });
+
+  fastify.post('/inbox/invites/:id/accept', async (req, reply) => {
+    const user = req.adminUser;
+    if (!user) return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } });
+    const { id } = req.params as { id: string };
+    try {
+      const member = databaseMembersService.acceptInvite(id, user.userId);
+      activityService.recordAudit({
+        user: user.username,
+        action: 'invite.accept',
+        resource: member.database_id,
+        result: 'success',
+        requestId: req.id,
+      });
+      return reply.send({ success: true, data: member });
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: { code: 'INVITE_ACCEPT_ERROR', message: err.message } });
+    }
+  });
+
+  fastify.post('/inbox/invites/:id/decline', async (req, reply) => {
+    const user = req.adminUser;
+    if (!user) return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } });
+    const { id } = req.params as { id: string };
+    try {
+      databaseMembersService.declineInvite(id, user.userId);
+      activityService.recordAudit({
+        user: user.username,
+        action: 'invite.decline',
+        resource: id,
+        result: 'success',
+        requestId: req.id,
+      });
+      return reply.send({ success: true });
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: { code: 'INVITE_DECLINE_ERROR', message: err.message } });
+    }
+  });
+
+  fastify.post('/inbox/announcements/:id/read', async (req, reply) => {
+    const user = req.adminUser;
+    if (!user) return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } });
+    const { id } = req.params as { id: string };
+    databaseMembersService.markAnnouncementRead(id, user.userId);
+    return reply.send({ success: true });
+  });
+
+  fastify.post('/inbox/read-all', async (req, reply) => {
+    const user = req.adminUser;
+    if (!user) return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } });
+    databaseMembersService.markAllAnnouncementsRead(user.userId);
+    return reply.send({ success: true });
+  });
+
+  fastify.post('/announcements', async (req, reply) => {
+    const user = req.adminUser;
+    if (!user || (user.role !== 'super_admin' && user.role !== 'admin')) {
+      return reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Admin role required to create announcements' } });
+    }
+    const Schema = z.object({
+      title: z.string().min(1).max(200),
+      message: z.string().min(1).max(5000),
+      type: z.enum(['announcement', 'maintenance', 'security', 'update']).default('announcement'),
+      expiresInDays: z.number().int().positive().optional().nullable(),
+      pinned: z.boolean().optional(),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message } });
+    }
+    const expiresAt = parsed.data.expiresInDays ? Date.now() + parsed.data.expiresInDays * 24 * 60 * 60 * 1000 : null;
+    const ann = databaseMembersService.createAnnouncement(
+      parsed.data.title,
+      parsed.data.message,
+      parsed.data.type,
+      user.userId,
+      user.username,
+      expiresAt,
+      parsed.data.pinned
+    );
+    activityService.recordAudit({
+      user: user.username,
+      action: 'announcement.create',
+      resource: ann.id,
+      result: 'success',
+      requestId: req.id,
+      details: JSON.stringify({ title: ann.title, type: ann.type }),
+    });
+    return reply.status(201).send({ success: true, data: ann });
+  });
+
+  fastify.delete('/announcements/:id', async (req, reply) => {
+    const user = req.adminUser;
+    if (!user || (user.role !== 'super_admin' && user.role !== 'admin')) {
+      return reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Admin role required' } });
+    }
+    const { id } = req.params as { id: string };
+    databaseMembersService.deleteAnnouncement(id);
+    activityService.recordAudit({
+      user: user.username,
+      action: 'announcement.delete',
+      resource: id,
+      result: 'success',
+      requestId: req.id,
+    });
+    return reply.send({ success: true });
   });
 };

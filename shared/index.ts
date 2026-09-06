@@ -463,3 +463,36 @@ export interface SystemMetricsHistory {
   };
 }
 
+export interface SystemAnnouncement {
+  id: string;
+  title: string;
+  message: string;
+  type: 'announcement' | 'maintenance' | 'security' | 'update';
+  author_id: string;
+  author_username: string;
+  created_at: number;
+  expires_at: number | null;
+  pinned: boolean;
+  is_read?: boolean;
+}
+
+export interface UserInboxInvite {
+  id: string;
+  database_id: string;
+  database_name: string;
+  database_description: string | null;
+  role: MemberRole;
+  invited_by: string;
+  invited_by_avatar?: string | null;
+  created_at: number;
+  expires_at: number;
+  status: 'pending' | 'accepted' | 'declined';
+}
+
+export interface UserInboxResponse {
+  invites: UserInboxInvite[];
+  announcements: SystemAnnouncement[];
+  unreadCount: number;
+}
+
+

@@ -32,8 +32,13 @@ import {
   Menu,
   X,
   User as UserIcon,
-  LayoutDashboard
+  LayoutDashboard,
+  Mail,
+  Bell
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '../api/client.js';
+import type { UserInboxResponse } from '@shared/index.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useTheme } from '../hooks/useTheme.js';
 import { useI18n } from '../hooks/useI18n.js';
@@ -66,6 +71,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const { t } = useI18n();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
+
+  const { data: inbox } = useQuery<UserInboxResponse>({
+    queryKey: ['userInbox'],
+    queryFn: () => apiRequest('/api/admin/inbox'),
+    refetchInterval: 15000,
+    enabled: !!user,
+  });
+  const unreadCount = inbox?.unreadCount || 0;
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
@@ -114,6 +127,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              setSelectedDatabaseId(null);
+              setCurrentTab('inbox');
+            }}
+            className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground relative"
+            title={t('nav.inbox', 'Inbox')}
+          >
+            <Mail className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+            )}
+          </button>
           <button
             onClick={onOpenSearch}
             className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
@@ -297,6 +323,30 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   {t('nav.telemetry', 'Live Telemetry')}
                 </button>
               )}
+
+              <button
+                onClick={() => {
+                  setSelectedDatabaseId(null);
+                  setCurrentTab('inbox');
+                  closeMobileMenu();
+                }}
+                className={cn(
+                  'w-full flex items-center justify-between px-3 py-2 text-xs rounded-md font-medium transition-colors',
+                  currentTab === 'inbox'
+                    ? 'bg-blue-600 text-white font-semibold'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                )}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Mail className="w-4 h-4" />
+                  <span>{t('nav.inbox', 'Inbox')}</span>
+                </div>
+                {unreadCount > 0 && (
+                  <span className="px-1.5 py-0.2 text-[10px] font-bold bg-red-500 text-white rounded-full">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
 
               <button
                 onClick={() => {

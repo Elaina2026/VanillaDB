@@ -17,14 +17,15 @@ import {
   Share2,
   ShieldAlert,
   SlidersHorizontal,
-  AlertTriangle
+  AlertTriangle,
+  Mail
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatTimeAgo } from '../lib/utils.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
-import type { DatabaseRecord, UserDashboardStats } from '@shared/index.js';
+import type { DatabaseRecord, UserDashboardStats, UserInboxResponse } from '@shared/index.js';
 
 export const DatabasesPage: React.FC<{
   onSelectDatabase: (id: string) => void;
@@ -48,6 +49,13 @@ export const DatabasesPage: React.FC<{
     queryFn: () => apiRequest('/api/admin/user/dashboard'),
     refetchInterval: 15000,
   });
+
+  const { data: inbox } = useQuery<UserInboxResponse>({
+    queryKey: ['userInbox'],
+    queryFn: () => apiRequest('/api/admin/inbox'),
+    refetchInterval: 15000,
+  });
+  const pendingInvitesCount = inbox?.invites?.length || 0;
 
   const deleteDbMutation = useMutation({
     mutationFn: (id: string) => apiRequest(`/api/admin/databases/${id}`, { method: 'DELETE' }),
@@ -164,20 +172,44 @@ export const DatabasesPage: React.FC<{
           >
             {t('common.mine', 'Created by me')}
           </button>
-          {databases.some((d: any) => d.is_shared === 1 || (d.owner_id && d.owner_id !== currentUser?.userId)) && (
+          {(databases.some((d: any) => d.is_shared === 1 || (d.owner_id && d.owner_id !== currentUser?.userId)) || pendingInvitesCount > 0) && (
             <button
               onClick={() => setFilterType('shared')}
-              className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
                 filterType === 'shared'
                   ? 'bg-card text-purple-500 shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {t('common.shared', 'Shared with me')}
+              <span>{t('common.shared', 'Shared with me')}</span>
+              {pendingInvitesCount > 0 && (
+                <span className="px-1.5 py-0.2 text-[9px] font-bold bg-blue-500 text-white rounded-full">
+                  {pendingInvitesCount}
+                </span>
+              )}
             </button>
           )}
         </div>
       </div>
+
+      {/* Pending Invites Banner */}
+      {pendingInvitesCount > 0 && (
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3.5 flex items-center justify-between gap-3 text-xs mb-4">
+          <div className="flex items-center gap-2.5 text-blue-500">
+            <Mail className="w-4 h-4 shrink-0" />
+            <span>
+              {t('inbox.pendingBanner', 'Bạn có {count} lời mời tham gia cơ sở dữ liệu đang chờ xử lý.').replace('{count}', String(pendingInvitesCount))}
+            </span>
+          </div>
+          <a
+            href="#/inbox"
+            className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md text-xs transition-colors shrink-0"
+          >
+            <span>{t('inbox.viewInbox', 'Xem Hộp thư')}</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+      )}
 
       {/* Database Grid */}
       {isLoading ? (
@@ -207,14 +239,36 @@ export const DatabasesPage: React.FC<{
             <Database className="w-6 h-6" />
           </div>
           <h3 className="text-sm font-semibold mb-1 text-foreground">
-            {search ? t('databases.noDatabasesSearch', 'No matching databases found') : t('databases.noDatabases', 'No databases found')}
+            {filterType === 'shared' && pendingInvitesCount > 0
+              ? (language === 'vi' ? 'Bạn có lời mời chưa chấp nhận' : 'Pending invitations waiting in your inbox')
+              : search
+              ? t('databases.noDatabasesSearch', 'No matching databases found')
+              : filterType === 'shared'
+              ? (language === 'vi' ? 'Chưa có cơ sở dữ liệu nào được chia sẻ với bạn' : 'No databases shared with you yet')
+              : t('databases.noDatabases', 'No databases found')}
           </h3>
           <p className="text-xs text-muted-foreground max-w-sm mb-5">
-            {search
+            {filterType === 'shared' && pendingInvitesCount > 0
+              ? (language === 'vi'
+                  ? `Bạn đang có ${pendingInvitesCount} lời mời chia sẻ cơ sở dữ liệu trong Hộp thư. Hãy mở hộp thư để Chấp nhận hoặc Từ chối.`
+                  : `You have ${pendingInvitesCount} database sharing invitations in your inbox. Check your inbox to accept or decline.`)
+              : search
               ? t('databases.adjustSearch', 'Try searching by different keywords or clear the filter.')
+              : filterType === 'shared'
+              ? (language === 'vi'
+                  ? 'Khi người khác chia sẻ database với bạn và bạn Chấp nhận từ Hộp thư, cơ sở dữ liệu sẽ hiển thị tại đây.'
+                  : 'When others share a database with you and you accept from the inbox, it will appear here.')
               : t('databases.noDatabasesDesc', 'Create your first SQLite database to get started connecting applications.')}
           </p>
-          {search ? (
+          {filterType === 'shared' && pendingInvitesCount > 0 ? (
+            <a
+              href="#/inbox"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer shadow-sm shadow-blue-500/25"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>{t('inbox.viewInbox', 'Xem Hộp thư')} ({pendingInvitesCount})</span>
+            </a>
+          ) : search ? (
             <button
               onClick={() => setSearch('')}
               className="px-3.5 py-1.5 bg-muted hover:bg-muted/80 text-foreground border border-border rounded-lg text-xs font-medium transition-colors cursor-pointer"

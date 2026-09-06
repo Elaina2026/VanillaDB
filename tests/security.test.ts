@@ -671,6 +671,21 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
         },
       });
 
+      // Tenant B accepts invite from inbox
+      const bInbox = await app.inject({
+        method: 'GET',
+        url: '/api/admin/inbox',
+        headers: { cookie: tenantBCookie },
+      });
+      const bInvite = bInbox.json().data?.invites?.find((i: any) => i.database_id === tenantADbId);
+      if (bInvite) {
+        await app.inject({
+          method: 'POST',
+          url: `/api/admin/inbox/invites/${bInvite.id}/accept`,
+          headers: { cookie: tenantBCookie },
+        });
+      }
+
       // 2. Tenant B (Viewer) tries to insert row via table row API -> 403
       const insertRow = await app.inject({
         method: 'POST',
@@ -1289,6 +1304,21 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
         headers: { cookie: adminCookie },
         payload: { emailOrUsername: viewerEmail, role: 'viewer' },
       });
+
+      // Viewer accepts invite from inbox
+      const vInbox = await app.inject({
+        method: 'GET',
+        url: '/api/admin/inbox',
+        headers: { cookie: viewerCookie },
+      });
+      const vInvite = vInbox.json().data?.invites?.find((i: any) => i.database_id === adminDbId);
+      if (vInvite) {
+        await app.inject({
+          method: 'POST',
+          url: `/api/admin/inbox/invites/${vInvite.id}/accept`,
+          headers: { cookie: viewerCookie },
+        });
+      }
 
       // 4. Viewer lists webhooks: secret must be sanitized
       const viewerList = await app.inject({

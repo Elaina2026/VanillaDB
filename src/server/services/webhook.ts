@@ -52,6 +52,28 @@ export class WebhookService {
     }
   }
 
+  public static isSafeWebhookUrl(urlString: string): { safe: boolean; reason?: string } {
+    try {
+      const u = new URL(urlString);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+        return { safe: false, reason: 'Webhook URL must use HTTP or HTTPS protocol' };
+      }
+      const host = u.hostname.toLowerCase();
+      // Block AWS/GCP/Azure/OpenStack link-local cloud metadata addresses
+      if (
+        host === '169.254.169.254' ||
+        host === 'metadata.google.internal' ||
+        host === 'instance-data' ||
+        host === '100.100.100.200'
+      ) {
+        return { safe: false, reason: 'Cloud metadata IP addresses are strictly forbidden' };
+      }
+      return { safe: true };
+    } catch {
+      return { safe: false, reason: 'Invalid webhook URL format' };
+    }
+  }
+
   private async executePost(
     hookId: string,
     url: string,
@@ -62,6 +84,13 @@ export class WebhookService {
     maxAttempts = 3
   ): Promise<boolean> {
     const metaDb = getMetadataDb();
+    const safety = WebhookService.isSafeWebhookUrl(url);
+    if (!safety.safe) {
+      logger.warn({ url, reason: safety.reason }, 'SSRF prevention: blocked webhook URL');
+      metaDb.prepare('UPDATE webhooks SET failure_count = failure_count + 1 WHERE id = ?').run(hookId);
+      return false;
+    }
+
     const signature = crypto.createHmac('sha256', secret).update(body).digest('hex');
 
     const controller = new AbortController();

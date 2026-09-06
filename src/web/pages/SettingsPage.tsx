@@ -1554,6 +1554,7 @@ export const SettingsPage: React.FC = () => {
                       type="password"
                       required
                       autoFocus
+                      autoComplete="current-password"
                       value={regeneratePassword}
                       onChange={(e) => setRegeneratePassword(e.target.value)}
                       placeholder="••••••••"
@@ -1613,6 +1614,7 @@ export const SettingsPage: React.FC = () => {
                 <input
                   type="password"
                   required
+                  autoComplete="current-password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   placeholder="••••••••"
@@ -1625,6 +1627,7 @@ export const SettingsPage: React.FC = () => {
                 <input
                   type="password"
                   required
+                  autoComplete="new-password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="••••••••"
@@ -1637,6 +1640,7 @@ export const SettingsPage: React.FC = () => {
                 <input
                   type="password"
                   required
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
@@ -1693,6 +1697,7 @@ export const SettingsPage: React.FC = () => {
                     <input
                       type="password"
                       required
+                      autoComplete="current-password"
                       value={totpVerifyPassword}
                       onChange={(e) => setTotpVerifyPassword(e.target.value)}
                       placeholder={t('settings.enterCurrentPasswordPlaceholder', 'Enter current password...')}
@@ -1709,6 +1714,7 @@ export const SettingsPage: React.FC = () => {
                       required
                       maxLength={6}
                       pattern="[0-9]{6}"
+                      autoComplete="one-time-code"
                       value={totpVerifyCode}
                       onChange={(e) => setTotpVerifyCode(e.target.value.replace(/\D/g, ''))}
                       placeholder="000000"
@@ -1760,6 +1766,7 @@ export const SettingsPage: React.FC = () => {
                     <input
                       type="password"
                       required
+                      autoComplete="current-password"
                       value={totpVerifyPassword}
                       onChange={(e) => setTotpVerifyPassword(e.target.value)}
                       placeholder={t('settings.yourPasswordPlaceholder', 'Your password...')}
@@ -1773,6 +1780,7 @@ export const SettingsPage: React.FC = () => {
                       type="text"
                       required
                       maxLength={6}
+                      autoComplete="one-time-code"
                       value={totpVerifyCode}
                       onChange={(e) => setTotpVerifyCode(e.target.value.replace(/\D/g, ''))}
                       placeholder="000000"

@@ -317,6 +317,34 @@ function runMigrations(db: DatabaseSync): void {
       sql: `
         ALTER TABLE databases ADD COLUMN backup_schedule TEXT;
       `
+    },
+    {
+      version: 13,
+      name: 'add_inbox_and_system_announcements',
+      sql: `
+        ALTER TABLE database_invites ADD COLUMN user_id TEXT;
+        ALTER TABLE database_invites ADD COLUMN username TEXT;
+        CREATE TABLE IF NOT EXISTS system_announcements (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          message TEXT NOT NULL,
+          type TEXT NOT NULL DEFAULT 'announcement',
+          author_id TEXT NOT NULL,
+          author_username TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          expires_at INTEGER,
+          pinned INTEGER DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_announcements_created ON system_announcements(created_at DESC);
+        CREATE TABLE IF NOT EXISTS user_read_announcements (
+          user_id TEXT NOT NULL,
+          announcement_id TEXT NOT NULL,
+          read_at INTEGER NOT NULL,
+          PRIMARY KEY (user_id, announcement_id),
+          FOREIGN KEY (announcement_id) REFERENCES system_announcements(id) ON DELETE CASCADE,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `
     }
   ];
 
