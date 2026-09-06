@@ -21,12 +21,15 @@ import {
   Clock,
   Archive,
   ArrowUpDown,
-  Table as TableIcon
+  Table as TableIcon,
+  Mail,
+  LayoutDashboard
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../api/client.js';
 import { useTheme } from '../hooks/useTheme.js';
 import { useI18n } from '../hooks/useI18n.js';
+import { useAuth } from '../hooks/useAuth.js';
 import type { DatabaseRecord } from '@shared/index.js';
 
 interface CommandPaletteProps {
@@ -48,6 +51,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const listRef = useRef<HTMLDivElement>(null);
   const { theme, setTheme } = useTheme();
   const { language, setLanguage } = useI18n();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
 
   const { data: databases } = useQuery<DatabaseRecord[]>({
     queryKey: ['databases'],
@@ -78,63 +83,124 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const isVi = language === 'vi';
 
   // Base navigation commands
-  const navCommands = [
-    {
-      id: 'nav-overview',
-      category: isVi ? 'Điều hướng' : 'Navigation',
-      label: isVi ? 'Đi đến Tổng quan' : 'Go to Overview',
-      detail: '#/overview',
-      icon: Home,
-      action: () => { onNavigate('overview'); onClose(); },
-    },
-    {
-      id: 'nav-databases',
-      category: isVi ? 'Điều hướng' : 'Navigation',
-      label: isVi ? 'Quản lý Cơ sở dữ liệu' : 'All Databases',
-      detail: '#/databases',
-      icon: Database,
-      action: () => { onNavigate('databases'); onClose(); },
-    },
-    {
-      id: 'nav-telemetry',
-      category: isVi ? 'Điều hướng' : 'Navigation',
-      label: isVi ? 'Giám sát hệ thống (Telemetry Live 1s)' : 'Live Telemetry (1s)',
-      detail: '#/telemetry',
-      icon: Activity,
-      action: () => { onNavigate('telemetry'); onClose(); },
-    },
-    {
-      id: 'nav-activity',
-      category: isVi ? 'Điều hướng' : 'Navigation',
-      label: isVi ? 'Nhật ký hoạt động & Audit' : 'Activity & Audit Logs',
-      detail: '#/activity',
-      icon: Activity,
-      action: () => { onNavigate('activity'); onClose(); },
-    },
-    {
-      id: 'nav-users',
-      category: isVi ? 'Điều hướng' : 'Navigation',
-      label: isVi ? 'Quản trị Người dùng' : 'User Management',
-      detail: '#/users',
-      icon: Users,
-      action: () => { onNavigate('users'); onClose(); },
-    },
-    {
-      id: 'nav-settings',
-      category: isVi ? 'Điều hướng' : 'Navigation',
-      label: isVi ? 'Cài đặt hệ thống' : 'System Settings',
-      detail: '#/settings',
-      icon: Settings,
-      action: () => { onNavigate('settings'); onClose(); },
-    },
-    {
-      id: 'nav-shortcuts',
-      category: isVi ? 'Điều hướng' : 'Navigation',
-      label: isVi ? 'Bảng tra cứu phím tắt' : 'Keyboard Shortcuts Reference',
-      detail: '#/shortcuts',
-      icon: Keyboard,
-      action: () => { onNavigate('shortcuts'); onClose(); },
-    },
+  const navCommands = isAdmin
+    ? [
+        {
+          id: 'nav-overview',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Đi đến Tổng quan hệ thống' : 'Go to System Overview',
+          detail: 'Alt + 1',
+          icon: Home,
+          action: () => { onNavigate('overview'); onClose(); },
+        },
+        {
+          id: 'nav-telemetry',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Giám sát hệ thống (Telemetry Live 1s)' : 'Live Telemetry (1s)',
+          detail: 'Alt + 2',
+          icon: Activity,
+          action: () => { onNavigate('telemetry'); onClose(); },
+        },
+        {
+          id: 'nav-databases',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Quản lý Cơ sở dữ liệu' : 'All Databases',
+          detail: 'Alt + 3',
+          icon: Database,
+          action: () => { onNavigate('databases'); onClose(); },
+        },
+        {
+          id: 'nav-activity',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Nhật ký hoạt động & Audit' : 'Activity & Audit Logs',
+          detail: 'Alt + 4',
+          icon: Activity,
+          action: () => { onNavigate('activity'); onClose(); },
+        },
+        {
+          id: 'nav-users',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Quản trị Người dùng' : 'User Management',
+          detail: 'Alt + 5',
+          icon: Users,
+          action: () => { onNavigate('users'); onClose(); },
+        },
+        {
+          id: 'nav-settings',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Cài đặt hệ thống' : 'System Settings',
+          detail: 'Alt + 6',
+          icon: Settings,
+          action: () => { onNavigate('settings'); onClose(); },
+        },
+        {
+          id: 'nav-inbox',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Hộp thư & Thông báo' : 'Inbox & Notifications',
+          detail: 'Alt + 7',
+          icon: Mail,
+          action: () => { onNavigate('inbox'); onClose(); },
+        },
+        {
+          id: 'nav-shortcuts',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Bảng tra cứu phím tắt' : 'Keyboard Shortcuts Reference',
+          detail: 'Shift + ?',
+          icon: Keyboard,
+          action: () => { onNavigate('shortcuts'); onClose(); },
+        },
+      ]
+    : [
+        {
+          id: 'nav-overview',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Bảng điều khiển cá nhân' : 'User Dashboard',
+          detail: 'Alt + 1',
+          icon: LayoutDashboard,
+          action: () => { onNavigate('overview'); onClose(); },
+        },
+        {
+          id: 'nav-inbox',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Hộp thư & Lời mời' : 'Inbox & Invitations',
+          detail: 'Alt + 2',
+          icon: Mail,
+          action: () => { onNavigate('inbox'); onClose(); },
+        },
+        {
+          id: 'nav-databases',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Cơ sở dữ liệu của tôi' : 'My Databases',
+          detail: 'Alt + 3',
+          icon: Database,
+          action: () => { onNavigate('databases'); onClose(); },
+        },
+        {
+          id: 'nav-activity',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Nhật ký hoạt động' : 'Activity Logs',
+          detail: 'Alt + 4',
+          icon: Activity,
+          action: () => { onNavigate('activity'); onClose(); },
+        },
+        {
+          id: 'nav-settings',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Cài đặt tài khoản' : 'Account Settings',
+          detail: 'Alt + 5',
+          icon: Settings,
+          action: () => { onNavigate('settings'); onClose(); },
+        },
+        {
+          id: 'nav-shortcuts',
+          category: isVi ? 'Điều hướng' : 'Navigation',
+          label: isVi ? 'Bảng tra cứu phím tắt' : 'Keyboard Shortcuts Reference',
+          detail: 'Shift + ?',
+          icon: Keyboard,
+          action: () => { onNavigate('shortcuts'); onClose(); },
+        },
+      ];
+  const quickActionCommands = [
     {
       id: 'action-create-db',
       category: isVi ? 'Thao tác nhanh' : 'Quick Actions',
@@ -197,7 +263,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     }
   ]);
 
-  const allItems = [...navCommands, ...dbCommands];
+  const allItems = [...navCommands, ...quickActionCommands, ...dbCommands];
   const filtered = allItems.filter(item =>
     item.label.toLowerCase().includes(query.toLowerCase()) ||
     item.detail.toLowerCase().includes(query.toLowerCase()) ||

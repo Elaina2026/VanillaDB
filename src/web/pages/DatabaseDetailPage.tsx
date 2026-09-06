@@ -116,8 +116,16 @@ export const DatabaseDetailPage: React.FC<{
     ];
 
     const handleDetailKeyDown = (e: KeyboardEvent) => {
-      const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName);
-      if (isInput) return;
+      const target = e.target as HTMLElement | null;
+      const isInput = Boolean(
+        target && (
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) ||
+          target.isContentEditable ||
+          Boolean(target.closest?.('.monaco-editor, [role="textbox"], [role="dialog"]'))
+        )
+      );
+      const isModalActive = Boolean(document.querySelector('[role="dialog"], [aria-modal="true"]'));
+      if (isInput || isModalActive) return;
 
       // Allow 1..9 (without Ctrl/Meta/Alt) to switch tabs quickly when focused on Database Detail
       if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {

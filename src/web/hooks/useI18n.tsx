@@ -975,6 +975,7 @@ const translations: Record<Language, Record<string, string>> = {
     // Command Palette Keys
     'palette.category.navigation': 'Navigation',
     'palette.nav.overview': 'Go to Overview',
+    'palette.nav.inbox': 'Go to Inbox & Notifications',
     'palette.nav.databases': 'Go to Databases',
     'palette.nav.telemetry': 'Go to Live Telemetry',
     'palette.nav.activity': 'Go to Activity & Audit Logs',
@@ -2023,6 +2024,7 @@ const translations: Record<Language, Record<string, string>> = {
     // Command Palette Keys
     'palette.category.navigation': 'Điều hướng',
     'palette.nav.overview': 'Đi đến Tổng quan',
+    'palette.nav.inbox': 'Đi đến Hộp thư & Thông báo',
     'palette.nav.databases': 'Đi đến Cơ sở dữ liệu',
     'palette.nav.telemetry': 'Đi đến Giám sát trực tiếp',
     'palette.nav.activity': 'Đi đến Nhật ký hoạt động',

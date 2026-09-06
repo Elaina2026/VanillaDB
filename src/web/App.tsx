@@ -90,21 +90,32 @@ export const App: React.FC = () => {
   // Global Keyboard Shortcuts listener (Ctrl + K, Ctrl + B, Ctrl + Shift + L, Shift + ?, Esc, etc.)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName);
-
-      // Open Command Palette: Ctrl + K / Cmd + K
+      // 1. Modals & Command Palette toggle
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsCommandPaletteOpen((prev) => !prev);
         return;
       }
 
-      // Create new Database: Ctrl + B / Cmd + B
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         setIsCreateDbOpen(true);
         return;
       }
+
+      // 2. Input / Editable element and modal dialog detection
+      const target = e.target as HTMLElement | null;
+      const isInput = Boolean(
+        target && (
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) ||
+          target.isContentEditable ||
+          Boolean(target.closest?.('.monaco-editor, [role="textbox"]'))
+        )
+      );
+      const isModalOpen = isCreateDbOpen || isCommandPaletteOpen || Boolean(createTokenDbId);
+
+      // Do not trigger general shortcuts when actively typing or when a modal is open
+      if (isInput || isModalOpen) return;
 
       // Toggle Language: Ctrl + Shift + L
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'L' || e.key === 'l' || e.code === 'KeyL')) {
@@ -122,27 +133,51 @@ export const App: React.FC = () => {
       }
 
       // Jump to Shortcuts Reference: Shift + ? or '?'
-      if ((e.key === '?' || (e.shiftKey && e.code === 'Slash')) && !isInput) {
+      if (e.key === '?' || (e.shiftKey && e.code === 'Slash')) {
         e.preventDefault();
         navigateTo('shortcuts');
         return;
       }
 
-      // Fast Navigation (when not typing in an input):
-      // Alt + 1: Overview, Alt + 2: Live Telemetry, Alt + 3: Databases, Alt + 4: Activity Logs, Alt + 5: Users, Alt + 6: Settings
-      if (e.altKey && !e.ctrlKey && !e.metaKey) {
-        if (e.key === '1' || e.code === 'Digit1') { e.preventDefault(); navigateTo('overview'); return; }
-        if (e.key === '2' || e.code === 'Digit2') { e.preventDefault(); navigateTo('telemetry'); return; }
-        if (e.key === '3' || e.code === 'Digit3') { e.preventDefault(); navigateTo('databases'); return; }
-        if (e.key === '4' || e.code === 'Digit4') { e.preventDefault(); navigateTo('activity'); return; }
-        if (e.key === '5' || e.code === 'Digit5') { e.preventDefault(); navigateTo('users'); return; }
-        if (e.key === '6' || e.code === 'Digit6') { e.preventDefault(); navigateTo('settings'); return; }
+      // Fast Navigation (Alt + 1..8) - Role-Aware (User vs Admin)
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        const key = e.key;
+        const code = e.code;
+
+        const is1 = key === '1' || code === 'Digit1' || code === 'Numpad1';
+        const is2 = key === '2' || code === 'Digit2' || code === 'Numpad2';
+        const is3 = key === '3' || code === 'Digit3' || code === 'Numpad3';
+        const is4 = key === '4' || code === 'Digit4' || code === 'Numpad4';
+        const is5 = key === '5' || code === 'Digit5' || code === 'Numpad5';
+        const is6 = key === '6' || code === 'Digit6' || code === 'Numpad6';
+        const is7 = key === '7' || code === 'Digit7' || code === 'Numpad7';
+        const is8 = key === '8' || code === 'Digit8' || code === 'Numpad8';
+
+        const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+
+        if (isAdmin) {
+          if (is1) { e.preventDefault(); navigateTo('overview'); return; }
+          if (is2) { e.preventDefault(); navigateTo('telemetry'); return; }
+          if (is3) { e.preventDefault(); navigateTo('databases'); return; }
+          if (is4) { e.preventDefault(); navigateTo('activity'); return; }
+          if (is5) { e.preventDefault(); navigateTo('users'); return; }
+          if (is6) { e.preventDefault(); navigateTo('settings'); return; }
+          if (is7) { e.preventDefault(); navigateTo('inbox'); return; }
+          if (is8) { e.preventDefault(); navigateTo('shortcuts'); return; }
+        } else {
+          if (is1) { e.preventDefault(); navigateTo('overview'); return; }
+          if (is2) { e.preventDefault(); navigateTo('inbox'); return; }
+          if (is3) { e.preventDefault(); navigateTo('databases'); return; }
+          if (is4) { e.preventDefault(); navigateTo('activity'); return; }
+          if (is5) { e.preventDefault(); navigateTo('settings'); return; }
+          if (is6) { e.preventDefault(); navigateTo('shortcuts'); return; }
+        }
       }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [language, theme]);
+  }, [language, theme, user, isCreateDbOpen, isCommandPaletteOpen, createTokenDbId]);
 
   if (isOffline) {
     return <ErrorPage type="offline" onRetry={refetchStatus} />;
@@ -222,6 +257,7 @@ export const App: React.FC = () => {
         <ShortcutsPage
           onNavigate={(t, id) => navigateTo(t, id)}
           onOpenCreateDb={() => setIsCreateDbOpen(true)}
+          onOpenSearch={() => setIsCommandPaletteOpen(true)}
         />
       ) : (
         user?.role === 'user' ? (
