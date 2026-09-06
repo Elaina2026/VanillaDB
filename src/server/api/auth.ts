@@ -272,7 +272,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
-  // 2FA Verification during login
+  // 2FA Verification during login (Supports TOTP 6-digit OR Backup Recovery Code)
   fastify.post('/login/2fa', async (req, reply) => {
     const ip = req.ip || 'unknown';
     if (!checkAuthRateLimit(`2fa:${ip}`, 10, 60 * 1000)) {
@@ -284,12 +284,13 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const Schema = z.object({
       tempToken: z.string().min(1),
-      code: z.string().length(6),
+      code: z.string().min(1).max(32),
+      isBackupCode: z.boolean().optional(),
     });
 
     const parsed = Schema.safeParse(req.body);
     if (!parsed.success) {
-      return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Valid 6-digit code required' } });
+      return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Valid 2FA code or backup code required' } });
     }
 
     const userId = authService.verifyTemp2faChallenge(parsed.data.tempToken, config.sessionSecret);
@@ -298,14 +299,88 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const userWithSecret = authService.getUserById(userId);
-    const totpInfo = authService.getTotpSecretInternal(userId);
-    if (!userWithSecret || !totpInfo?.totp_secret) {
-      return reply.status(400).send({ success: false, error: { code: '2FA_NOT_CONFIGURED', message: '2FA not found' } });
+    if (!userWithSecret) {
+      return reply.status(400).send({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
     }
 
-    const isValid = verifyTotpCode(totpInfo.totp_secret, parsed.data.code);
-    if (!isValid) {
-      return reply.status(401).send({ success: false, error: { code: 'INVALID_2FA_CODE', message: 'Mã xác thực 2FA không chính xác' } });
+    const cleanCode = parsed.data.code.trim();
+    let isSuccess = false;
+    let loginMethod = 'totp';
+
+    // 1. Try TOTP code first if 6 digits and not explicitly set as backup code
+    const isSixDigit = /^\d{6}$/.test(cleanCode);
+    const totpInfo = authService.getTotpSecretInternal(userId);
+    if (isSixDigit && !parsed.data.isBackupCode && totpInfo?.totp_secret) {
+      if (verifyTotpCode(totpInfo.totp_secret, cleanCode)) {
+        isSuccess = true;
+        loginMethod = 'totp';
+      }
+    }
+
+    // 2. If not validated via TOTP, verify as Backup Recovery Code
+    if (!isSuccess) {
+      const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+      const userRow = metaDb.prepare('SELECT totp_backup_codes FROM users WHERE id = ?').get(userId) as
+        | { totp_backup_codes: string | null }
+        | undefined;
+
+      if (userRow?.totp_backup_codes) {
+        let rawCodes: any[] = [];
+        try {
+          rawCodes = JSON.parse(userRow.totp_backup_codes);
+          if (!Array.isArray(rawCodes)) rawCodes = [];
+        } catch {
+          rawCodes = [];
+        }
+
+        const normInput = cleanCode.toUpperCase().replace(/\s+/g, '');
+        const formattedInput = normInput.length === 8 && !normInput.includes('-')
+          ? `${normInput.slice(0, 4)}-${normInput.slice(4)}`
+          : normInput;
+
+        const matchIndex = rawCodes.findIndex((item) => {
+          const candidate = typeof item === 'string' ? item : item.code;
+          const isUsed = typeof item === 'object' && item.used;
+          if (!candidate || isUsed) return false;
+          const candUpper = candidate.toUpperCase().trim();
+          const candStripped = candUpper.replace(/-/g, '');
+
+          if (candUpper.length === formattedInput.length && crypto.timingSafeEqual(Buffer.from(candUpper), Buffer.from(formattedInput))) {
+            return true;
+          }
+          if (candStripped.length === normInput.length && crypto.timingSafeEqual(Buffer.from(candStripped), Buffer.from(normInput))) {
+            return true;
+          }
+          return false;
+        });
+
+        if (matchIndex !== -1) {
+          // Burn the backup code so it cannot be used again
+          const matched = rawCodes[matchIndex];
+          if (typeof matched === 'string') {
+            rawCodes[matchIndex] = { code: matched, used: true, used_at: Date.now() };
+          } else {
+            matched.used = true;
+            matched.used_at = Date.now();
+          }
+
+          metaDb.prepare('UPDATE users SET totp_backup_codes = ?, updated_at = ? WHERE id = ?').run(
+            JSON.stringify(rawCodes),
+            Date.now(),
+            userId
+          );
+
+          isSuccess = true;
+          loginMethod = 'backup_code';
+        }
+      }
+    }
+
+    if (!isSuccess) {
+      return reply.status(401).send({
+        success: false,
+        error: { code: 'INVALID_2FA_CODE', message: 'Mã xác thực 2FA hoặc mã dự phòng không chính xác' },
+      });
     }
 
     const { cookieValue, expires } = authService.generateSessionCookie(userWithSecret, config.sessionSecret);
@@ -319,7 +394,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     activityService.recordAudit({
       user: userWithSecret.username,
-      action: 'login_2fa',
+      action: loginMethod === 'backup_code' ? 'login_2fa_backup_code' : 'login_2fa',
       resource: 'auth',
       result: 'success',
       requestId: req.id,
@@ -329,6 +404,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       success: true,
       data: {
         user: { id: userWithSecret.id, username: userWithSecret.username, role: userWithSecret.role, created_at: userWithSecret.created_at },
+        method: loginMethod,
       },
     });
   });

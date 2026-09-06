@@ -458,6 +458,60 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
       expect(regenRes.json().data.total).toBe(6);
       expect(regenRes.json().data.remaining).toBe(6);
       expect(regenRes.json().data.backupCodes.length).toBe(6);
+
+      // 11. Test direct 2FA login challenge using a backup recovery code
+      const newBackupCodes: string[] = regenRes.json().data.backupCodes;
+      const testBackupCode = newBackupCodes[0];
+
+      // Initiate login -> returns tempToken with require2fa: true
+      const loginInit = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          username: `backup_user_${runId}`,
+          password: 'PasswordResetWithTotp123!',
+        },
+      });
+      expect(loginInit.statusCode).toBe(200);
+      expect(loginInit.json().data.require2fa).toBe(true);
+      const loginTempToken = loginInit.json().data.tempToken;
+
+      // Complete 2FA login using the backup recovery code
+      const backupLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login/2fa',
+        payload: {
+          tempToken: loginTempToken,
+          code: testBackupCode,
+          isBackupCode: true,
+        },
+      });
+      expect(backupLogin.statusCode).toBe(200);
+      expect(backupLogin.json().data.method).toBe('backup_code');
+      const backupSessionCookie = backupLogin.cookies.find((c: any) => c.name === 'vdb_session');
+      expect(backupSessionCookie).toBeDefined();
+
+      // Verify that consumed backup code cannot be reused to log in again
+      const reuseLoginInit = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          username: `backup_user_${runId}`,
+          password: 'PasswordResetWithTotp123!',
+        },
+      });
+      const reuseTempToken = reuseLoginInit.json().data.tempToken;
+      const reuseBackupLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login/2fa',
+        payload: {
+          tempToken: reuseTempToken,
+          code: testBackupCode,
+          isBackupCode: true,
+        },
+      });
+      expect(reuseBackupLogin.statusCode).toBe(401);
+      expect(reuseBackupLogin.json().error.code).toBe('INVALID_2FA_CODE');
     });
   });
 

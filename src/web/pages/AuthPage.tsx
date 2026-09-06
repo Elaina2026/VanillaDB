@@ -58,6 +58,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
   const [require2fa, setRequire2fa] = useState(false);
   const [tempToken, setTempToken] = useState('');
   const [totpCode, setTotpCode] = useState('');
+  const [useBackupCodeForLogin, setUseBackupCodeForLogin] = useState(false);
+  const [backupCodeInput, setBackupCodeInput] = useState('');
 
   // Reset Password State (Dual-Factor: TOTP 6-digit OR Backup Code)
   const [recoveryMethod, setRecoveryMethod] = useState<'totp' | 'backup'>('totp');
@@ -98,10 +100,21 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
     setError(null);
     setLoading(true);
 
+    const codeToSend = useBackupCodeForLogin ? backupCodeInput.trim() : totpCode.trim();
+    if (!codeToSend) {
+      setError(t('auth.codeRequired', 'Vui lòng nhập mã xác thực'));
+      setLoading(false);
+      return;
+    }
+
     try {
       await apiRequest('/api/auth/login/2fa', {
         method: 'POST',
-        body: JSON.stringify({ tempToken, code: totpCode.trim() }),
+        body: JSON.stringify({
+          tempToken,
+          code: codeToSend,
+          isBackupCode: useBackupCodeForLogin,
+        }),
       });
       refetchStatus();
     } catch (err: any) {
@@ -300,26 +313,74 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
         {require2fa ? (
           <form onSubmit={handle2faSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">{t('auth.totpCode', '6-digit Authenticator Code')}</label>
-              <div className="relative">
-                <ShieldCheck className="w-4 h-4 absolute left-3 top-2.5 text-blue-500" />
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  maxLength={6}
-                  pattern="[0-9]{6}"
-                  value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
-                  placeholder="000000"
-                  className="w-full pl-9 pr-3 py-2 text-center tracking-widest text-lg font-mono font-bold bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500"
-                />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-muted-foreground">
+                  {useBackupCodeForLogin
+                    ? t('auth.backupCodeLabel', 'Mã dự phòng 8 ký tự')
+                    : t('auth.totpCode', 'Mã Authenticator 6 số')}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseBackupCodeForLogin(!useBackupCodeForLogin);
+                    setError(null);
+                  }}
+                  className="text-[11px] text-blue-500 hover:text-blue-400 hover:underline cursor-pointer"
+                >
+                  {useBackupCodeForLogin
+                    ? t('auth.useTotpCode', 'Dùng mã Authenticator')
+                    : t('auth.useBackupCode', 'Dùng mã dự phòng')}
+                </button>
               </div>
+
+              <div className="relative">
+                {useBackupCodeForLogin ? (
+                  <>
+                    <Key className="w-4 h-4 absolute left-3 top-2.5 text-amber-500" />
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      maxLength={12}
+                      value={backupCodeInput}
+                      onChange={(e) => {
+                        let val = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                        if (val.length === 8 && !val.includes('-')) {
+                          val = `${val.slice(0, 4)}-${val.slice(4)}`;
+                        }
+                        setBackupCodeInput(val);
+                      }}
+                      placeholder="ABCD-1234"
+                      className="w-full pl-9 pr-3 py-2 text-center tracking-widest text-lg font-mono font-bold bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4 absolute left-3 top-2.5 text-blue-500" />
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      maxLength={6}
+                      pattern="[0-9]{6}"
+                      value={totpCode}
+                      onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="000000"
+                      className="w-full pl-9 pr-3 py-2 text-center tracking-widest text-lg font-mono font-bold bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500"
+                    />
+                  </>
+                )}
+              </div>
+              {useBackupCodeForLogin && (
+                <p className="text-[10px] text-muted-foreground mt-1 text-center">
+                  {t('auth.backupCodeNote', 'Mỗi mã dự phòng chỉ dùng được 1 lần và sẽ tự động hủy sau khi đăng nhập thành công.')}
+                </p>
+              )}
             </div>
 
             <button
               type="submit"
-              disabled={loading || totpCode.length !== 6}
+              disabled={loading || (useBackupCodeForLogin ? backupCodeInput.trim().length < 8 : totpCode.length !== 6)}
               className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
             >
               {loading ? t('common.loading', 'Processing...') : t('auth.verify2fa', 'Verify & Sign In')}
@@ -330,6 +391,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
               onClick={() => {
                 setRequire2fa(false);
                 setTotpCode('');
+                setBackupCodeInput('');
+                setUseBackupCodeForLogin(false);
                 setError(null);
               }}
               className="w-full py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1 cursor-pointer"
