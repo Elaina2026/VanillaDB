@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" width="100%" height="100%">
+  <defs>
+    <!-- Cyan to Royal Blue primary cylinder gradient -->
+    <linearGradient id="vdbCylinder" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="35%" stop-color="#2563eb" />
+      <stop offset="70%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+
+    <!-- Top disk high-contrast surface -->
+    <linearGradient id="vdbTopDisk" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+
+    <!-- Mid disk surface -->
+    <linearGradient id="vdbMidDisk" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#1e3a8a" />
+    </linearGradient>
+
+    <!-- Lightning V-Monogram Gradient -->
+    <linearGradient id="vdbBolt" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="40%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#ffffff" />
+    </linearGradient>
+
+    <!-- Ambient Glow Filter -->
+    <filter id="vdbGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Ambient Backdrop Glow (No opaque box background) -->
+  <ellipse cx="256" cy="270" rx="160" ry="140" fill="#2563eb" opacity="0.3" filter="url(#vdbGlow)"/>
+
+  <!-- DATABASE CYLINDER STACK (Transparent Background) -->
+
+  <!-- Layer 3: Bottom Disk -->
+  <g transform="translate(0, 140)">
+    <path d="M 126 180 A 130 46 0 0 0 386 180 V 235 A 130 46 0 0 1 126 235 Z" fill="url(#vdbCylinder)" stroke="#1e40af" stroke-width="4" stroke-linejoin="round" />
+    <ellipse cx="256" cy="180" rx="130" ry="46" fill="url(#vdbMidDisk)" stroke="#3b82f6" stroke-width="3" />
+  </g>
+
+  <!-- Layer 2: Middle Disk -->
+  <g transform="translate(0, 70)">
+    <path d="M 126 180 A 130 46 0 0 0 386 180 V 235 A 130 46 0 0 1 126 235 Z" fill="url(#vdbCylinder)" stroke="#1e40af" stroke-width="4" stroke-linejoin="round" />
+    <ellipse cx="256" cy="180" rx="130" ry="46" fill="url(#vdbMidDisk)" stroke="#3b82f6" stroke-width="3" />
+  </g>
+
+  <!-- Layer 1: Top Disk -->
+  <g transform="translate(0, 0)">
+    <path d="M 126 180 A 130 46 0 0 0 386 180 V 235 A 130 46 0 0 1 126 235 Z" fill="url(#vdbCylinder)" stroke="#1e40af" stroke-width="4" stroke-linejoin="round" />
+    <ellipse cx="256" cy="180" rx="130" ry="46" fill="url(#vdbTopDisk)" stroke="#93c5fd" stroke-width="6" />
+  </g>
+
+  <!-- Central Realtime V-Bolt Monogram -->
+  <path
+    d="M 226 105 L 278 180 L 246 192 L 298 290 L 244 206 L 274 194 Z"
+    fill="url(#vdbBolt)"
+    stroke="#ffffff"
+    stroke-width="5"
+    stroke-linejoin="round"
+    filter="url(#vdbGlow)"
+  />
+
+  <!-- Floating Data Nodes / Satellites -->
+  <circle cx="140" cy="140" r="10" fill="#38bdf8" filter="url(#vdbGlow)" />
+  <circle cx="375" cy="170" r="8.5" fill="#60a5fa" filter="url(#vdbGlow)" />
+  <circle cx="355" cy="400" r="11" fill="#38bdf8" filter="url(#vdbGlow)" />
+  <circle cx="155" cy="380" r="9" fill="#818cf8" filter="url(#vdbGlow)" />
+</svg>
