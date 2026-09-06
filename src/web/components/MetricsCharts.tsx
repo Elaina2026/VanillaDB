@@ -1,5 +1,5 @@
 import React, { useState, useId } from 'react';
-import type { SystemStatus } from '@shared/index.js';
+import type { SystemStatus, MetricHistoryPoint } from '@shared/index.js';
 import { formatBytes } from '../lib/utils.js';
 import { useI18n } from '../hooks/useI18n.js';
 
@@ -56,13 +56,36 @@ function generateSeries(timeRange: TimeRange, status?: SystemStatus): SeriesPoin
   return data;
 }
 
+function buildSeries(timeRange: TimeRange, status?: SystemStatus, timeline?: MetricHistoryPoint[]): SeriesPoint[] {
+  if (timeline && timeline.length >= 2) {
+    return timeline.map((p) => {
+      const date = new Date(p.timestamp);
+      const label = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: timeRange === '10m' ? '2-digit' : undefined });
+      const errorRate = p.requestsCount > 0 ? Math.min(100, parseFloat(((p.errorsCount / p.requestsCount) * 100).toFixed(2))) : 0;
+      return {
+        timestamp: p.timestamp,
+        label,
+        cpu: Math.min(100, Math.max(0, Math.round(p.cpuPercent || 0))),
+        ram: Math.min(100, Math.max(0, Math.round(p.ramPercent || 0))),
+        netInKB: Math.max(0, Math.round((p.networkInRate || 0) / 1024)),
+        netOutKB: Math.max(0, Math.round((p.networkOutRate || 0) / 1024)),
+        qps: Math.max(0, Math.round((p.qps || 0) * 10) / 10),
+        errorRate,
+        avgMs: Math.max(0, parseFloat((p.avgDurationMs || 0).toFixed(2))),
+        p95Ms: Math.max(0, parseFloat(((p.avgDurationMs || 0) * 1.5).toFixed(2))),
+      };
+    });
+  }
+  return generateSeries(timeRange, status);
+}
+
 /* -------------------------------------------------------------------------- */
 /* 1. Network In/Out Area Chart                                               */
 /* -------------------------------------------------------------------------- */
-export const NetworkChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus }> = ({ timeRange, status }) => {
+export const NetworkChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus; timeline?: MetricHistoryPoint[] }> = ({ timeRange, status, timeline }) => {
   const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const data = generateSeries(timeRange, status);
+  const data = buildSeries(timeRange, status, timeline);
   const chartId = useId().replace(/:/g, '');
 
   const width = 500;
@@ -193,10 +216,10 @@ export const NetworkChart: React.FC<{ timeRange: TimeRange; status?: SystemStatu
 /* -------------------------------------------------------------------------- */
 /* 2. Realtime CPU & RAM Dual Area Trend Chart (%)                             */
 /* -------------------------------------------------------------------------- */
-export const CpuRamChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus }> = ({ timeRange, status }) => {
+export const CpuRamChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus; timeline?: MetricHistoryPoint[] }> = ({ timeRange, status, timeline }) => {
   const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const data = generateSeries(timeRange, status);
+  const data = buildSeries(timeRange, status, timeline);
   const chartId = useId().replace(/:/g, '');
 
   const width = 500;
@@ -448,10 +471,10 @@ export const StorageBreakdownChart: React.FC<{ status?: SystemStatus }> = ({ sta
 /* -------------------------------------------------------------------------- */
 /* 4. Request Volume & Error Rate Timeline                                    */
 /* -------------------------------------------------------------------------- */
-export const RequestVolumeChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus }> = ({ timeRange, status }) => {
+export const RequestVolumeChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus; timeline?: MetricHistoryPoint[] }> = ({ timeRange, status, timeline }) => {
   const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const data = generateSeries(timeRange, status);
+  const data = buildSeries(timeRange, status, timeline);
 
   const width = 500;
   const height = 180;
@@ -711,10 +734,10 @@ export const DatabaseOperationsTimelineChart: React.FC<{
   );
 };
 
-export const QueryLatencyChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus }> = ({ timeRange, status }) => {
+export const QueryLatencyChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus; timeline?: MetricHistoryPoint[] }> = ({ timeRange, status, timeline }) => {
   const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const data = generateSeries(timeRange, status);
+  const data = buildSeries(timeRange, status, timeline);
   const chartId = useId().replace(/:/g, '');
 
   const width = 500;

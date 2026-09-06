@@ -76,9 +76,24 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     try {
       const isSuperAdmin = req.adminUser?.role === 'super_admin';
-      const effectiveMaxSizeMb = parsed.data.maxSizeMb !== undefined
-        ? parsed.data.maxSizeMb
-        : (isSuperAdmin ? null : (systemService.getSettings().default_user_max_disk_mb ?? 200));
+      const isSystemAdmin = isSuperAdmin || req.adminUser?.role === 'admin';
+      const maxUserDiskMb = systemService.getSettings().default_user_max_disk_mb ?? 200;
+
+      let effectiveMaxSizeMb: number | null = null;
+      if (isSystemAdmin) {
+        effectiveMaxSizeMb = parsed.data.maxSizeMb !== undefined ? parsed.data.maxSizeMb : null;
+      } else {
+        if (parsed.data.maxSizeMb === null || (typeof parsed.data.maxSizeMb === 'number' && parsed.data.maxSizeMb > maxUserDiskMb)) {
+          return reply.status(403).send({
+            success: false,
+            error: {
+              code: 'QUOTA_EXCEEDED',
+              message: `You cannot set a database disk quota exceeding the user limit (${maxUserDiskMb}MB) or set unlimited.`,
+            },
+          });
+        }
+        effectiveMaxSizeMb = parsed.data.maxSizeMb ?? maxUserDiskMb;
+      }
 
       const record = databaseService.createDatabase(parsed.data.name, parsed.data.description, req.adminUser?.userId, effectiveMaxSizeMb);
       activityService.recordAudit({
@@ -1567,7 +1582,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const dbName = (explicitName || filename.replace(/\.[^/.]+$/, '')).trim();
 
     const isSuperAdmin = req.adminUser?.role === 'super_admin';
-    const defaultDiskMb = isSuperAdmin ? null : (systemService.getSettings().default_user_max_disk_mb ?? 200);
+    const isSystemAdmin = isSuperAdmin || req.adminUser?.role === 'admin';
+    const defaultDiskMb = isSystemAdmin ? null : (systemService.getSettings().default_user_max_disk_mb ?? 200);
+
+    if (defaultDiskMb && buffer.length > defaultDiskMb * 1024 * 1024) {
+      return reply.status(413).send({
+        success: false,
+        error: { code: 'DISK_QUOTA_EXCEEDED', message: `Imported file exceeds user disk limit (${defaultDiskMb}MB)` },
+      });
+    }
+
     const record = databaseService.createDatabase(dbName, description || `Imported from ${filename}`, req.adminUser?.userId, defaultDiskMb);
     const id = record.id;
     const ext = filename.split('.').pop()?.toLowerCase() || '';

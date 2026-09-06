@@ -156,7 +156,7 @@ export const TelemetryPage: React.FC = () => {
             </span>
           </div>
           <div className="flex-1 min-h-[220px]">
-            <CpuRamChart timeRange={timeRange} status={status} />
+            <CpuRamChart timeRange={timeRange} status={status} timeline={metricsHistory?.timeline} />
           </div>
         </div>
 
@@ -172,7 +172,7 @@ export const TelemetryPage: React.FC = () => {
             </span>
           </div>
           <div className="flex-1 min-h-[220px]">
-            <NetworkChart timeRange={timeRange} status={status} />
+            <NetworkChart timeRange={timeRange} status={status} timeline={metricsHistory?.timeline} />
           </div>
         </div>
 
@@ -188,7 +188,7 @@ export const TelemetryPage: React.FC = () => {
             </span>
           </div>
           <div className="flex-1 min-h-[220px]">
-            <RequestVolumeChart timeRange={timeRange} status={status} />
+            <RequestVolumeChart timeRange={timeRange} status={status} timeline={metricsHistory?.timeline} />
           </div>
         </div>
 
@@ -204,7 +204,7 @@ export const TelemetryPage: React.FC = () => {
             </span>
           </div>
           <div className="flex-1 min-h-[220px]">
-            <QueryLatencyChart timeRange={timeRange} status={status} />
+            <QueryLatencyChart timeRange={timeRange} status={status} timeline={metricsHistory?.timeline} />
           </div>
         </div>
       </div>

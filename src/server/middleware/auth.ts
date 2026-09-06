@@ -46,7 +46,14 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
 
   // Check per-user rate limit (if user has quota configured > 0)
   const fullUser = authService.getUserById(user.userId);
-  if (fullUser && fullUser.status === 'disabled') {
+  if (!fullUser) {
+    reply.status(401).send({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'User account no longer exists' },
+    });
+    return;
+  }
+  if (fullUser.status === 'disabled') {
     reply.status(403).send({
       success: false,
       error: { code: 'USER_DISABLED', message: 'User account has been disabled by administrator' },

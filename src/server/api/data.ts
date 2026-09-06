@@ -11,7 +11,24 @@ import { realtimeService } from '../services/realtime.js';
 import { requireTokenPermission } from '../middleware/auth.js';
 import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
 
+function isTablePermitted(table: string, apiToken?: any): boolean {
+  if (!apiToken) return true;
+  const lower = table.toLowerCase();
+  if (apiToken.denied_tables && Array.isArray(apiToken.denied_tables) && apiToken.denied_tables.some((t: string) => t.toLowerCase() === lower)) {
+    return false;
+  }
+  if (apiToken.allowed_tables && Array.isArray(apiToken.allowed_tables) && apiToken.allowed_tables.length > 0) {
+    return apiToken.allowed_tables.some((t: string) => t.toLowerCase() === lower);
+  }
+  return true;
+}
+
 export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, filePath: string, mimeType: string, fileSize: number) {
+  // Defensive isolation for potentially executable active content (SVG/HTML)
+  if (mimeType === 'image/svg+xml' || mimeType === 'text/html') {
+    reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+  }
+
   const range = req.headers.range;
   const isEncrypted = isEncryptedFile(filePath);
 
@@ -533,6 +550,13 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     const databaseId = req.databaseId!;
     const table = (req.query as any)?.table ? String((req.query as any).table) : undefined;
 
+    if (table && req.apiToken && !isTablePermitted(table, req.apiToken)) {
+      return reply.status(403).send({
+        success: false,
+        error: { code: 'FORBIDDEN', message: `Access to table "${table}" is denied for this token` }
+      });
+    }
+
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
@@ -546,6 +570,9 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     }, 20000);
 
     const unsubscribe = realtimeService.subscribe(databaseId, table, (event) => {
+      if (req.apiToken && event.table && !isTablePermitted(event.table, req.apiToken)) {
+        return;
+      }
       reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
     });
 

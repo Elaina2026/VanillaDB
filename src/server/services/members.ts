@@ -136,10 +136,14 @@ export class DatabaseMembersService {
       // User exists but is not yet a member: create or update pending invitation for their inbox
       const email = (targetUser.email || `${targetUser.username}@local`).toLowerCase();
       const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
-      const existingInvite = metaDb.prepare("SELECT id FROM database_invites WHERE database_id = ? AND (user_id = ? OR LOWER(email) = LOWER(?)) AND status = 'pending'").get(databaseId, targetUser.id, email) as { id: string } | undefined;
+      const existingInvite = metaDb.prepare("SELECT id FROM database_invites WHERE database_id = ? AND (user_id = ? OR LOWER(email) = LOWER(?))").get(databaseId, targetUser.id, email) as { id: string } | undefined;
 
       if (existingInvite) {
-        metaDb.prepare('UPDATE database_invites SET role = ?, expires_at = ?, user_id = ?, username = ?, email = ? WHERE id = ?').run(role, expiresAt, targetUser.id, targetUser.username, email, existingInvite.id);
+        metaDb.prepare(`
+          UPDATE database_invites
+          SET role = ?, expires_at = ?, user_id = ?, username = ?, email = ?, invited_by = ?, status = 'pending', created_at = ?
+          WHERE id = ?
+        `).run(role, expiresAt, targetUser.id, targetUser.username, email, invitedBy, now, existingInvite.id);
         return {
           type: 'invite',
           record: {
@@ -182,11 +186,15 @@ export class DatabaseMembersService {
 
     // User does not exist yet: create pending invite by email
     const email = trimmedInput.toLowerCase();
-    const existingInvite = metaDb.prepare("SELECT id FROM database_invites WHERE database_id = ? AND LOWER(email) = ? AND status = 'pending'").get(databaseId, email) as { id: string } | undefined;
+    const existingInvite = metaDb.prepare("SELECT id FROM database_invites WHERE database_id = ? AND LOWER(email) = ?").get(databaseId, email) as { id: string } | undefined;
     const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
 
     if (existingInvite) {
-      metaDb.prepare('UPDATE database_invites SET role = ?, expires_at = ? WHERE id = ?').run(role, expiresAt, existingInvite.id);
+      metaDb.prepare(`
+        UPDATE database_invites
+        SET role = ?, expires_at = ?, invited_by = ?, status = 'pending', created_at = ?
+        WHERE id = ?
+      `).run(role, expiresAt, invitedBy, now, existingInvite.id);
       return {
         type: 'invite',
         record: {

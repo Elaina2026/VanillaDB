@@ -234,11 +234,15 @@ export class DatabaseManager {
 
     const db = this.get(databaseId);
     const trimmed = sqlText.trim();
+    // Strip comments to reliably inspect statement tokens and prevent comment-separated evasions
+    const stripped = trimmed.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\r\n]*/g, ' ').trim();
     const startTime = performance.now();
 
-    // Accurately distinguish read vs write, including mutating CTEs (WITH ... INSERT/UPDATE/DELETE)
-    const isMutatingCte = /^WITH\b/i.test(trimmed) && /\b(INSERT\s+INTO|UPDATE\s+|DELETE\s+FROM|REPLACE\s+INTO)\b/i.test(trimmed);
-    const isSelect = (/^(SELECT|EXPLAIN|PRAGMA)\b/i.test(trimmed) || /^WITH\b/i.test(trimmed)) && !isMutatingCte;
+    // Accurately distinguish read vs write, including mutating CTEs and SQLite conflict clauses
+    const isCte = /^WITH\b/i.test(stripped);
+    const isMutatingCte = isCte && /\b(INSERT\s+(OR\s+[A-Z]+\s+)?INTO|UPDATE\s+|DELETE\s+FROM|REPLACE\s+INTO)\b/i.test(stripped);
+    const isExplicitMutation = /^\s*(INSERT|UPDATE|DELETE|REPLACE|DROP|ALTER|CREATE|VACUUM)\b/i.test(stripped);
+    const isSelect = (/^\s*(SELECT|EXPLAIN|PRAGMA)\b/i.test(stripped) || isCte) && !isMutatingCte && !isExplicitMutation;
 
     let params: any[] | Record<string, any> = [];
     if (Array.isArray(paramsInput)) {
@@ -479,6 +483,20 @@ export class DatabaseManager {
         const regex = new RegExp(`\\b${table}\\b`, 'i');
         if (regex.test(stripped)) {
           throw new Error(`Access to table "${table}" is denied for this token.`);
+        }
+      }
+    }
+
+    if (options?.allowedTables && options.allowedTables.length > 0) {
+      const allowedSet = new Set(options.allowedTables.map(t => t.toLowerCase()));
+      const tableMatches = stripped.matchAll(/\b(?:FROM|JOIN|INTO|UPDATE|TABLE)\s+(?:["`]?([a-zA-Z0-9_]+)["`]?)/gi);
+      for (const match of tableMatches) {
+        const table = match[1]?.toLowerCase();
+        if (table && !['sqlite_master', 'sqlite_schema', 'sqlite_temp_master', 'sqlite_temp_schema'].includes(table)) {
+          const cteDefinition = new RegExp(`\\b${table}\\s+AS\\s*\\(`, 'i');
+          if (!cteDefinition.test(stripped) && !allowedSet.has(table)) {
+            throw new Error(`Access to table "${match[1]}" is not permitted for this token.`);
+          }
         }
       }
     }

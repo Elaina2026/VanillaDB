@@ -46,14 +46,17 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       const sess = authService.verifySessionCookie(sessionCookie, config.sessionSecret);
       if (sess) {
         const full = authService.getUserById(sess.userId);
-        currentUser = {
-          userId: sess.userId,
-          username: sess.username,
-          role: sess.role,
-          email: full?.email || null,
-          avatar_url: full?.avatar_url || null,
-          totp_enabled: full?.totp_enabled ?? false,
-        };
+        if (full && full.status !== 'disabled') {
+          currentUser = {
+            userId: full.id,
+            username: full.username,
+            role: full.role,
+            email: full.email || null,
+            avatar_url: full.avatar_url || null,
+            totp_enabled: full.totp_enabled ?? false,
+            rate_limit_per_minute: full.rate_limit_per_minute ?? 180,
+          };
+        }
       }
     }
 
@@ -981,13 +984,14 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         rawCodes = [];
       }
 
+      const normInput = cleanBackup.replace(/[^A-Z0-9]/g, '');
       const matchIndex = rawCodes.findIndex((item) => {
         const candidate = typeof item === 'string' ? item : item.code;
         const isUsed = typeof item === 'object' && item.used;
         if (!candidate || isUsed) return false;
-        const candUpper = candidate.toUpperCase();
-        if (candUpper.length !== cleanBackup.length) return false;
-        return crypto.timingSafeEqual(Buffer.from(candUpper), Buffer.from(cleanBackup));
+        const candNorm = candidate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (candNorm.length !== normInput.length) return false;
+        return crypto.timingSafeEqual(Buffer.from(candNorm), Buffer.from(normInput));
       });
 
       if (matchIndex === -1) {

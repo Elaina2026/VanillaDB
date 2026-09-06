@@ -99,7 +99,7 @@ export const DatabasesPage: React.FC<{
       return db.owner_id === currentUser?.userId || db.owner_username === currentUser?.username;
     }
     if (filterType === 'shared') {
-      return (db as any).is_shared === 1 || (db.owner_id && db.owner_id !== currentUser?.userId);
+      return Boolean(db.is_shared) || (db.owner_id && db.owner_id !== currentUser?.userId);
     }
     return true;
   });
@@ -183,7 +183,7 @@ export const DatabasesPage: React.FC<{
           >
             {t('common.mine', 'Created by me')}
           </button>
-          {(databases.some((d: any) => d.is_shared === 1 || (d.owner_id && d.owner_id !== currentUser?.userId)) || pendingInvitesCount > 0) && (
+          {(databases.some((d: any) => Boolean(d.is_shared) || (d.owner_id && d.owner_id !== currentUser?.userId)) || pendingInvitesCount > 0) && (
             <button
               onClick={() => setFilterType('shared')}
               className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
@@ -300,7 +300,7 @@ export const DatabasesPage: React.FC<{
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((db) => {
             const isOwner = db.owner_id === currentUser?.userId || db.owner_username === currentUser?.username;
-            const isShared = (db as any).is_shared === 1;
+            const isShared = Boolean(db.is_shared);
 
             return (
               <div
@@ -418,7 +418,7 @@ export const DatabasesPage: React.FC<{
                     )}
 
                     {/* Leave Shared Database Button */}
-                    {!canDeleteDb(db) && ((db as any).is_shared === 1 || (db.owner_id && db.owner_id !== currentUser?.userId)) && (
+                    {!canDeleteDb(db) && (Boolean(db.is_shared) || (db.owner_id && db.owner_id !== currentUser?.userId)) && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
