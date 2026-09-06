@@ -1,6 +1,6 @@
 # Authentication, RBAC & Permissions
 
-This document covers user roles, dashboard session authentication, API tokens, granular permissions, and sliding-window rate limiting.
+This document covers user roles, dashboard session authentication, API tokens, granular permissions, sliding-window rate limiting, and two-factor authentication.
 
 ---
 
@@ -12,7 +12,7 @@ VanillaDatabase supports three hierarchical user roles:
 | :--- | :--- |
 | **`super_admin`** | Full system control: create/manage users, edit system settings, access all databases, unrestricted quotas, rate limit bypass. |
 | **`admin`** | Manage all tenant databases, view telemetry, manage backups and webhooks, inspect users list. Cannot create or delete other users. |
-| **`user`** | Access and manage **only** databases owned by their account (`owner_id`). Subject to quota limits (`max_databases`) and rate limiting (`rate_limit_per_minute`). |
+| **`user`** | Access and manage **only** databases owned by their account (`owner_id`) or shared via database members. Subject to quota limits (`max_databases`) and rate limiting (`rate_limit_per_minute`). |
 
 ---
 

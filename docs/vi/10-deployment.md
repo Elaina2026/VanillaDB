@@ -1,22 +1,22 @@
-# Triển khai & Vận hành Production (Deployment)
+# Triển khai & Vận hành Môi trường Production
 
-Hướng dẫn triển khai **VanillaDatabase** trên môi trường thực tế sử dụng Nginx Reverse Proxy, Systemd hoặc Docker.
+Tài liệu này hướng dẫn cách triển khai **VanillaDatabase** trên môi trường sản xuất (production) sử dụng Systemd, Docker hoặc Nginx Reverse Proxy.
 
 ---
 
-## 1. Danh sách kiểm tra trước khi chạy Production
+## 1. Danh mục Kiểm tra Bảo mật Trước khi Triển khai
 
 - [ ] Thiết lập `NODE_ENV=production`.
-- [ ] Thiết lập chuỗi bí mật `VDB_SESSION_SECRET` ngẫu nhiên tối thiểu 32 ký tự.
-- [ ] Chọn đường dẫn lưu trữ `VDB_DATA_DIR` trên ổ đĩa SSD/NVMe tốc độ cao.
-- [ ] Bật `VDB_TRUST_PROXY=true` nếu đặt máy chủ sau Nginx, Cloudflare hoặc Caddy.
-- [ ] Giới hạn cổng 3000 chỉ lắng nghe nội bộ thông qua tường lửa (UFW / iptables).
+- [ ] Cấu hình biến `VDB_SESSION_SECRET` an toàn (chuỗi ngẫu nhiên tối thiểu 32 ký tự).
+- [ ] Chỉ định thư mục `VDB_DATA_DIR` cố định trên ổ đĩa SSD/NVMe tốc độ cao.
+- [ ] Kích hoạt `VDB_TRUST_PROXY=true` khi chạy phía sau Nginx hoặc Cloudflare.
+- [ ] Cấu hình tường lửa để cổng 3000 chỉ có thể truy cập nội bộ hoặc qua Reverse Proxy.
 
 ---
 
 ## 2. Cấu hình Nginx Reverse Proxy
 
-VanillaDatabase yêu cầu tắt cơ chế đệm proxy (buffering) để hỗ trợ luồng **Server-Sent Events (SSE)** và **phát luồng HTTP 206 Partial Range**:
+VanillaDatabase yêu cầu tắt cơ chế đệm proxy (buffering) để hỗ trợ luồng thời gian thực **Server-Sent Events (SSE)** và phát luồng media **HTTP 206 Partial Content Range Streaming**:
 
 ```nginx
 server {
@@ -32,7 +32,7 @@ server {
     ssl_certificate /etc/letsencrypt/live/db.yourdomain.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/db.yourdomain.com/privkey.pem;
 
-    # Kích thước tối đa cho upload database & media
+    # Kích thước tệp tải lên tối đa cho các bản sao lưu database và file media
     client_max_body_size 1024M;
 
     location / {
@@ -46,7 +46,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Tắt bộ đệm proxy cho SSE và phát luồng Media HTTP 206
+        # Tắt bộ đệm proxy cho SSE Realtime và Range 206 Media Streaming
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 86400s;
@@ -56,12 +56,13 @@ server {
 
 ---
 
-## 3. Khởi chạy bằng dịch vụ Systemd (Linux)
+## 3. Cấu hình Dịch vụ Systemd (Linux)
 
-Tạo tệp cấu hình dịch vụ tại `/etc/systemd/system/vanilladb.service`:
+Tạo tệp cấu hình `/etc/systemd/system/vanilladb.service`:
+
 ```ini
 [Unit]
-Description=VanillaDatabase Multi-Tenant Engine
+Description=VanillaDatabase Engine
 After=network.target
 
 [Service]
@@ -78,7 +79,7 @@ Environment=VDB_DATA_DIR=/var/data/vanilladb
 WantedBy=multi-user.target
 ```
 
-Kích hoạt và khởi chạy:
+Kích hoạt và khởi chạy dịch vụ:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now vanilladb

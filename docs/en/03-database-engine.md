@@ -1,6 +1,6 @@
 # Database Management & SQL Engine
 
-This document details SQL operations, custom SQL functions, schema inspection, and batch transactions in **VanillaDatabase**.
+This document details SQL operations, custom SQL functions, schema inspection, branching, and batch transactions in **VanillaDatabase**.
 
 ---
 
@@ -8,8 +8,8 @@ This document details SQL operations, custom SQL functions, schema inspection, a
 
 ### Creating a Database
 Databases can be created via Dashboard or Admin API:
-- ID format: `db_<nanoid(16)>` (e.g. `db_abc1234567890xyz`)
-- Slug format: Unique URL-safe identifier (e.g. `production-db`)
+- ID format: `db_<nanoid(16)>` (e.g. `db_pMI8Tn-5MvVgh9-1`)
+- Slug format: Unique URL-safe identifier (e.g. `production-store-db`)
 
 ### 1-Click Database Branching / Cloning
 VanillaDatabase supports instantaneous database cloning:
@@ -50,39 +50,17 @@ FROM items
 ORDER BY dist ASC;
 ```
 
-### In-Database AES-256-GCM Crypto Helpers
-Encrypt sensitive column data directly in SQL:
-
-```sql
--- Encrypt string using system master key
-SELECT encrypt_aes('user_ssn_123456') as encrypted_ssn;
-
--- Encrypt with custom passphrase
-SELECT encrypt_aes('user_secret_data', 'MyCustomSecretKey') as enc;
-
--- Decrypt back to UTF-8 plaintext
-SELECT decrypt_aes(enc, 'MyCustomSecretKey') as decrypted_data;
-```
-
-### Cryptographic Hashes
-```sql
--- SHA-256 Hash
-SELECT hash_sha256('password_or_token') as digest;
-
--- HMAC-SHA256
-SELECT hash_hmac('payload_string', 'secret_key') as signature;
-```
+### Cryptographic SQL Functions (Native Crypto)
+- `encrypt_aes(plaintext, key)`: Encrypts a string using authenticated AES-256-GCM.
+- `decrypt_aes(ciphertext, key)`: Decrypts an AES-256-GCM encrypted string.
+- `hash_sha256(data)`: Computes a standard SHA-256 hex digest.
+- `hash_hmac(data, secret)`: Computes an HMAC-SHA256 digest.
 
 ---
 
-## 3. Query Profiling & EXPLAIN QUERY PLAN
+## 3. SQL Safety Sandbox
 
-VanillaDatabase provides automated query plan analysis via `POST /api/admin/databases/:id/explain`:
-
-```sql
-EXPLAIN QUERY PLAN SELECT * FROM orders WHERE customer_id = 42;
-```
-
-The server inspects the query plan output and generates warnings:
-- **Full Table Scan Warning**: Detected when SQLite executes `SCAN TABLE`. Recommends specific columns to index.
-- **Index Search Confirmation**: Detected when SQLite executes `SEARCH TABLE ... USING INDEX`.
+To preserve multi-tenant safety and server stability, the engine strictly rejects dangerous SQL constructs:
+- **`ATTACH DATABASE` & `DETACH DATABASE`**: Strictly forbidden to prevent accessing sibling tenant files.
+- **`load_extension()`**: Forbidden to prevent running arbitrary native binary shared libraries.
+- **Dangerous PRAGMAs**: Direct modification of `data_version`, `journal_mode`, or `foreign_keys` is guarded.

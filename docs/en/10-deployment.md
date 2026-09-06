@@ -49,45 +49,38 @@ server {
         # Disable buffering for SSE Realtime and Range 206 Media Streaming
         proxy_buffering off;
         proxy_cache off;
-        chunked_transfer_encoding off;
-        proxy_read_timeout 24h;
-        proxy_send_timeout 24h;
+        proxy_read_timeout 86400s;
     }
 }
 ```
 
 ---
 
-## 3. Systemd Service (Linux)
+## 3. Systemd Service Setup (Linux)
 
 Create `/etc/systemd/system/vanilladb.service`:
 
 ```ini
 [Unit]
-Description=VanillaDatabase Multi-Tenant SQLite Service
+Description=VanillaDatabase Engine
 After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
+User=www-data
 WorkingDirectory=/var/www/vanilladb
-Environment=NODE_ENV=production
-Environment=VDB_PORT=3000
-Environment=VDB_DATA_DIR=/var/www/vanilladb/data
-EnvironmentFile=/var/www/vanilladb/.env
 ExecStart=/usr/bin/node dist/src/server/index.js
 Restart=always
 RestartSec=5
-LimitNOFILE=65536
+Environment=NODE_ENV=production
+Environment=VDB_DATA_DIR=/var/data/vanilladb
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Enable and start the service:
+Enable and start:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable vanilladb
-sudo systemctl start vanilladb
-sudo systemctl status vanilladb
+sudo systemctl enable --now vanilladb
 ```

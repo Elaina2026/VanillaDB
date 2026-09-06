@@ -9,7 +9,7 @@ Guide for developers looking to contribute, run benchmarks, or extend VanillaDat
 ### Setup Local Environment
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/Elaina2026/VanillaDB.git
 cd VanillaDatabase
 
 # Install dependencies
@@ -36,6 +36,7 @@ Runs the full integration test suite verifying:
 - Backup creation, restore & checksum verification
 - Webhook HMAC-SHA256 event dispatching
 - AI Vector math custom functions
+- Two-factor authentication (2FA) and backup code recovery
 
 ### Run TypeScript Typecheck
 ```bash
@@ -47,11 +48,3 @@ npm run typecheck
 npm run benchmark
 ```
 Runs high-concurrency benchmarks evaluating throughput and latency (p50, p95, p99) for single inserts, parallel reads, and batch transactions.
-
----
-
-## 3. Pull Request Guidelines
-
-1. Ensure all tests pass (`npm test`) and typechecking succeeds (`npm run typecheck`).
-2. Follow existing code idioms: Pino logger, Zod request schemas, and synchronous `DatabaseSync` queries.
-3. Update relevant documentation in `docs/wiki/` if modifying endpoints or adding configuration settings.

@@ -50,11 +50,8 @@ VanillaDatabase can dispatch asynchronous signed HTTP POST requests to external 
 ```javascript
 import crypto from 'crypto';
 
-function verifyWebhook(payloadRawBody, signatureHeader, webhookSecret) {
-  const expected = crypto
-    .createHmac('sha256', webhookSecret)
-    .update(payloadRawBody)
-    .digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(signatureHeader), Buffer.from(expected));
+function verifySignature(payloadBuffer, secret, signatureHeader) {
+  const expected = crypto.createHmac('sha256', secret).update(payloadBuffer).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signatureHeader));
 }
 ```

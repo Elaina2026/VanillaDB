@@ -1,14 +1,15 @@
 # Architecture & Engine Design
 
-This document details the internal architecture, lifecycle, concurrency model, and data isolation mechanisms of **VanillaDatabase**.
+This document details the internal architecture, connection pooling, concurrency model, and multi-tenant data isolation mechanisms of **VanillaDatabase**.
 
 ---
 
-## 1. System Architecture Overview
+## 1. High-Level Architectural Diagram
 
 ```
                       ┌─────────────────────────────────┐
                       │    HTTP / WebSocket Clients     │
+                      │   (Web Dashboard, SDKs, Bots)   │
                       └────────────────┬────────────────┘
                                        │
                      ┌─────────────────┴─────────────────┐
@@ -50,55 +51,40 @@ This document details the internal architecture, lifecycle, concurrency model, a
 
 ---
 
-## 2. Multi-Tenancy & Data Isolation
+## 2. Plane Separation: Control vs Data
 
-### Isolated Tenant Files
-Every created database is stored as a dedicated SQLite file:
-- Primary file: `data/databases/db_<nanoid>.sqlite`
+VanillaDatabase cleanly separates operational control from tenant data traffic:
+
+### Control Plane (`/api/*`)
+- Governs administrative operations: database creation/deletion, API token issuance, scheduled jobs, member invitations, backups, and user management.
+- Guarded by session cookie authentication (`vdb_session`) with `Argon2id` verification and RBAC checks.
+- Backed by the system metadata database (`data/system/vanilladb.sqlite`).
+
+### Data Plane (`/v1/*`)
+- High-throughput tenant execution plane for SQL queries, transactional batch executions, and media streaming.
+- Guarded by scoped API bearer tokens (`vdb_live_*`, `vdb_test_*`) and sliding-window rate limiters.
+- Fully isolated to the target database instance.
+
+---
+
+## 3. Multi-Tenancy & Data Isolation
+
+### Discrete Database Files
+Every tenant database created is stored as a dedicated SQLite file:
+- Primary database file: `data/databases/db_<nanoid>.sqlite`
 - Write-Ahead Log: `data/databases/db_<nanoid>.sqlite-wal`
 - Shared Memory: `data/databases/db_<nanoid>.sqlite-shm`
 
-### Central Control Plane Metadata
-System metadata, user accounts, tokens, and audit logs are kept in a separate database:
-- `data/system/vanilladb.sqlite`
-
-This physical separation ensures:
-1. **Zero cross-tenant contamination**: A corrupted tenant database or query lock never impacts other tenants or system metadata.
-2. **Instant portability**: Cloning, backing up, or exporting a database is as simple as copying the individual `.sqlite` file.
-3. **Hard resource deletion**: Deleting a database safely deletes the `.sqlite` file, its WAL, its encrypted backup snapshots, and its media files.
+### Isolation Advantages
+1. **Absolute Security**: Cross-tenant data leaks via SQL injection or poorly formed `JOIN` clauses are physically impossible across file boundaries.
+2. **Per-Tenant Backup & Portability**: Individual databases can be backed up, restored, cloned, or downloaded without locking other databases.
+3. **Hard Quota Enforcement**: File sizes can be checked against per-tenant storage caps (`max_size_mb`).
 
 ---
 
-## 3. SQLite Concurrency & Handle Management
+## 4. Concurrency & Performance Engine
 
-### WAL Mode (Write-Ahead Logging)
-Every database is automatically configured with:
-```sql
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
-PRAGMA busy_timeout = 5000;
-PRAGMA synchronous = NORMAL;
-```
-- **Concurrent Reads & Writes**: Readers never block writers, and writers never block readers.
-- **Busy Timeout**: Automatically waits up to 5,000ms if another writer is committing, eliminating `SQLITE_BUSY` crashes.
-
-### Active Handle Cache & Idle Eviction
-- Handles are managed in `DatabaseManager` (`src/server/db/manager.ts`).
-- Active database handles are cached in memory for high-throughput reuse.
-- A background timer checks handles every 60 seconds. Any handle idle for more than **5 minutes** (`IDLE_TIMEOUT_MS`) is automatically flushed (`wal_checkpoint(PASSIVE)`) and closed to free memory and file descriptors.
-
----
-
-## 4. SQL Sandbox & Safety Guardrails
-
-To prevent malicious queries or privilege escalation through tenant databases, all incoming SQL statements pass through `DatabaseManager.validateSqlSafety()` before execution:
-
-1. **Forbidden Statements**:
-   - `ATTACH DATABASE` & `DETACH DATABASE`: Prevents accessing system files or other tenant databases.
-   - `VACUUM INTO`: Prevents writing arbitrary files to the host OS.
-   - `load_extension()`: Blocks executing untrusted native C shared libraries.
-   - `PRAGMA writable_schema`: Protects internal SQLite master structures.
-2. **PRAGMA Whitelist**:
-   - Only safe inspection pragmas (`table_info`, `index_list`, `foreign_key_list`, `integrity_check`, `quick_check`, `wal_checkpoint`, `page_count`) are allowed through API endpoints.
-3. **Table Whitelists / Denylists**:
-   - Restricted API tokens have table-level access rules enforced directly during query validation.
+- **PRAGMA journal_mode = WAL**: Write-Ahead Logging allows concurrent readers and writers without lock contention.
+- **PRAGMA busy_timeout = 5000**: When a write lock is active, subsequent read/write requests wait up to 5000ms before returning `SQLITE_BUSY`.
+- **Handle Cache Pool (`dbManager`)**: Frequently queried database handles are cached in memory with a 60-second sliding expiration, minimizing OS file open/close overhead.
+- **Atomic File Checkpoints**: Backups execute `PRAGMA wal_checkpoint(FULL)` to ensure zero dirty pages remain uncommitted before snapshotting.

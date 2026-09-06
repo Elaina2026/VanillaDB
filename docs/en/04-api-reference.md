@@ -1,6 +1,6 @@
 # Data Plane & REST API Reference
 
-The Data Plane (`/v1`) provides high-performance HTTP endpoints for executing SQL queries, transactional batches, table CRUD, and managing media files.
+The Data Plane (`/v1`) provides high-throughput HTTP endpoints for executing SQL queries, transactional batches, table CRUD, and managing media files.
 
 ---
 
@@ -41,8 +41,8 @@ Authorization: Bearer vdb_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 **Request Body**:
 ```json
 {
-  "sql": "SELECT id, username, score FROM users WHERE score > ? ORDER BY score DESC LIMIT ?",
-  "params": [100, 5]
+  "sql": "SELECT id, username, score FROM users WHERE score >= ? ORDER BY score DESC LIMIT ?",
+  "params": [100, 10]
 }
 ```
 
@@ -72,14 +72,8 @@ Authorization: Bearer vdb_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 {
   "transaction": true,
   "statements": [
-    {
-      "sql": "UPDATE bank_accounts SET balance = balance - ? WHERE account_id = ?",
-      "params": [100, "acc_alice"]
-    },
-    {
-      "sql": "UPDATE bank_accounts SET balance = balance + ? WHERE account_id = ?",
-      "params": [100, "acc_bob"]
-    }
+    { "sql": "UPDATE accounts SET balance = balance - ? WHERE id = ?", "params": [50, "acc_1"] },
+    { "sql": "UPDATE accounts SET balance = balance + ? WHERE id = ?", "params": [50, "acc_2"] }
   ]
 }
 ```
@@ -90,36 +84,10 @@ Authorization: Bearer vdb_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   "success": true,
   "data": {
     "results": [
-      { "statementIndex": 0, "result": { "changes": 1, "durationMs": 0.21 } },
-      { "statementIndex": 1, "result": { "changes": 1, "durationMs": 0.18 } }
+      { "changes": 1, "lastInsertRowid": 0 },
+      { "changes": 1, "lastInsertRowid": 0 }
     ],
-    "totalDurationMs": 0.52
-  }
-}
-```
-
----
-
-### 3. REST Table Insert
-- **POST** `/v1/databases/:databaseId/tables/:table/rows`
-
-**Request Body**:
-```json
-{
-  "username": "elaina",
-  "score": 500,
-  "created_at": 1724900000000
-}
-```
-
-**Response (201 Created)**:
-```json
-{
-  "success": true,
-  "data": {
-    "changes": 1,
-    "lastInsertRowid": 12,
-    "durationMs": 0.31
+    "durationMs": 0.85
   }
 }
 ```
