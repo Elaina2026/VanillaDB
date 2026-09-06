@@ -83,16 +83,18 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       if (isSystemAdmin) {
         effectiveMaxSizeMb = parsed.data.maxSizeMb !== undefined ? parsed.data.maxSizeMb : null;
       } else {
-        if (parsed.data.maxSizeMb === null || (typeof parsed.data.maxSizeMb === 'number' && parsed.data.maxSizeMb > maxUserDiskMb)) {
+        if (typeof parsed.data.maxSizeMb === 'number' && parsed.data.maxSizeMb > maxUserDiskMb) {
           return reply.status(403).send({
             success: false,
             error: {
               code: 'QUOTA_EXCEEDED',
-              message: `You cannot set a database disk quota exceeding the user limit (${maxUserDiskMb}MB) or set unlimited.`,
+              message: `You cannot set a database disk quota exceeding the user limit (${maxUserDiskMb}MB).`,
             },
           });
         }
-        effectiveMaxSizeMb = parsed.data.maxSizeMb ?? maxUserDiskMb;
+        effectiveMaxSizeMb = (typeof parsed.data.maxSizeMb === 'number' && parsed.data.maxSizeMb > 0)
+          ? parsed.data.maxSizeMb
+          : maxUserDiskMb;
       }
 
       const record = databaseService.createDatabase(parsed.data.name, parsed.data.description, req.adminUser?.userId, effectiveMaxSizeMb);
@@ -1673,9 +1675,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const Schema = z.object({
       username: z.string().min(3).max(50),
       password: z.string().min(6).max(128),
+      email: z.string().email().optional().or(z.literal('')).nullable(),
       role: z.enum(['super_admin', 'admin', 'user']).default('user'),
       maxDatabases: z.number().int().min(0).default(settings.default_user_max_databases ?? 2),
       rateLimitPerMinute: z.number().int().min(0).default(settings.default_user_rate_limit ?? 180),
+      status: z.enum(['active', 'disabled']).default('active'),
     });
 
     const parsed = Schema.safeParse(req.body);
@@ -1687,13 +1691,20 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
+      const cleanEmail = parsed.data.email ? parsed.data.email.trim().toLowerCase() : undefined;
       const newUser = await authService.createUser({
         username: parsed.data.username,
         password: parsed.data.password,
+        email: cleanEmail,
         role: parsed.data.role as any,
         maxDatabases: parsed.data.maxDatabases,
         rateLimitPerMinute: parsed.data.rateLimitPerMinute,
+        status: parsed.data.status,
       });
+
+      if (cleanEmail) {
+        databaseMembersService.claimPendingInvites(newUser.id, cleanEmail);
+      }
 
       activityService.recordAudit({
         user: req.adminUser!.username,
@@ -1701,7 +1712,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         resource: newUser.id,
         result: 'success',
         requestId: req.id,
-        details: JSON.stringify({ username: newUser.username, role: newUser.role, maxDatabases: newUser.max_databases, rateLimit: newUser.rate_limit_per_minute }),
+        details: JSON.stringify({ username: newUser.username, email: newUser.email, role: newUser.role, maxDatabases: newUser.max_databases, rateLimit: newUser.rate_limit_per_minute, status: newUser.status }),
       });
 
       return reply.status(201).send({ success: true, data: newUser });
@@ -1716,6 +1727,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch('/users/:userId', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
     const { userId } = req.params as { userId: string };
     const Schema = z.object({
+      email: z.string().email().optional().or(z.literal('')).nullable(),
       password: z.string().min(6).max(128).optional(),
       role: z.enum(['super_admin', 'admin', 'user']).optional(),
       maxDatabases: z.number().int().min(0).optional(),
@@ -1747,7 +1759,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      const updated = await authService.updateUser(userId, parsed.data as any);
+      const updatePayload: any = { ...parsed.data };
+      if (parsed.data.email !== undefined) {
+        updatePayload.email = parsed.data.email ? parsed.data.email.trim().toLowerCase() : null;
+      }
+      const updated = await authService.updateUser(userId, updatePayload);
+      if (updatePayload.email) {
+        databaseMembersService.claimPendingInvites(userId, updatePayload.email);
+      }
       activityService.recordAudit({
         user: req.adminUser!.username,
         action: 'user.update',
@@ -1896,7 +1915,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const db = requireDatabaseAccess(req, reply, id, 'viewer');
     if (!db) return;
 
-    const data = databaseMembersService.listMembers(id);
+    const callerRole = databaseMembersService.getUserDatabaseRole(id, req.adminUser!.userId, req.adminUser!.role);
+    const data = databaseMembersService.listMembers(id, callerRole);
     return reply.send({ success: true, data });
   });
 

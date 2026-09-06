@@ -16,6 +16,7 @@ import {
   Clock,
   User as UserIcon,
   CheckCheck,
+  CheckCircle2,
   Pin,
   Database,
   ArrowRight,
@@ -45,6 +46,18 @@ export const InboxPage: React.FC<{
   const [newPinned, setNewPinned] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const showError = (msg: string) => {
+    setErrorMessage(msg);
+    setTimeout(() => setErrorMessage(null), 5000);
+  };
+  const showSuccess = (msg: string) => {
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(null), 4000);
+  };
+
   const { data: inbox, isLoading, refetch } = useQuery<UserInboxResponse>({
     queryKey: ['userInbox'],
     queryFn: () => apiRequest('/api/admin/inbox'),
@@ -56,9 +69,13 @@ export const InboxPage: React.FC<{
       apiRequest(`/api/admin/inbox/invites/${invite.id}/accept`, { method: 'POST' }),
     onSuccess: (_, invite) => {
       setAcceptedDbId({ id: invite.database_id, name: invite.database_name });
+      showSuccess(t('inbox.acceptedSuccess', 'Invitation accepted successfully'));
       queryClient.invalidateQueries({ queryKey: ['userInbox'] });
       queryClient.invalidateQueries({ queryKey: ['databases'] });
       queryClient.invalidateQueries({ queryKey: ['userDashboardStats'] });
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to accept invitation');
     },
   });
 
@@ -66,8 +83,12 @@ export const InboxPage: React.FC<{
     mutationFn: (inviteId: string) =>
       apiRequest(`/api/admin/inbox/invites/${inviteId}/decline`, { method: 'POST' }),
     onSuccess: () => {
+      showSuccess(t('inbox.declinedSuccess', 'Invitation declined'));
       queryClient.invalidateQueries({ queryKey: ['userInbox'] });
       queryClient.invalidateQueries({ queryKey: ['databases'] });
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to decline invitation');
     },
   });
 
@@ -77,12 +98,19 @@ export const InboxPage: React.FC<{
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userInbox'] });
     },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to mark announcement as read');
+    },
   });
 
   const markAllReadMutation = useMutation({
     mutationFn: () => apiRequest('/api/admin/inbox/read-all', { method: 'POST' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userInbox'] });
+      showSuccess(t('inbox.allMarkedRead', 'All announcements marked as read'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to mark all as read');
     },
   });
 
@@ -100,6 +128,7 @@ export const InboxPage: React.FC<{
       setNewExpiresInDays('');
       setNewPinned(false);
       setFormError(null);
+      showSuccess(t('inbox.announcementCreated', 'Announcement posted successfully'));
       queryClient.invalidateQueries({ queryKey: ['userInbox'] });
     },
     onError: (err: any) => {
@@ -111,7 +140,11 @@ export const InboxPage: React.FC<{
     mutationFn: (announcementId: string) =>
       apiRequest(`/api/admin/announcements/${announcementId}`, { method: 'DELETE' }),
     onSuccess: () => {
+      showSuccess(t('inbox.announcementDeleted', 'Announcement deleted'));
       queryClient.invalidateQueries({ queryKey: ['userInbox'] });
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to delete announcement');
     },
   });
 
@@ -598,6 +631,20 @@ export const InboxPage: React.FC<{
               </div>
             </form>
           </div>
+        </div>
+      )}
+      {/* Toast notifications */}
+      {successMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-card border border-border shadow-xl rounded-lg px-4 py-3 text-xs text-foreground flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-destructive text-destructive-foreground shadow-xl rounded-lg px-4 py-3 text-xs flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{errorMessage}</span>
         </div>
       )}
     </div>

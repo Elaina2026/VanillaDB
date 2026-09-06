@@ -74,6 +74,16 @@ export const App: React.FC = () => {
     }
   }, [authenticated, route.authSubRoute]);
 
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+  const adminOnlyTabs = ['telemetry', 'users'];
+
+  // Guard admin-only routes against unprivileged users
+  useEffect(() => {
+    if (authenticated && !isAdmin && adminOnlyTabs.includes(route.tab)) {
+      window.location.hash = '/overview';
+    }
+  }, [authenticated, isAdmin, route.tab]);
+
   const navigateTo = (tab: string, dbId: string | null = null, dbTab: string = 'overview') => {
     if (dbId) {
       window.location.hash = `/databases/${dbId}/${dbTab}`;
@@ -201,7 +211,8 @@ export const App: React.FC = () => {
   }
 
   const validTabs = ['overview', 'telemetry', 'users', 'databases', 'activity', 'settings', 'shortcuts', 'inbox'];
-  const isInvalidTab = !route.databaseId && !validTabs.includes(route.tab);
+  const isUnauthorizedTab = !isAdmin && adminOnlyTabs.includes(route.tab);
+  const isInvalidTab = (!route.databaseId && !validTabs.includes(route.tab)) || isUnauthorizedTab;
 
   if (isInvalidTab) {
     return <ErrorPage type="404" onGoHome={() => navigateTo('overview')} />;

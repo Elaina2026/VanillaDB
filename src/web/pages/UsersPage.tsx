@@ -29,14 +29,17 @@ export const UsersPage: React.FC = () => {
   const { user: currentUser } = useAuth();
   const { t } = useI18n();
   const queryClient = useQueryClient();
+  const isSuperAdmin = currentUser?.role === 'super_admin';
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Form states
   const [formData, setFormData] = useState<{
     username: string;
+    email: string;
     password: string;
     role: UserRole;
     maxDatabases: number;
@@ -44,6 +47,7 @@ export const UsersPage: React.FC = () => {
     status: 'active' | 'disabled';
   }>({
     username: '',
+    email: '',
     password: '',
     role: 'user',
     maxDatabases: 5,
@@ -98,12 +102,18 @@ export const UsersPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setDeletingUserId(null);
+      setDeleteError(null);
+    },
+    onError: (err: any) => {
+      setDeletingUserId(null);
+      setDeleteError(err.message || 'Failed to delete user');
     },
   });
 
   const resetForm = () => {
     setFormData({
       username: '',
+      email: '',
       password: '',
       role: 'user',
       maxDatabases: 5,
@@ -117,6 +127,7 @@ export const UsersPage: React.FC = () => {
     setEditingUser(u);
     setFormData({
       username: u.username,
+      email: u.email || '',
       password: '',
       role: u.role,
       maxDatabases: u.max_databases,
@@ -132,7 +143,7 @@ export const UsersPage: React.FC = () => {
   );
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6 select-none">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
@@ -156,16 +167,18 @@ export const UsersPage: React.FC = () => {
             <span>{t('common.refresh', 'Refresh')}</span>
           </button>
 
-          <button
-            onClick={() => {
-              resetForm();
-              setIsCreateModalOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>{t('users.create', 'Add New User')}</span>
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={() => {
+                resetForm();
+                setIsCreateModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>{t('users.create', 'Add New User')}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -200,6 +213,12 @@ export const UsersPage: React.FC = () => {
         </div>
       </div>
 
+      {deleteError && (
+        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded text-xs">
+          {deleteError}
+        </div>
+      )}
+
       {/* User Table Card */}
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden flex flex-col">
         {/* Search Bar */}
@@ -207,6 +226,7 @@ export const UsersPage: React.FC = () => {
           <Search className="w-4 h-4 text-muted-foreground" />
           <input
             type="text"
+            aria-label={t('users.searchPlaceholder', 'Search users by username or role...')}
             placeholder={t('users.searchPlaceholder', 'Search users by username or role...')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -247,6 +267,7 @@ export const UsersPage: React.FC = () => {
                           </span>
                         )}
                       </div>
+                      {u.email && <div className="text-[10px] text-muted-foreground">{u.email}</div>}
                       <div className="text-[10px] font-mono text-muted-foreground">{u.id}</div>
                     </td>
 
@@ -297,23 +318,29 @@ export const UsersPage: React.FC = () => {
                     </td>
 
                     <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleOpenEdit(u)}
-                          className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors"
-                          title={t('users.editUser', 'Edit User')}
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setDeletingUserId(u.id)}
-                          disabled={u.id === currentUser?.userId}
-                          className="p-1.5 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-500 disabled:opacity-30 transition-colors"
-                          title={t('users.deleteUser', 'Delete User')}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {isSuperAdmin ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleOpenEdit(u)}
+                            className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors"
+                            title={t('users.editUser', 'Edit User')}
+                            aria-label={`${t('users.editUser', 'Edit User')}: ${u.username}`}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeletingUserId(u.id)}
+                            disabled={u.id === currentUser?.userId}
+                            className="p-1.5 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-500 disabled:opacity-30 transition-colors"
+                            title={t('users.deleteUser', 'Delete User')}
+                            aria-label={`${t('users.deleteUser', 'Delete User')}: ${u.username}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground italic">Read-only</span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -333,6 +360,7 @@ export const UsersPage: React.FC = () => {
                 {editingUser ? `${t('users.editUserPrefix', 'Edit User:')} ${editingUser.username}` : t('users.createNewAccount', 'Create New Account')}
               </h2>
               <button
+                type="button"
                 onClick={() => {
                   setIsCreateModalOpen(false);
                   setEditingUser(null);
@@ -349,11 +377,35 @@ export const UsersPage: React.FC = () => {
               </div>
             )}
 
-            <div className="space-y-3 text-xs">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (editingUser) {
+                  const updatePayload: any = {
+                    role: formData.role,
+                    email: formData.email ? formData.email.trim() : undefined,
+                    maxDatabases: formData.maxDatabases,
+                    rateLimitPerMinute: formData.rateLimitPerMinute,
+                    status: formData.status,
+                  };
+                  if (formData.password) updatePayload.password = formData.password;
+                  updateUserMutation.mutate({ id: editingUser.id, data: updatePayload });
+                } else {
+                  createUserMutation.mutate(formData);
+                }
+              }}
+              className="space-y-3 text-xs"
+            >
               <div>
-                <label className="block text-muted-foreground font-medium mb-1">{t('users.username', 'Username')}</label>
+                <label htmlFor="user-username" className="block text-muted-foreground font-medium mb-1">
+                  {t('users.username', 'Username')}
+                </label>
                 <input
+                  id="user-username"
+                  name="username"
                   type="text"
+                  autoComplete="username"
+                  required
                   disabled={!!editingUser}
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
@@ -363,12 +415,31 @@ export const UsersPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-muted-foreground font-medium mb-1">
+                <label htmlFor="user-email" className="block text-muted-foreground font-medium mb-1">
+                  Email
+                </label>
+                <input
+                  id="user-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="developer@example.com"
+                  className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="user-password" className="block text-muted-foreground font-medium mb-1">
                   {editingUser ? t('users.newPasswordHint', 'New Password (leave empty to keep current)') : t('auth.password', 'Password')}
                 </label>
                 <input
+                  id="user-password"
+                  name="password"
                   type="password"
-                  autoComplete="new-password"
+                  autoComplete={editingUser ? 'new-password' : 'current-password'}
+                  required={!editingUser}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="••••••••"
@@ -378,8 +449,12 @@ export const UsersPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-muted-foreground font-medium mb-1">{t('users.role', 'Role')}</label>
+                  <label htmlFor="user-role" className="block text-muted-foreground font-medium mb-1">
+                    {t('users.role', 'Role')}
+                  </label>
                   <select
+                    id="user-role"
+                    name="role"
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                     className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
@@ -391,8 +466,12 @@ export const UsersPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-muted-foreground font-medium mb-1">{t('users.accountStatus', 'Account Status')}</label>
+                  <label htmlFor="user-status" className="block text-muted-foreground font-medium mb-1">
+                    {t('users.accountStatus', 'Account Status')}
+                  </label>
                   <select
+                    id="user-status"
+                    name="status"
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'disabled' })}
                     className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
@@ -405,8 +484,12 @@ export const UsersPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-muted-foreground font-medium mb-1">{t('users.maxDbsAllowed', 'Max DBs Allowed')}</label>
+                  <label htmlFor="user-max-databases" className="block text-muted-foreground font-medium mb-1">
+                    {t('users.maxDbsAllowed', 'Max DBs Allowed')}
+                  </label>
                   <input
+                    id="user-max-databases"
+                    name="maxDatabases"
                     type="number"
                     min={0}
                     value={formData.maxDatabases}
@@ -417,8 +500,12 @@ export const UsersPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-muted-foreground font-medium mb-1">{t('users.rateLimit', 'Rate Limit (req/min)')}</label>
+                  <label htmlFor="user-rate-limit" className="block text-muted-foreground font-medium mb-1">
+                    {t('users.rateLimit', 'Rate Limit (req/min)')
+                  }</label>
                   <input
+                    id="user-rate-limit"
+                    name="rateLimitPerMinute"
                     type="number"
                     min={0}
                     value={formData.rateLimitPerMinute}
@@ -428,39 +515,27 @@ export const UsersPage: React.FC = () => {
                   <span className="text-[10px] text-muted-foreground mt-0.5 block">{t('users.zeroUnlimited', '0 = Unlimited')}</span>
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-              <button
-                onClick={() => {
-                  setIsCreateModalOpen(false);
-                  setEditingUser(null);
-                }}
-                className="px-4 py-2 bg-card border border-border hover:bg-accent text-foreground rounded text-xs font-medium"
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                onClick={() => {
-                  if (editingUser) {
-                    const updatePayload: any = {
-                      role: formData.role,
-                      maxDatabases: formData.maxDatabases,
-                      rateLimitPerMinute: formData.rateLimitPerMinute,
-                      status: formData.status,
-                    };
-                    if (formData.password) updatePayload.password = formData.password;
-                    updateUserMutation.mutate({ id: editingUser.id, data: updatePayload });
-                  } else {
-                    createUserMutation.mutate(formData);
-                  }
-                }}
-                disabled={createUserMutation.isPending || updateUserMutation.isPending || (!editingUser && (!formData.username || !formData.password))}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-semibold shadow-sm"
-              >
-                {createUserMutation.isPending || updateUserMutation.isPending ? t('common.saving', 'Saving...') : editingUser ? t('users.updateUserBtn', 'Update User') : t('users.createUserBtn', 'Create User')}
-              </button>
-            </div>
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateModalOpen(false);
+                    setEditingUser(null);
+                  }}
+                  className="px-4 py-2 bg-card border border-border hover:bg-accent text-foreground rounded text-xs font-medium"
+                >
+                  {t('common.cancel', 'Cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={createUserMutation.isPending || updateUserMutation.isPending || (!editingUser && (!formData.username || !formData.password))}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-semibold shadow-sm"
+                >
+                  {createUserMutation.isPending || updateUserMutation.isPending ? t('common.saving', 'Saving...') : editingUser ? t('users.updateUserBtn', 'Update User') : t('users.createUserBtn', 'Create User')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

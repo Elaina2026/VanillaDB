@@ -93,7 +93,11 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
     }
   }
 
-  request.adminUser = user;
+  request.adminUser = {
+    userId: fullUser.id,
+    username: fullUser.username,
+    role: fullUser.role,
+  };
 }
 
 export function getRateLimitWarningsForUser(userId: string): Array<{
@@ -204,6 +208,29 @@ export function requireTokenPermission(permission: TokenPermission) {
     if (sessionCookie) {
       const user = authService.verifySessionCookie(sessionCookie, config.sessionSecret);
       if (user) {
+        const fullUser = authService.getUserById(user.userId);
+        if (!fullUser) {
+          reply.status(401).send({
+            success: false,
+            error: { code: 'UNAUTHORIZED', message: 'User account no longer exists' },
+          });
+          return;
+        }
+        if (fullUser.status === 'disabled') {
+          reply.status(403).send({
+            success: false,
+            error: { code: 'USER_DISABLED', message: 'User account has been disabled by administrator' },
+          });
+          return;
+        }
+
+        user.role = fullUser.role;
+        request.adminUser = {
+          userId: fullUser.id,
+          username: fullUser.username,
+          role: fullUser.role,
+        };
+
         // Enforce tenant boundary: regular users can only access databases they own or are invited to
         if (user.role !== 'super_admin' && user.role !== 'admin') {
           const { databaseMembersService } = await import('../services/members.js');

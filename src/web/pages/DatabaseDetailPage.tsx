@@ -166,10 +166,14 @@ export const DatabaseDetailPage: React.FC<{
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/schema`),
   });
 
-  const isSystemAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isSystemAdmin = isSuperAdmin || currentUser?.role === 'admin';
   const dbAccessRole = stats?.database?.access_role;
-  const canManageTokens = isSystemAdmin || dbAccessRole === 'owner' || dbAccessRole === 'admin';
-  const canManageMembers = isSystemAdmin || dbAccessRole === 'owner' || dbAccessRole === 'admin';
+  const isOwner = isSuperAdmin || (Boolean(currentUser?.userId) && stats?.database?.owner_id === currentUser?.userId) || dbAccessRole === 'owner';
+  const canAdmin = isSystemAdmin || dbAccessRole === 'owner' || dbAccessRole === 'admin';
+  const canEdit = canAdmin || dbAccessRole === 'editor';
+  const canManageTokens = canAdmin;
+  const canManageMembers = canAdmin;
 
   const { data: tokens = [], isLoading: isTokensLoading, refetch: refetchTokens } = useQuery<ApiTokenRecord[]>({
     queryKey: ['dbTokens', databaseId],
@@ -212,6 +216,18 @@ export const DatabaseDetailPage: React.FC<{
   });
   const dbRateWarning = userStats?.rateLimitWarnings?.find((w) => w.databaseId === databaseId);
 
+  const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const showError = (msg: string) => {
+    setErrorMessage(msg);
+    setTimeout(() => setErrorMessage(null), 5000);
+  };
+  const showSuccess = (msg: string) => {
+    setNotificationMessage(msg);
+    setTimeout(() => setNotificationMessage(null), 4000);
+  };
+
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmailOrUser, setInviteEmailOrUser] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'editor' | 'viewer'>('viewer');
@@ -230,6 +246,7 @@ export const DatabaseDetailPage: React.FC<{
       setInviteStatus(null);
       refetchMembers();
       refetchStats();
+      showSuccess(t('members.inviteSent', 'Invitation sent successfully'));
     },
     onError: (err: any) => {
       setInviteStatus(err.message || 'Failed to invite member');
@@ -247,7 +264,11 @@ export const DatabaseDetailPage: React.FC<{
       } else {
         refetchMembers();
         refetchStats();
+        showSuccess(t('members.removed', 'Member removed'));
       }
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to remove member');
     },
   });
 
@@ -258,6 +279,10 @@ export const DatabaseDetailPage: React.FC<{
       }),
     onSuccess: () => {
       refetchMembers();
+      showSuccess(t('members.inviteRevoked', 'Invite revoked'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to revoke invite');
     },
   });
 
@@ -270,6 +295,10 @@ export const DatabaseDetailPage: React.FC<{
     onSuccess: () => {
       refetchStats();
       queryClient.invalidateQueries({ queryKey: ['databases'] });
+      showSuccess(t('db.updated', 'Database updated'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to update database');
     },
   });
 
@@ -362,6 +391,10 @@ export const DatabaseDetailPage: React.FC<{
       refetchFiles();
       refetchStats();
       queryClient.invalidateQueries({ queryKey: ['dbStats', databaseId] });
+      showSuccess(t('storage.deletedSuccess', 'File deleted successfully'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to delete file');
     },
   });
 
@@ -378,16 +411,21 @@ export const DatabaseDetailPage: React.FC<{
         const formData = new FormData();
         formData.append('file', file);
 
-        await fetch(`/api/admin/databases/${databaseId}/files`, {
+        const res = await fetch(`/api/admin/databases/${databaseId}/files`, {
           method: 'POST',
           body: formData,
         });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData?.error?.message || `Failed to upload ${file.name}`);
+        }
       }
       refetchFiles();
       refetchStats();
       queryClient.invalidateQueries({ queryKey: ['dbStats', databaseId] });
-    } catch (err) {
-      console.error(err);
+      showSuccess(t('storage.uploadedSuccess', 'File(s) uploaded successfully'));
+    } catch (err: any) {
+      showError(err.message || 'File upload failed');
     } finally {
       setIsUploading(false);
     }
@@ -408,8 +446,6 @@ export const DatabaseDetailPage: React.FC<{
     message: '',
     onConfirm: () => {},
   });
-
-  const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
 
   // Table browser states
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -454,8 +490,10 @@ export const DatabaseDetailPage: React.FC<{
     onSuccess: () => {
       setIsCreateJobOpen(false);
       refetchJobs();
-      setNotificationMessage('Scheduled job created successfully');
-      setTimeout(() => setNotificationMessage(null), 3000);
+      showSuccess(t('jobs.createdSuccess', 'Scheduled job created successfully'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to create scheduled job');
     },
   });
 
@@ -463,8 +501,10 @@ export const DatabaseDetailPage: React.FC<{
     mutationFn: (jobId: string) => apiRequest(`/api/admin/jobs/${jobId}/run`, { method: 'POST' }),
     onSuccess: () => {
       refetchJobs();
-      setNotificationMessage('Job executed successfully');
-      setTimeout(() => setNotificationMessage(null), 3000);
+      showSuccess(t('jobs.executedSuccess', 'Job executed successfully'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to run job');
     },
   });
 
@@ -472,6 +512,10 @@ export const DatabaseDetailPage: React.FC<{
     mutationFn: (jobId: string) => apiRequest(`/api/admin/jobs/${jobId}`, { method: 'DELETE' }),
     onSuccess: () => {
       refetchJobs();
+      showSuccess(t('jobs.deletedSuccess', 'Job deleted successfully'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to delete job');
     },
   });
 
@@ -484,7 +528,7 @@ export const DatabaseDetailPage: React.FC<{
 
   const { data: tableRows, isLoading: isRowsLoading, refetch: refetchRows } = useQuery<SqlQueryResult>({
     queryKey: ['tableRows', databaseId, selectedTable, tableLimit, tableOffset],
-    queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/tables/${selectedTable}/rows?limit=${tableLimit}&offset=${tableOffset}`),
+    queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/tables/${encodeURIComponent(selectedTable!)}/rows?limit=${tableLimit}&offset=${tableOffset}`),
     enabled: !!selectedTable && activeTab === 'tables',
   });
 
@@ -495,7 +539,7 @@ export const DatabaseDetailPage: React.FC<{
   // Table mutations
   const deleteBulkMutation = useMutation({
     mutationFn: (pkValues: any[]) =>
-      apiRequest(`/api/admin/databases/${databaseId}/tables/${selectedTable}/delete-bulk`, {
+      apiRequest(`/api/admin/databases/${databaseId}/tables/${encodeURIComponent(selectedTable!)}/delete-bulk`, {
         method: 'POST',
         body: JSON.stringify({ pkCol: primaryKeyCol, pkValues }),
       }),
@@ -504,12 +548,16 @@ export const DatabaseDetailPage: React.FC<{
       refetchRows();
       refetchSchema();
       refetchStats();
+      showSuccess(t('tables.deleteSuccess', 'Selected rows deleted successfully'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to delete selected rows');
     },
   });
 
   const renameTableMutation = useMutation({
     mutationFn: (newName: string) =>
-      apiRequest(`/api/admin/databases/${databaseId}/tables/${selectedTable}/rename`, {
+      apiRequest(`/api/admin/databases/${databaseId}/tables/${encodeURIComponent(selectedTable!)}/rename`, {
         method: 'POST',
         body: JSON.stringify({ newName }),
       }),
@@ -518,24 +566,32 @@ export const DatabaseDetailPage: React.FC<{
       setSelectedTable(data.name);
       refetchSchema();
       refetchStats();
+      showSuccess(t('tables.renameSuccess', 'Table renamed successfully'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to rename table');
     },
   });
 
   const dropTableMutation = useMutation({
     mutationFn: () =>
-      apiRequest(`/api/admin/databases/${databaseId}/tables/${selectedTable}`, {
+      apiRequest(`/api/admin/databases/${databaseId}/tables/${encodeURIComponent(selectedTable!)}`, {
         method: 'DELETE',
       }),
     onSuccess: () => {
       setSelectedTable(null);
       refetchSchema();
       refetchStats();
+      showSuccess(t('tables.dropSuccess', 'Table dropped successfully'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to drop table');
     },
   });
 
   const truncateTableMutation = useMutation({
     mutationFn: () =>
-      apiRequest(`/api/admin/databases/${databaseId}/tables/${selectedTable}/truncate`, {
+      apiRequest(`/api/admin/databases/${databaseId}/tables/${encodeURIComponent(selectedTable!)}/truncate`, {
         method: 'POST',
       }),
     onSuccess: () => {
@@ -543,12 +599,16 @@ export const DatabaseDetailPage: React.FC<{
       refetchRows();
       refetchSchema();
       refetchStats();
+      showSuccess(t('tables.truncateSuccess', 'Table truncated successfully'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to truncate table');
     },
   });
 
   const insertRowMutation = useMutation({
     mutationFn: (row: Record<string, any>) =>
-      apiRequest(`/api/admin/databases/${databaseId}/tables/${selectedTable}/rows`, {
+      apiRequest(`/api/admin/databases/${databaseId}/tables/${encodeURIComponent(selectedTable!)}/rows`, {
         method: 'POST',
         body: JSON.stringify(row),
       }),
@@ -557,12 +617,16 @@ export const DatabaseDetailPage: React.FC<{
       refetchRows();
       refetchSchema();
       refetchStats();
+      showSuccess(t('tables.insertSuccess', 'Row inserted successfully'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to insert row');
     },
   });
 
   const updateRowMutation = useMutation({
     mutationFn: (payload: { pkCol: string; pkVal: any; values: Record<string, any> }) =>
-      apiRequest(`/api/admin/databases/${databaseId}/tables/${selectedTable}/rows`, {
+      apiRequest(`/api/admin/databases/${databaseId}/tables/${encodeURIComponent(selectedTable!)}/rows`, {
         method: 'PUT',
         body: JSON.stringify(payload),
       }),
@@ -571,6 +635,10 @@ export const DatabaseDetailPage: React.FC<{
       refetchRows();
       refetchSchema();
       refetchStats();
+      showSuccess(t('tables.updateSuccess', 'Row updated successfully'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to update row');
     },
   });
 
@@ -653,6 +721,10 @@ export const DatabaseDetailPage: React.FC<{
     onSuccess: () => {
       refetchBackups();
       refetchStats();
+      showSuccess(t('backups.created', 'Backup created successfully'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to create backup');
     },
   });
 
@@ -663,24 +735,46 @@ export const DatabaseDetailPage: React.FC<{
       refetchStats();
       refetchSchema();
       if (selectedTable) refetchRows();
+      showSuccess(t('backups.restored', 'Backup restored successfully'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to restore backup');
     },
   });
 
   const deleteBackupMutation = useMutation({
     mutationFn: (backupId: string) =>
       apiRequest(`/api/admin/backups/${backupId}`, { method: 'DELETE' }),
-    onSuccess: () => refetchBackups(),
+    onSuccess: () => {
+      refetchBackups();
+      showSuccess(t('backups.deleted', 'Backup deleted'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to delete backup');
+    },
   });
 
   // Token actions
   const revokeTokenMutation = useMutation({
     mutationFn: (tokenId: string) => apiRequest(`/api/admin/tokens/${tokenId}/revoke`, { method: 'POST' }),
-    onSuccess: () => refetchTokens(),
+    onSuccess: () => {
+      refetchTokens();
+      showSuccess(t('tokens.revoked', 'Token revoked'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to revoke token');
+    },
   });
 
   const deleteTokenMutation = useMutation({
     mutationFn: (tokenId: string) => apiRequest(`/api/admin/tokens/${tokenId}`, { method: 'DELETE' }),
-    onSuccess: () => refetchTokens(),
+    onSuccess: () => {
+      refetchTokens();
+      showSuccess(t('tokens.deleted', 'Token deleted'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to delete token');
+    },
   });
 
   // Maintenance action
@@ -693,8 +787,10 @@ export const DatabaseDetailPage: React.FC<{
       }),
     onSuccess: (data, action) => {
       refetchStats();
-      setMaintenanceMessage(`Maintenance "${action}" finished successfully.`);
-      setTimeout(() => setMaintenanceMessage(null), 4000);
+      showSuccess(`Maintenance "${action}" finished successfully.`);
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Maintenance action failed');
     },
   });
 
@@ -710,8 +806,10 @@ export const DatabaseDetailPage: React.FC<{
     onSuccess: (newDb) => {
       setIsCloneModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['databases'] });
-      setNotificationMessage(`Database cloned to "${newDb.name}" (${newDb.id})`);
-      setTimeout(() => setNotificationMessage(null), 4000);
+      showSuccess(`Database cloned to "${newDb.name}" (${newDb.id})`);
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to clone database');
     },
   });
 
@@ -1431,7 +1529,7 @@ export const DatabaseDetailPage: React.FC<{
                 {selectedTable && (
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Bulk Delete Button */}
-                    {selectedRowIds.length > 0 && (
+                    {canEdit && selectedRowIds.length > 0 && (
                       <button
                         onClick={() => {
                           setConfirmConfig({
@@ -1456,70 +1554,78 @@ export const DatabaseDetailPage: React.FC<{
                     )}
 
                     {/* Add Row Button */}
-                    <button
-                      onClick={() => setIsInsertModalOpen(true)}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      {t('tables.insertRow', 'Insert Row')}
-                    </button>
+                    {canEdit && (
+                      <button
+                        onClick={() => setIsInsertModalOpen(true)}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        {t('tables.insertRow', 'Insert Row')}
+                      </button>
+                    )}
 
                     {/* Rename Table */}
-                    <button
-                      onClick={() => {
-                        setNewTableName(selectedTable);
-                        setIsRenameTableOpen(true);
-                      }}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-background border border-border hover:bg-accent rounded text-xs font-medium transition-colors text-foreground"
-                    >
-                      <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
-                      {t('tables.renameTable', 'Rename')}
-                    </button>
+                    {canAdmin && (
+                      <button
+                        onClick={() => {
+                          setNewTableName(selectedTable);
+                          setIsRenameTableOpen(true);
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-background border border-border hover:bg-accent rounded text-xs font-medium transition-colors text-foreground"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
+                        {t('tables.renameTable', 'Rename')}
+                      </button>
+                    )}
 
                     {/* Truncate Table */}
-                    <button
-                      onClick={() => {
-                        setConfirmConfig({
-                          isOpen: true,
-                          title: `${t('tables.truncateTable', 'Truncate Table')} "${selectedTable}"?`,
-                          message: t('tables.confirmTruncate', `Are you sure you want to empty table "${selectedTable}"? All row records will be permanently purged.`),
-                          confirmText: t('tables.truncateTable', 'Truncate Table'),
-                          variant: 'danger',
-                          isLoading: truncateTableMutation.isPending,
-                          onConfirm: () => {
-                            truncateTableMutation.mutate();
-                            setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
-                          },
-                        });
-                      }}
-                      disabled={truncateTableMutation.isPending}
-                      className="px-2.5 py-1 bg-background border border-border hover:bg-accent rounded text-xs font-medium transition-colors text-muted-foreground hover:text-red-500"
-                    >
-                      {t('tables.truncateTable', 'Truncate')}
-                    </button>
+                    {canAdmin && (
+                      <button
+                        onClick={() => {
+                          setConfirmConfig({
+                            isOpen: true,
+                            title: `${t('tables.truncateTable', 'Truncate Table')} "${selectedTable}"?`,
+                            message: t('tables.confirmTruncate', `Are you sure you want to empty table "${selectedTable}"? All row records will be permanently purged.`),
+                            confirmText: t('tables.truncateTable', 'Truncate Table'),
+                            variant: 'danger',
+                            isLoading: truncateTableMutation.isPending,
+                            onConfirm: () => {
+                              truncateTableMutation.mutate();
+                              setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+                            },
+                          });
+                        }}
+                        disabled={truncateTableMutation.isPending}
+                        className="px-2.5 py-1 bg-background border border-border hover:bg-accent rounded text-xs font-medium transition-colors text-muted-foreground hover:text-red-500"
+                      >
+                        {t('tables.truncateTable', 'Truncate')}
+                      </button>
+                    )}
 
                     {/* Drop Table */}
-                    <button
-                      onClick={() => {
-                        setConfirmConfig({
-                          isOpen: true,
-                          title: `${t('tables.dropTable', 'Drop Table')} "${selectedTable}"?`,
-                          message: t('tables.confirmDrop', `Are you sure you want to permanently DROP table "${selectedTable}" and all its columns, data, and indexes?`),
-                          confirmText: t('tables.dropTable', 'Drop Table'),
-                          variant: 'danger',
-                          isLoading: dropTableMutation.isPending,
-                          onConfirm: () => {
-                            dropTableMutation.mutate();
-                            setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
-                          },
-                        });
-                      }}
-                      disabled={dropTableMutation.isPending}
-                      className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
-                      title={t('tables.dropTable', 'Drop Table')}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {canAdmin && (
+                      <button
+                        onClick={() => {
+                          setConfirmConfig({
+                            isOpen: true,
+                            title: `${t('tables.dropTable', 'Drop Table')} "${selectedTable}"?`,
+                            message: t('tables.confirmDrop', `Are you sure you want to permanently DROP table "${selectedTable}" and all its columns, data, and indexes?`),
+                            confirmText: t('tables.dropTable', 'Drop Table'),
+                            variant: 'danger',
+                            isLoading: dropTableMutation.isPending,
+                            onConfirm: () => {
+                              dropTableMutation.mutate();
+                              setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+                            },
+                          });
+                        }}
+                        disabled={dropTableMutation.isPending}
+                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                        title={t('tables.dropTable', 'Drop Table')}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
 
                     {/* Pagination limit */}
                     <select
@@ -1625,35 +1731,39 @@ export const DatabaseDetailPage: React.FC<{
                             </td>
                             {/* Row Action Buttons */}
                             <td className="py-1 px-2 border-r border-border text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <button
-                                  onClick={() => setEditingRow(row)}
-                                  className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors"
-                                  title={t('tables.editRow', 'Edit Row')}
-                                >
-                                  <Edit2 className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setConfirmConfig({
-                                      isOpen: true,
-                                      title: t('tables.deleteRowTitle', 'Delete Row?'),
-                                      message: `${t('tables.confirmDelete', 'Are you sure you want to delete this row?')} (${primaryKeyCol} = "${pkVal}")`,
-                                      confirmText: t('tables.deleteRow', 'Delete Row'),
-                                      variant: 'danger',
-                                      isLoading: deleteBulkMutation.isPending,
-                                      onConfirm: () => {
-                                        deleteBulkMutation.mutate([pkVal]);
-                                        setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
-                                      },
-                                    });
-                                  }}
-                                  className="p-1 hover:bg-red-500/20 rounded text-muted-foreground hover:text-red-500 transition-colors"
-                                  title={t('tables.deleteRow', 'Delete Row')}
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
+                              {canEdit ? (
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => setEditingRow(row)}
+                                    className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors"
+                                    title={t('tables.editRow', 'Edit Row')}
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setConfirmConfig({
+                                        isOpen: true,
+                                        title: t('tables.deleteRowTitle', 'Delete Row?'),
+                                        message: `${t('tables.confirmDelete', 'Are you sure you want to delete this row?')} (${primaryKeyCol} = "${pkVal}")`,
+                                        confirmText: t('tables.deleteRow', 'Delete Row'),
+                                        variant: 'danger',
+                                        isLoading: deleteBulkMutation.isPending,
+                                        onConfirm: () => {
+                                          deleteBulkMutation.mutate([pkVal]);
+                                          setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+                                        },
+                                      });
+                                    }}
+                                    className="p-1 hover:bg-red-500/20 rounded text-muted-foreground hover:text-red-500 transition-colors"
+                                    title={t('tables.deleteRow', 'Delete Row')}
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground italic">-</span>
+                              )}
                             </td>
                             {tableRows.columns.map((col) => {
                               const val = row[col];
@@ -1725,24 +1835,28 @@ export const DatabaseDetailPage: React.FC<{
                       PK: {String(mobileDetailRow[primaryKeyCol])}
                     </span>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setEditingRow(mobileDetailRow);
-                          setMobileDetailRow(null);
-                        }}
-                        className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => {
-                          deleteBulkMutation.mutate([mobileDetailRow[primaryKeyCol]]);
-                          setMobileDetailRow(null);
-                        }}
-                        className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold"
-                      >
-                        Delete
-                      </button>
+                      {canEdit && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditingRow(mobileDetailRow);
+                              setMobileDetailRow(null);
+                            }}
+                            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              deleteBulkMutation.mutate([mobileDetailRow[primaryKeyCol]]);
+                              setMobileDetailRow(null);
+                            }}
+                            className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
                       <button
                         onClick={() => setMobileDetailRow(null)}
                         className="p-1 text-muted-foreground hover:text-foreground rounded"
@@ -4509,6 +4623,14 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
         <div className="fixed bottom-5 right-5 z-50 bg-card border border-border shadow-xl rounded-lg px-4 py-3 text-xs text-foreground flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
           <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
           <span>{notificationMessage}</span>
+        </div>
+      )}
+
+      {/* Error Toast */}
+      {errorMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-destructive text-destructive-foreground shadow-xl rounded-lg px-4 py-3 text-xs flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{errorMessage}</span>
         </div>
       )}
     </div>

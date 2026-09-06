@@ -1367,5 +1367,91 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     expect(disableRes.statusCode).toBe(200);
     expect(disableRes.json().data.backup_schedule).toBe('disabled');
   });
+
+  // 22. Multi-Tenant RBAC, Invite Resilience & User Deletion Cascade Test
+  it('should enforce disabled/deleted account guards, transaction cascades, and invite lifecycle resilience', async () => {
+    const { authService } = await import('../src/server/services/auth.js');
+    const { databaseMembersService } = await import('../src/server/services/members.js');
+    const { getMetadataDb } = await import('../src/server/db/metadata.js');
+    const { config } = await import('../src/server/config/index.js');
+    const metaDb = getMetadataDb();
+
+    // 1. Create an active user, generate session, then disable in DB
+    const disabledUsername = `disabled_${Date.now()}`;
+    const targetUser = await authService.createUser({
+      username: disabledUsername,
+      password: 'Password123!',
+      email: `${disabledUsername}@example.com`,
+      status: 'active',
+    });
+    expect(targetUser.status).toBe('active');
+
+    const { cookieValue } = authService.generateSessionCookie(targetUser, config.sessionSecret);
+    const userCookie = `vdb_session=${cookieValue}`;
+
+    // Disable the account in database
+    metaDb.prepare("UPDATE users SET status = 'disabled' WHERE id = ?").run(targetUser.id);
+
+    // Guard 1: Login should reject disabled account
+    const disabledLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: disabledUsername, password: 'Password123!' },
+    });
+    expect(disabledLogin.statusCode).toBe(401);
+
+    // Guard 2: Existing session cookie should be rejected with 403 USER_DISABLED
+    const disabledReq = await app.inject({
+      method: 'GET',
+      url: '/api/admin/user/dashboard',
+      headers: { cookie: userCookie },
+    });
+    expect(disabledReq.statusCode).toBe(403);
+    expect(disabledReq.json().error.code).toBe('USER_DISABLED');
+
+    // Ensure database exists for test
+    const targetDb = testDbId ? { id: testDbId } : databaseService.createDatabase(`Test DB Invite ${Date.now()}`);
+    const activeDbId = targetDb.id;
+
+    // 2. Test inviteMember with invalid email format for non-existent user -> should throw
+    expect(() => {
+      databaseMembersService.inviteMember(activeDbId, 'invalid-email-no-domain', 'viewer', 'admin_test');
+    }).toThrow(/valid email address/i);
+
+    // 3. Test inviteMember resilience: re-inviting previously declined or revoked invite
+    const inviteEmail = `invite_test_${Date.now()}@example.com`;
+    const initialInvite = databaseMembersService.inviteMember(activeDbId, inviteEmail, 'viewer', 'admin_test');
+    expect(initialInvite.record).toBeDefined();
+
+    // Revoke the invite
+    const revoked = databaseMembersService.revokeInvite(activeDbId, initialInvite.record.id);
+    expect(revoked).toBe(true);
+
+    // Re-invite same email -> should succeed without UNIQUE constraint collision
+    const reInvite = databaseMembersService.inviteMember(activeDbId, inviteEmail, 'editor', 'admin_test');
+    expect(reInvite.record).toBeDefined();
+    expect(reInvite.record.role).toBe('editor');
+
+    // 4. Test user deletion cascade: creates DB, deletes user -> DB owner detached to NULL, invites purged
+    const tempUsername = `temp_cascade_${Date.now()}`;
+    const tempUser = await authService.createUser({
+      username: tempUsername,
+      password: 'Password123!',
+      email: `${tempUsername}@example.com`,
+    });
+
+    const tempDb = databaseService.createDatabase(`Temp DB ${tempUsername}`, undefined, tempUser.id);
+    expect(tempDb.owner_id).toBe(tempUser.id);
+
+    // Delete user atomically
+    const deleteSuccess = authService.deleteUser(tempUser.id);
+    expect(deleteSuccess).toBe(true);
+
+    const detachedDb = metaDb.prepare('SELECT owner_id FROM databases WHERE id = ?').get(tempDb.id) as any;
+    expect(detachedDb.owner_id).toBeNull();
+
+    // Cleanup temp DB
+    databaseService.deleteDatabase(tempDb.id);
+  });
 });
 

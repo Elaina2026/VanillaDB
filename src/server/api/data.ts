@@ -139,6 +139,25 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
           error: { code: 'FORBIDDEN', message: 'Token does not have write permissions', requestId: req.id },
         });
       }
+    } else if (sessionUser && sessionUser.role !== 'super_admin' && sessionUser.role !== 'admin') {
+      const { databaseMembersService } = await import('../services/members.js');
+      const memberRole = databaseMembersService.getUserDatabaseRole(databaseId, sessionUser.userId, sessionUser.role);
+      if (memberRole === 'viewer') {
+        hasWrite = false;
+        if (!isSelect || isDdl) {
+          return reply.status(403).send({
+            success: false,
+            error: { code: 'FORBIDDEN', message: 'Viewer role can only execute read-only queries (SELECT)', requestId: req.id },
+          });
+        }
+      } else if (memberRole === 'editor') {
+        if (isDdl) {
+          return reply.status(403).send({
+            success: false,
+            error: { code: 'FORBIDDEN', message: 'Editor role cannot execute DDL queries (schema modification)', requestId: req.id },
+          });
+        }
+      }
     }
 
     const startTime = performance.now();
@@ -225,6 +244,25 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
             success: false,
             error: { code: 'FORBIDDEN', message: 'Batch contains DDL statements but token lacks database:ddl permission', requestId: req.id },
           });
+        }
+      }
+    } else if (sessionUser && sessionUser.role !== 'super_admin' && sessionUser.role !== 'admin') {
+      const { databaseMembersService } = await import('../services/members.js');
+      const memberRole = databaseMembersService.getUserDatabaseRole(databaseId, sessionUser.userId, sessionUser.role);
+      if (memberRole === 'viewer') {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Viewer role cannot execute batch mutations', requestId: req.id },
+        });
+      }
+      if (memberRole === 'editor') {
+        for (const stmt of parsed.data.statements) {
+          if (/^(CREATE|ALTER|DROP)\b/i.test(stmt.sql.trim())) {
+            return reply.status(403).send({
+              success: false,
+              error: { code: 'FORBIDDEN', message: 'Editor role cannot execute DDL schema modifications', requestId: req.id },
+            });
+          }
         }
       }
     }

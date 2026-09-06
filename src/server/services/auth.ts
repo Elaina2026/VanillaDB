@@ -42,7 +42,8 @@ export class AuthService {
     maxDatabases: number = 1000,
     rateLimitPerMinute: number = 0,
     email?: string,
-    avatarUrl?: string
+    avatarUrl?: string,
+    status: 'active' | 'disabled' = 'active'
   ): Promise<UserRecord> {
     const metaDb = getMetadataDb();
     const existing = metaDb.prepare('SELECT id FROM users WHERE username = ?').get(username);
@@ -62,8 +63,8 @@ export class AuthService {
 
     metaDb.prepare(`
       INSERT INTO users (id, username, email, avatar_url, password_hash, role, max_databases, rate_limit_per_minute, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
-    `).run(id, username, email || null, avatarUrl || null, hash, role, maxDatabases, rateLimitPerMinute, now, now);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, username, email || null, avatarUrl || null, hash, role, maxDatabases, rateLimitPerMinute, status, now, now);
 
     return {
       id,
@@ -73,7 +74,7 @@ export class AuthService {
       role,
       max_databases: maxDatabases,
       rate_limit_per_minute: rateLimitPerMinute,
-      status: 'active',
+      status,
       totp_enabled: false,
       created_at: now,
       updated_at: now,
@@ -88,6 +89,7 @@ export class AuthService {
     role?: UserRole;
     maxDatabases?: number;
     rateLimitPerMinute?: number;
+    status?: 'active' | 'disabled';
   }): Promise<UserRecord> {
     const role = data.role || 'user';
     const settings = systemService.getSettings();
@@ -95,7 +97,8 @@ export class AuthService {
     const defaultRateLimit = settings.default_user_rate_limit ?? 180;
     const maxDatabases = data.maxDatabases !== undefined ? data.maxDatabases : defaultMaxDb;
     const rateLimit = data.rateLimitPerMinute !== undefined ? data.rateLimitPerMinute : defaultRateLimit;
-    return this.createAdminUser(data.username, data.password, role, maxDatabases, rateLimit, data.email, data.avatarUrl);
+    const status = data.status || 'active';
+    return this.createAdminUser(data.username, data.password, role, maxDatabases, rateLimit, data.email, data.avatarUrl, status);
   }
 
   public listUsers(): UserRecord[] {
@@ -225,8 +228,28 @@ export class AuthService {
       }
     }
 
-    metaDb.prepare('DELETE FROM users WHERE id = ?').run(userId);
-    return true;
+    metaDb.exec('BEGIN TRANSACTION;');
+    try {
+      // Detach ownership of databases owned by deleted user
+      metaDb.prepare('UPDATE databases SET owner_id = NULL WHERE owner_id = ?').run(userId);
+
+      // Clean up invitations sent to or sent by deleted user
+      const userEmail = (user.email || '').toLowerCase();
+      metaDb.prepare(`
+        DELETE FROM database_invites
+        WHERE user_id = ?
+           OR (username IS NOT NULL AND LOWER(username) = LOWER(?))
+           OR (email IS NOT NULL AND email != '' AND LOWER(email) = ?)
+           OR invited_by = ?
+      `).run(userId, user.username, userEmail, user.username);
+
+      metaDb.prepare('DELETE FROM users WHERE id = ?').run(userId);
+      metaDb.exec('COMMIT;');
+      return true;
+    } catch (err) {
+      metaDb.exec('ROLLBACK;');
+      throw err;
+    }
   }
 
   public async validateUser(usernameOrEmail: string, password: string): Promise<UserRecord | null> {

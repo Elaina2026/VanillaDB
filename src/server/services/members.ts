@@ -37,8 +37,9 @@ export class DatabaseMembersService {
   /**
    * List all members of a database plus pending invites
    */
-  public listMembers(databaseId: string): { members: DatabaseMemberRecord[]; invites: DatabaseInviteRecord[] } {
+  public listMembers(databaseId: string, callerRole?: MemberRole | null): { members: DatabaseMemberRecord[]; invites: DatabaseInviteRecord[] } {
     const metaDb = getMetadataDb();
+    const now = Date.now();
     const members = metaDb.prepare(`
       SELECT m.id, m.database_id, m.user_id, m.role, m.invited_by, m.created_at, m.updated_at,
              u.username, u.email, u.avatar_url
@@ -48,14 +49,17 @@ export class DatabaseMembersService {
       ORDER BY m.created_at ASC
     `).all(databaseId) as any[];
 
-    const invites = metaDb.prepare(`
-      SELECT i.id, i.database_id, i.email, i.role, i.invited_by, i.status, i.created_at, i.expires_at,
-             d.name as database_name
-      FROM database_invites i
-      JOIN databases d ON i.database_id = d.id
-      WHERE i.database_id = ? AND i.status = 'pending'
-      ORDER BY i.created_at DESC
-    `).all(databaseId) as any[];
+    const canViewInvites = callerRole === 'owner' || callerRole === 'admin';
+    const invites = canViewInvites
+      ? (metaDb.prepare(`
+          SELECT i.id, i.database_id, i.email, i.role, i.invited_by, i.status, i.created_at, i.expires_at,
+                 d.name as database_name
+          FROM database_invites i
+          JOIN databases d ON i.database_id = d.id
+          WHERE i.database_id = ? AND i.status = 'pending' AND i.expires_at > ?
+          ORDER BY i.created_at DESC
+        `).all(databaseId, now) as any[])
+      : [];
 
     return {
       members: members.map(m => ({
@@ -184,7 +188,12 @@ export class DatabaseMembersService {
       };
     }
 
-    // User does not exist yet: create pending invite by email
+    // User does not exist yet: require valid email format
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedInput);
+    if (!isEmail) {
+      throw new Error('User not found. Unregistered users must be invited by a valid email address.');
+    }
+
     const email = trimmedInput.toLowerCase();
     const existingInvite = metaDb.prepare("SELECT id FROM database_invites WHERE database_id = ? AND LOWER(email) = ?").get(databaseId, email) as { id: string } | undefined;
     const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
@@ -288,6 +297,8 @@ export class DatabaseMembersService {
 
     const invite = metaDb.prepare('SELECT * FROM database_invites WHERE id = ?').get(inviteId) as any;
     if (!invite) throw new Error('Invitation not found');
+    if (invite.status !== 'pending') throw new Error(`Invitation is already ${invite.status}`);
+    if (invite.expires_at < Date.now()) throw new Error('Invitation has expired');
 
     const userEmail = (user.email || '').toLowerCase();
     const inviteEmail = (invite.email || '').toLowerCase();
@@ -470,7 +481,7 @@ export class DatabaseMembersService {
    */
   public revokeInvite(databaseId: string, inviteId: string): boolean {
     const metaDb = getMetadataDb();
-    const res = metaDb.prepare("UPDATE database_invites SET status = 'revoked' WHERE id = ? AND database_id = ?").run(inviteId, databaseId);
+    const res = metaDb.prepare("UPDATE database_invites SET status = 'revoked' WHERE id = ? AND database_id = ? AND status = 'pending'").run(inviteId, databaseId);
     return res.changes > 0;
   }
 

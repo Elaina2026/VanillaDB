@@ -19,7 +19,7 @@ export const CreateDatabaseModal: React.FC<{
   const queryClient = useQueryClient();
 
   const createMutation = useMutation({
-    mutationFn: async (payload: { name: string; description?: string; maxSizeMb?: number | null; file?: File | null }) => {
+    mutationFn: async (payload: { name: string; description?: string; maxSizeMb?: number; file?: File | null }) => {
       if (payload.file) {
         const formData = new FormData();
         formData.append('file', payload.file);
@@ -69,7 +69,7 @@ export const CreateDatabaseModal: React.FC<{
     createMutation.mutate({
       name: name.trim() || (importFile ? importFile.name.replace(/\.[^/.]+$/, '') : ''),
       description: description.trim() || undefined,
-      maxSizeMb: maxSizeMb.trim() ? parseInt(maxSizeMb.trim(), 10) : null,
+      maxSizeMb: maxSizeMb.trim() ? parseInt(maxSizeMb.trim(), 10) : undefined,
       file: importFile,
     });
   };
