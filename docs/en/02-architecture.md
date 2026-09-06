@@ -8,16 +8,16 @@ This document details the internal architecture, connection pooling, concurrency
 
 ```
                       ┌─────────────────────────────────┐
-                      │    HTTP / WebSocket Clients     │
-                      │   (Web Dashboard, SDKs, Bots)   │
+                      │        HTTP / SSE Clients       │
+                      │  (Web Dashboard, SDKs, Scripts) │
                       └────────────────┬────────────────┘
                                        │
                      ┌─────────────────┴─────────────────┐
                      │ Fastify HTTP Server (Port: 3000)  │
-                     │  - Helmet Security & CORS         │
-                     │  - Cookie Session Parser          │
-                     │  - Multipart Upload Engine        │
-                     │  - Metrics & Telemetry Hook       │
+                     │  - Helmet Security & CORS Guard   │
+                     │  - Session Cookie & Bearer Auth   │
+                     │  - Multipart Upload & Range 206   │
+                     │  - Realtime Metrics & Telemetry   │
                      └─────────────────┬─────────────────┘
                                        │
         ┌──────────────────────────────┴──────────────────────────────┐
@@ -25,7 +25,7 @@ This document details the internal architecture, connection pooling, concurrency
 ┌──────────────────────────────┐              ┌──────────────────────────────┐
 │ Control Plane (/api/*)       │              │ Data Plane (/v1/*)           │
 │ • Admin Authentication       │              │ • API Bearer Token Guard     │
-│ • User RBAC & Quotas         │              │ • Token Rate Limiter         │
+│ • Multi-User RBAC & Quotas   │              │ • Sliding Rate Limiter (429) │
 │ • Multi-DB SQL Translator    │              │ • Parameterized Query Engine │
 │ • Scheduled Backup Worker    │              │ • Atomic Batch Transaction   │
 │ • Webhook Event Dispatcher   │              │ • Realtime SSE Stream Bus    │
@@ -34,18 +34,19 @@ This document details the internal architecture, connection pooling, concurrency
                │                                             │
                ▼                                             ▼
 ┌──────────────────────────────┐              ┌──────────────────────────────┐
-│ Metadata Store               │              │ Database Manager Pool        │
-│ • data/system/vanilladb.db   │              │ • Connection Handle Cache    │
-│ • Schema migrations          │              │ • SQL Safety Validator       │
-│ • Users, Tokens, Settings    │              │ • Vector Math & SQL Crypto   │
+│ System Metadata Store        │              │ Database Manager Pool        │
+│ • data/system/vanilladb.sqlite              │ • Connection Handle Cache    │
+│ • Schema migrations & users  │              │ • SQL Safety Sandbox         │
+│ • API tokens & audit logs    │              │ • Vector Math & SQL Crypto   │
 └──────────────────────────────┘              └──────────────┬───────────────┘
                                                              │
                                                              ▼
                                               ┌──────────────────────────────┐
-                                              │ Tenant SQLite Databases      │
+                                              │ Isolated Tenant Databases    │
                                               │ • data/databases/:id.sqlite  │
                                               │ • WAL Mode & Busy Timeout    │
                                               │ • data/storage/:id/*         │
+                                              │ • data/backups/:id/*.sqlite  │
                                               └──────────────────────────────┘
 ```
 

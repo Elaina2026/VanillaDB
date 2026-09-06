@@ -69,29 +69,47 @@ Thay vì phải duy trì các máy chủ cơ sở dữ liệu nặng nề cho t�
 ## Kiến trúc hệ thống
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                       Clients / SDKs / Web UI                           │
-│        (Browser Dashboard, TypeScript SDK, Python SDK, Bots)            │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │
-                 ┌───────────────────┴───────────────────┐
-                 ▼                                       ▼
-  ┌─────────────────────────────┐         ┌─────────────────────────────┐
-  │ Control Plane (/api)        │         │ Data Plane (/v1)            │
-  │ • Fastify Admin Session Auth│         │ • API Bearer Token Guard    │
-  │ • Multi-User RBAC & Quotas  │         │ • Token Rate Limiter (429)  │
-  │ • Database & Token Manager  │         │ • Parameterized SQL Engine  │
-  │ • Multi-DB SQL Translator   │         │ • Atomic Batch Transaction  │
-  │ • Scheduled Backup Worker   │         │ • Realtime SSE Stream Bus   │
-  │ • Webhook Event Dispatcher  │         │ • Media Storage (Range 206) │
-  └──────────────┬──────────────┘         └──────────────┬──────────────┘
-                 │                                       │
-                 ▼                                       ▼
-  ┌─────────────────────────────┐         ┌─────────────────────────────┐
-  │ Metadata & Activity Store   │         │ Isolated Tenant Databases   │
-  │ • data/system/vanilladb.db  │         │ • data/databases/:id.db     │
-  │ • data/backups/:id/*.sqlite │         │ • data/storage/:id/*        │
-  └─────────────────────────────┘         └─────────────────────────────┘
+                      ┌─────────────────────────────────┐
+                      │     Clients HTTP / Luồng SSE    │
+                      │  (Giao diện Web, SDKs, Scripts) │
+                      └────────────────┬────────────────┘
+                                       │
+                     ┌─────────────────┴─────────────────┐
+                     │ Máy chủ HTTP Fastify (Cổng: 3000) │
+                     │  - Bảo mật Helmet & Bộ lọc CORS   │
+                     │  - Xác thực Cookie & Bearer Token │
+                     │  - Tải tệp Multipart & Range 206  │
+                     │  - Thu thập chỉ số & Telemetry    │
+                     └─────────────────┬─────────────────┘
+                                       │
+        ┌──────────────────────────────┴──────────────────────────────┐
+        ▼                                                             ▼
+┌──────────────────────────────┐              ┌──────────────────────────────┐
+│ Control Plane (/api/*)       │              │ Data Plane (/v1/*)           │
+│ • Xác thực Admin & Phiên     │              │ • Kiểm soát API Bearer Token │
+│ • Phân quyền RBAC & Hạn mức  │              │ • Giới hạn tần suất (429)    │
+│ • Dịch chuyển đa hệ CSDL SQL │              │ • Động cơ SQL tham số hóa    │
+│ • Lập lịch sao lưu tự động   │              │ • Giao dịch Batch nguyên tử  │
+│ • Bộ phát sự kiện Webhook    │              │ • Kênh SSE thời gian thực    │
+│ • Nhật ký kiểm toán hệ thống │              │ • Lưu trữ & phát luồng Range │
+└──────────────┬───────────────┘              └──────────────┬───────────────┘
+               │                                             │
+               ▼                                             ▼
+┌──────────────────────────────┐              ┌──────────────────────────────┐
+│ Kho Metadata Hệ thống        │              │ Bộ đệm Quản lý Kết nối CSDL  │
+│ • data/system/vanilladb.sqlite              │ • Bộ nhớ đệm Handle kết nối  │
+│ • Lịch sử di chuyển schema   │              │ • Hộp cát bảo mật cú pháp    │
+│ • Người dùng, Token, Cấu hình│              │ • Hàm Vector AI & Mật mã SQL │
+└──────────────────────────────┘              └──────────────┬───────────────┘
+                                                             │
+                                                             ▼
+                                              ┌──────────────────────────────┐
+                                              │ Tệp CSDL SQLite Khách thuê   │
+                                              │ • data/databases/:id.sqlite  │
+                                              │ • Chế độ WAL & Busy Timeout  │
+                                              │ • data/storage/:id/*         │
+                                              │ • data/backups/:id/*.sqlite  │
+                                              └──────────────────────────────┘
 ```
 
 ---

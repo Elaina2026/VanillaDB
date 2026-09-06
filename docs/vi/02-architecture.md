@@ -8,15 +8,15 @@ Tài liệu này giải thích chi tiết cấu trúc kiến trúc bên trong, c
 
 ```
                       ┌─────────────────────────────────┐
-                      │    HTTP / WebSocket Clients     │
-                      │   (Web Dashboard, SDKs, Bots)   │
+                      │     Clients HTTP / Luồng SSE    │
+                      │  (Giao diện Web, SDKs, Scripts) │
                       └────────────────┬────────────────┘
                                        │
                      ┌─────────────────┴─────────────────┐
-                     │ Fastify HTTP Server (Port: 3000)  │
-                     │  - Bảo mật Helmet & CORS          │
-                     │  - Phân tích Session Cookie       │
-                     │  - Động cơ tải tệp Multipart      │
+                     │ Máy chủ HTTP Fastify (Cổng: 3000) │
+                     │  - Bảo mật Helmet & Bộ lọc CORS   │
+                     │  - Xác thực Cookie & Bearer Token │
+                     │  - Tải tệp Multipart & Range 206  │
                      │  - Thu thập chỉ số & Telemetry    │
                      └─────────────────┬─────────────────┘
                                        │
@@ -24,8 +24,8 @@ Tài liệu này giải thích chi tiết cấu trúc kiến trúc bên trong, c
         ▼                                                             ▼
 ┌──────────────────────────────┐              ┌──────────────────────────────┐
 │ Control Plane (/api/*)       │              │ Data Plane (/v1/*)           │
-│ • Xác thực Admin & Session   │              │ • Kiểm soát API Bearer Token │
-│ • Phân quyền RBAC & Hạn mức  │              │ • Giới hạn tần suất gọi API  │
+│ • Xác thực Admin & Phiên     │              │ • Kiểm soát API Bearer Token │
+│ • Phân quyền RBAC & Hạn mức  │              │ • Giới hạn tần suất (429)    │
 │ • Dịch chuyển đa hệ CSDL SQL │              │ • Động cơ SQL tham số hóa    │
 │ • Lập lịch sao lưu tự động   │              │ • Giao dịch Batch nguyên tử  │
 │ • Bộ phát sự kiện Webhook    │              │ • Kênh SSE thời gian thực    │
@@ -34,9 +34,9 @@ Tài liệu này giải thích chi tiết cấu trúc kiến trúc bên trong, c
                │                                             │
                ▼                                             ▼
 ┌──────────────────────────────┐              ┌──────────────────────────────┐
-│ Kho Metadata Hệ thống        │              │ Bộ đệm kết nối Database      │
-│ • data/system/vanilladb.db   │              │ • Bộ nhớ đệm Handle kết nối  │
-│ • Lịch sử di chuyển schema   │              │ • Kiểm tra an toàn cú pháp   │
+│ Kho Metadata Hệ thống        │              │ Bộ đệm Quản lý Kết nối CSDL  │
+│ • data/system/vanilladb.sqlite              │ • Bộ nhớ đệm Handle kết nối  │
+│ • Lịch sử di chuyển schema   │              │ • Hộp cát bảo mật cú pháp    │
 │ • Người dùng, Token, Cấu hình│              │ • Hàm Vector AI & Mật mã SQL │
 └──────────────────────────────┘              └──────────────┬───────────────┘
                                                              │
@@ -46,6 +46,7 @@ Tài liệu này giải thích chi tiết cấu trúc kiến trúc bên trong, c
                                               │ • data/databases/:id.sqlite  │
                                               │ • Chế độ WAL & Busy Timeout  │
                                               │ • data/storage/:id/*         │
+                                              │ • data/backups/:id/*.sqlite  │
                                               └──────────────────────────────┘
 ```
 

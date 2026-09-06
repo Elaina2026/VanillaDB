@@ -69,29 +69,47 @@ Instead of managing separate heavy database servers for every client, project, o
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                       Clients / SDKs / Web UI                           │
-│        (Browser Dashboard, TypeScript SDK, Python SDK, Bots)            │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │
-                 ┌───────────────────┴───────────────────┐
-                 ▼                                       ▼
-  ┌─────────────────────────────┐         ┌─────────────────────────────┐
-  │ Control Plane (/api)        │         │ Data Plane (/v1)            │
-  │ • Fastify Admin Session Auth│         │ • API Bearer Token Guard    │
-  │ • Multi-User RBAC & Quotas  │         │ • Token Rate Limiter (429)  │
-  │ • Database & Token Manager  │         │ • Parameterized SQL Engine  │
-  │ • Multi-DB SQL Translator   │         │ • Atomic Batch Transaction  │
-  │ • Scheduled Backup Worker   │         │ • Realtime SSE Stream Bus   │
-  │ • Webhook Event Dispatcher  │         │ • Media Storage (Range 206) │
-  └──────────────┬──────────────┘         └──────────────┬──────────────┘
-                 │                                       │
-                 ▼                                       ▼
-  ┌─────────────────────────────┐         ┌─────────────────────────────┐
-  │ Metadata & Activity Store   │         │ Isolated Tenant Databases   │
-  │ • data/system/vanilladb.db  │         │ • data/databases/:id.db     │
-  │ • data/backups/:id/*.sqlite │         │ • data/storage/:id/*        │
-  └─────────────────────────────┘         └─────────────────────────────┘
+                      ┌─────────────────────────────────┐
+                      │        HTTP / SSE Clients       │
+                      │  (Web Dashboard, SDKs, Scripts) │
+                      └────────────────┬────────────────┘
+                                       │
+                     ┌─────────────────┴─────────────────┐
+                     │ Fastify HTTP Server (Port: 3000)  │
+                     │  - Helmet Security & CORS Guard   │
+                     │  - Session Cookie & Bearer Auth   │
+                     │  - Multipart Upload & Range 206   │
+                     │  - Realtime Metrics & Telemetry   │
+                     └─────────────────┬─────────────────┘
+                                       │
+        ┌──────────────────────────────┴──────────────────────────────┐
+        ▼                                                             ▼
+┌──────────────────────────────┐              ┌──────────────────────────────┐
+│ Control Plane (/api/*)       │              │ Data Plane (/v1/*)           │
+│ • Admin Authentication       │              │ • API Bearer Token Guard     │
+│ • Multi-User RBAC & Quotas   │              │ • Sliding Rate Limiter (429) │
+│ • Multi-DB SQL Translator    │              │ • Parameterized Query Engine │
+│ • Scheduled Backup Worker    │              │ • Atomic Batch Transaction   │
+│ • Webhook Event Dispatcher   │              │ • Realtime SSE Stream Bus    │
+│ • Audit & Activity Logs      │              │ • Media Storage (Range 206)  │
+└──────────────┬───────────────┘              └──────────────┬───────────────┘
+               │                                             │
+               ▼                                             ▼
+┌──────────────────────────────┐              ┌──────────────────────────────┐
+│ System Metadata Store        │              │ Database Manager Pool        │
+│ • data/system/vanilladb.sqlite              │ • Connection Handle Cache    │
+│ • Schema migrations & users  │              │ • SQL Safety Sandbox         │
+│ • API tokens & audit logs    │              │ • Vector Math & SQL Crypto   │
+└──────────────────────────────┘              └──────────────┬───────────────┘
+                                                             │
+                                                             ▼
+                                              ┌──────────────────────────────┐
+                                              │ Isolated Tenant Databases    │
+                                              │ • data/databases/:id.sqlite  │
+                                              │ • WAL Mode & Busy Timeout    │
+                                              │ • data/storage/:id/*         │
+                                              │ • data/backups/:id/*.sqlite  │
+                                              └──────────────────────────────┘
 ```
 
 ---
