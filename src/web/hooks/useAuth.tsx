@@ -28,13 +28,21 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const queryClient = useQueryClient();
 
+  const [loadTimeout, setLoadTimeout] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setLoadTimeout(true), 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['authStatus'],
     queryFn: () => apiRequest('/api/auth/status'),
-    retry: 2,
+    retry: 1,
     retryDelay: 1000,
     staleTime: 1000 * 60,
   });
+
+  const effectiveLoading = isLoading && !loadTimeout;
 
   const isOffline = !!error && ((error as any).status === 502 || (error as any).status === 503 || (error as any).status === 504 || (error as any).message?.includes('Failed to fetch') || (error as any).message?.includes('NetworkError') || !navigator.onLine);
 
@@ -51,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         initialized: data?.initialized ?? true,
         authenticated: data?.authenticated ?? false,
         user: data?.user ?? null,
-        isLoading,
+        isLoading: effectiveLoading,
         isOffline,
         logout: () => logoutMutation.mutate(),
         refetchStatus: () => refetch(),
