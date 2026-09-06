@@ -468,17 +468,6 @@ export const SettingsPage: React.FC = () => {
             <span>{currentTabMeta.label}</span>
             <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
-
-          {activeTab !== 'account' && (
-            <button
-              onClick={handleSave}
-              disabled={updateMutation.isPending}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-            >
-              {saved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-              <span>{saved ? t('settings.saved', 'Saved') : t('settings.save', 'Save')}</span>
-            </button>
-          )}
         </div>
       )}
 
@@ -640,30 +629,19 @@ export const SettingsPage: React.FC = () => {
             })}
           </div>
 
-          {/* Sidebar Footer with Save Settings Button */}
-          {activeTab !== 'account' && (
-            <div className="p-2.5 border-t border-border mt-auto shrink-0">
-              {isSidebarOpen ? (
-                <button
-                  onClick={handleSave}
-                  disabled={updateMutation.isPending}
-                  className="w-full flex items-center justify-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all cursor-pointer active:scale-[0.98]"
-                >
-                  {saved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-                  <span>{saved ? t('settings.saved', 'Saved') : updateMutation.isPending ? t('settings.saving', 'Saving...') : t('settings.save', 'Save Settings')}</span>
-                </button>
-              ) : (
-                <button
-                  onClick={handleSave}
-                  disabled={updateMutation.isPending}
-                  className="w-full h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
-                  title={t('settings.save', 'Save Settings')}
-                >
-                  {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                </button>
-              )}
-            </div>
-          )}
+          {/* Sidebar Footer */}
+          <div className="p-3 border-t border-border mt-auto shrink-0">
+            {isSidebarOpen ? (
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono">
+                <span>VanillaDB</span>
+                <span className="text-emerald-500 font-semibold">v{status?.version || '1.3.2'}</span>
+              </div>
+            ) : (
+              <div className="flex justify-center text-[10px] font-mono text-emerald-500 font-bold">
+                v1.3
+              </div>
+            )}
+          </div>
         </aside>
       )}
 
@@ -696,7 +674,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={handleSave}
                 disabled={updateMutation.isPending}
-                className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all cursor-pointer self-start sm:self-auto active:scale-[0.98]"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm shadow-blue-500/25 transition-all cursor-pointer self-start sm:self-auto active:scale-[0.98]"
               >
                 {saved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
                 <span>{saved ? t('settings.saved', 'Saved Successfully') : updateMutation.isPending ? t('settings.saving', 'Saving...') : t('settings.save', 'Save Settings')}</span>
