@@ -15,7 +15,7 @@ import { authService } from '../services/auth.js';
 import { systemService } from '../services/system.js';
 import { jobSchedulerService } from '../services/jobScheduler.js';
 import { databaseMembersService } from '../services/members.js';
-import { requireAdminAuth, requireRole } from '../middleware/auth.js';
+import { requireAdminAuth, requireRole, getRateLimitWarningsForUser } from '../middleware/auth.js';
 import { SqlTranslator } from '../utils/sqlTranslator.js';
 import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
 import { TokenPermissionSchema, type MemberRole } from '../../../shared/index.js';
@@ -132,6 +132,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       name: z.string().min(1).max(100).optional(),
       description: z.string().max(500).optional().nullable(),
       maxSizeMb: z.number().int().positive().optional().nullable(),
+      backupSchedule: z.enum(['inherit', 'disabled', 'hourly', '6hours', '12hours', 'daily', 'weekly']).optional().nullable(),
     });
 
     const parsed = Schema.safeParse(req.body);
@@ -139,10 +140,22 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid payload' } });
     }
 
+    // Prevent regular users from inflating disk quotas beyond the platform limit
+    if (parsed.data.maxSizeMb !== undefined && req.adminUser?.role !== 'super_admin' && req.adminUser?.role !== 'admin') {
+      const maxAllowed = systemService.getSettings().default_user_max_disk_mb ?? 200;
+      if (parsed.data.maxSizeMb === null || parsed.data.maxSizeMb > maxAllowed) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN', message: `Regular users cannot set disk quota higher than ${maxAllowed}MB` },
+        });
+      }
+    }
+
     const updated = databaseService.updateDatabase(id, {
       name: parsed.data.name,
       description: parsed.data.description,
       max_size_mb: parsed.data.maxSizeMb,
+      backup_schedule: parsed.data.backupSchedule,
     });
     dbManager.updateCachedQuota(id, parsed.data.maxSizeMb ?? null);
     return reply.send({ success: true, data: updated });
@@ -179,17 +192,24 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: 'New database name required' } });
     }
 
-    const cloned = databaseService.duplicateDatabase(id, parsed.data.name);
-    activityService.recordAudit({
-      user: req.adminUser!.username,
-      action: 'database.clone',
-      resource: cloned.id,
-      result: 'success',
-      requestId: req.id,
-      details: JSON.stringify({ sourceId: id, newName: cloned.name }),
-    });
+    try {
+      const cloned = databaseService.duplicateDatabase(id, parsed.data.name, req.adminUser?.userId);
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'database.clone',
+        resource: cloned.id,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ sourceId: id, newName: cloned.name }),
+      });
 
-    return reply.status(201).send({ success: true, data: cloned });
+      return reply.status(201).send({ success: true, data: cloned });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'DATABASE_DUPLICATE_ERROR', message: err.message },
+      });
+    }
   });
 
   // Schema introspection & Table explorer
@@ -204,7 +224,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Setup FTS5 Full-Text Search Virtual Table with Auto-Sync Triggers
   fastify.post('/databases/:id/fts5-setup', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const db = requireDatabaseAccess(req, reply, id);
+    const db = requireDatabaseAccess(req, reply, id, 'admin');
     if (!db) return;
 
     const Schema = z.object({
@@ -1080,7 +1100,10 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!dbRecord) return;
     const Schema = z.object({
       name: z.string().min(1).max(100),
-      url: z.string().url(),
+      url: z.string().url().refine(
+        u => u.startsWith('http://') || u.startsWith('https://'),
+        'Webhook URL must use HTTP or HTTPS protocol'
+      ),
       secret: z.string().optional(),
       events: z.array(z.string()).min(1),
     });
@@ -1672,6 +1695,21 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    if (req.adminUser?.userId === userId) {
+      if (parsed.data.role && parsed.data.role !== 'super_admin') {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'CANNOT_DEMOTE_SELF', message: 'You cannot demote your own super_admin account' },
+        });
+      }
+      if (parsed.data.status === 'disabled') {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'CANNOT_DISABLE_SELF', message: 'You cannot disable your own account' },
+        });
+      }
+    }
+
     try {
       const updated = await authService.updateUser(userId, parsed.data as any);
       activityService.recordAudit({
@@ -1723,7 +1761,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Scheduled Jobs (Cron Tasks)
   fastify.get('/databases/:id/jobs', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const db = requireDatabaseAccess(req, reply, id);
+    const db = requireDatabaseAccess(req, reply, id, 'viewer');
     if (!db) return;
 
     const jobs = jobSchedulerService.listJobs(id);
@@ -1732,7 +1770,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/databases/:id/jobs', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const db = requireDatabaseAccess(req, reply, id);
+    const db = requireDatabaseAccess(req, reply, id, 'admin');
     if (!db) return;
 
     const Schema = z.object({
@@ -1761,6 +1799,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.patch('/jobs/:jobId', async (req, reply) => {
     const { jobId } = req.params as { jobId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const jobRow = metaDb.prepare('SELECT database_id FROM scheduled_jobs WHERE id = ?').get(jobId) as { database_id: string } | undefined;
+    if (!jobRow) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    const db = requireDatabaseAccess(req, reply, jobRow.database_id, 'admin');
+    if (!db) return;
+
     const Schema = z.object({
       name: z.string().min(1).max(64).optional(),
       cron_expression: z.string().min(1).max(64).optional(),
@@ -1782,6 +1828,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete('/jobs/:jobId', async (req, reply) => {
     const { jobId } = req.params as { jobId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const jobRow = metaDb.prepare('SELECT database_id FROM scheduled_jobs WHERE id = ?').get(jobId) as { database_id: string } | undefined;
+    if (!jobRow) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    const db = requireDatabaseAccess(req, reply, jobRow.database_id, 'admin');
+    if (!db) return;
+
     const ok = jobSchedulerService.deleteJob(jobId);
     return reply.send({ success: ok });
   });
@@ -1793,6 +1847,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!job) {
       return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
     }
+    const db = requireDatabaseAccess(req, reply, job.database_id, 'admin');
+    if (!db) return;
 
     const result = await jobSchedulerService.runJob(job);
     return reply.send({ success: result.success, error: result.error });
@@ -1927,6 +1983,18 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       LIMIT 10
     `).all(user.userId, user.userId) as any[];
 
+    // 6. User storage quota limit
+    const isSuperAdmin = user.role === 'super_admin';
+    const defaultUserDiskMb = systemService.getSettings().default_user_max_disk_mb ?? 200;
+    const maxStorageMb = isSuperAdmin ? null : defaultUserDiskMb;
+
+    // 7. Active rate limit warnings across user databases
+    const rawWarnings = getRateLimitWarningsForUser(user.userId);
+    const rateLimitWarnings = rawWarnings.map(w => ({
+      ...w,
+      databaseName: userDbs.find(d => d.id === w.databaseId)?.name || w.databaseId,
+    }));
+
     return reply.send({
       success: true,
       data: {
@@ -1934,8 +2002,10 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         maxDatabases,
         sharedDatabasesCount: sharedRow?.count || 0,
         storageUsedBytes,
+        maxStorageMb,
         activeTokensCount: tokensCountRow?.count || 0,
         recentActivity,
+        rateLimitWarnings,
       },
     });
   });

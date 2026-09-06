@@ -15,6 +15,27 @@ import {
 import { config } from '../config/index.js';
 import { requireAdminAuth } from '../middleware/auth.js';
 
+// In-memory rate limiting tracker for authentication attempts (Brute-force protection)
+const authAttemptTracker = new Map<string, { count: number; resetAt: number }>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, item] of authAttemptTracker.entries()) {
+    if (now > item.resetAt) authAttemptTracker.delete(key);
+  }
+}, 60 * 1000).unref();
+
+function checkAuthRateLimit(ipOrId: string, maxAttempts = 10, windowMs = 60 * 1000): boolean {
+  const now = Date.now();
+  const entry = authAttemptTracker.get(ipOrId) || { count: 0, resetAt: now + windowMs };
+  if (now > entry.resetAt) {
+    entry.count = 0;
+    entry.resetAt = now + windowMs;
+  }
+  entry.count++;
+  authAttemptTracker.set(ipOrId, entry);
+  return entry.count <= maxAttempts;
+}
+
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/status', async (req, reply) => {
     const hasAdmin = authService.hasAdminUser();
@@ -176,6 +197,14 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/login', async (req, reply) => {
+    const ip = req.ip || 'unknown';
+    if (!checkAuthRateLimit(`login:${ip}`, 30, 60 * 1000)) {
+      return reply.status(429).send({
+        success: false,
+        error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Please wait 1 minute.' },
+      });
+    }
+
     const LoginSchema = z.object({
       username: z.string(),
       password: z.string(),
@@ -245,6 +274,14 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
   // 2FA Verification during login
   fastify.post('/login/2fa', async (req, reply) => {
+    const ip = req.ip || 'unknown';
+    if (!checkAuthRateLimit(`2fa:${ip}`, 10, 60 * 1000)) {
+      return reply.status(429).send({
+        success: false,
+        error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many 2FA verification attempts. Please wait 1 minute.' },
+      });
+    }
+
     const Schema = z.object({
       tempToken: z.string().min(1),
       code: z.string().length(6),
@@ -751,6 +788,14 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Reset password using either TOTP 6-digit code OR 2FA Backup Recovery Code
   fastify.post('/recovery/reset-password', async (req, reply) => {
+    const ip = req.ip || 'unknown';
+    if (!checkAuthRateLimit(`recovery:${ip}`, 10, 60 * 1000)) {
+      return reply.status(429).send({
+        success: false,
+        error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many account recovery attempts. Please wait 1 minute.' },
+      });
+    }
+
     const Schema = z.object({
       usernameOrEmail: z.string().min(1, 'Username hoặc Email là bắt buộc'),
       backupCode: z.string().optional(),

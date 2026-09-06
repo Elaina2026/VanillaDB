@@ -1139,6 +1139,8 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     });
     expect(betaDashboard.statusCode).toBe(200);
     expect(betaDashboard.json().data.sharedDatabasesCount).toBe(1);
+    expect(betaDashboard.json().data.maxStorageMb).toBe(200);
+    expect(Array.isArray(betaDashboard.json().data.rateLimitWarnings)).toBe(true);
 
     // 10. Clean up
     try {
@@ -1243,6 +1245,42 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
       const userTotp = metaDb.prepare('SELECT id FROM users WHERE username = ?').get(totpUsername) as any;
       if (userTotp) authService.deleteUser(userTotp.id);
     } catch {}
+  });
+
+  // 21. Per-Database Backup Schedule Customization Test
+  it('should support database-level backup schedule customization (inherit, daily, disabled)', async () => {
+    // 1. Update backup schedule on testDbId to 'daily'
+    const patchRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/admin/databases/${testDbId}`,
+      headers: { cookie: adminCookie },
+      payload: {
+        backupSchedule: 'daily',
+      },
+    });
+    expect(patchRes.statusCode).toBe(200);
+    expect(patchRes.json().data.backup_schedule).toBe('daily');
+
+    // 2. Fetch database and verify backup_schedule is returned
+    const getRes = await app.inject({
+      method: 'GET',
+      url: `/api/admin/databases/${testDbId}`,
+      headers: { cookie: adminCookie },
+    });
+    expect(getRes.statusCode).toBe(200);
+    expect(getRes.json().data.database.backup_schedule).toBe('daily');
+
+    // 3. Update backup schedule to 'disabled'
+    const disableRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/admin/databases/${testDbId}`,
+      headers: { cookie: adminCookie },
+      payload: {
+        backupSchedule: 'disabled',
+      },
+    });
+    expect(disableRes.statusCode).toBe(200);
+    expect(disableRes.json().data.backup_schedule).toBe('disabled');
   });
 });
 

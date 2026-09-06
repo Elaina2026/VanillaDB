@@ -310,6 +310,13 @@ function runMigrations(db: DatabaseSync): void {
       sql: `
         ALTER TABLE users ADD COLUMN totp_backup_codes TEXT;
       `
+    },
+    {
+      version: 12,
+      name: 'add_backup_schedule_to_databases',
+      sql: `
+        ALTER TABLE databases ADD COLUMN backup_schedule TEXT;
+      `
     }
   ];
 

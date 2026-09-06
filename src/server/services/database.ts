@@ -76,7 +76,9 @@ export class DatabaseService {
     if (userId && role === 'user') {
       const rows = metaDb.prepare(`
         SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
+               d.backup_schedule,
                u.username as owner_username,
+               u.avatar_url as owner_avatar_url,
                CASE
                  WHEN d.owner_id = ? THEN 'owner'
                  ELSE COALESCE(dm.role, 'viewer')
@@ -95,12 +97,16 @@ export class DatabaseService {
         is_shared: Boolean(r.is_shared),
         access_role: r.access_role || 'viewer',
         member_count: Number(r.member_count || 0),
+        backup_schedule: r.backup_schedule || null,
+        owner_avatar_url: r.owner_avatar_url || null,
       }));
     }
 
     const rows = metaDb.prepare(`
       SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
+             d.backup_schedule,
              u.username as owner_username,
+             u.avatar_url as owner_avatar_url,
              'owner' as access_role,
              0 as is_shared,
              (SELECT COUNT(*) FROM database_members WHERE database_id = d.id) as member_count
@@ -114,6 +120,8 @@ export class DatabaseService {
       is_shared: false,
       access_role: 'owner',
       member_count: Number(r.member_count || 0),
+      backup_schedule: r.backup_schedule || null,
+      owner_avatar_url: r.owner_avatar_url || null,
     }));
   }
 
@@ -121,15 +129,27 @@ export class DatabaseService {
     const metaDb = getMetadataDb();
     const row = metaDb.prepare(`
       SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
-             u.username as owner_username
+             d.backup_schedule,
+             u.username as owner_username,
+             u.avatar_url as owner_avatar_url
       FROM databases d
       LEFT JOIN users u ON d.owner_id = u.id
       WHERE d.id = ?
     `).get(databaseId) as any;
-    return row || null;
+    if (!row) return null;
+    return {
+      ...row,
+      backup_schedule: row.backup_schedule || null,
+      owner_avatar_url: row.owner_avatar_url || null,
+    };
   }
 
-  public updateDatabase(databaseId: string, updates: { name?: string; description?: string | null; max_size_mb?: number | null }): DatabaseRecord {
+  public updateDatabase(databaseId: string, updates: {
+    name?: string;
+    description?: string | null;
+    max_size_mb?: number | null;
+    backup_schedule?: 'inherit' | 'disabled' | 'hourly' | '6hours' | '12hours' | 'daily' | 'weekly' | null;
+  }): DatabaseRecord {
     const metaDb = getMetadataDb();
     const current = this.getDatabase(databaseId);
     if (!current) throw new Error(`Database not found: ${databaseId}`);
@@ -137,12 +157,14 @@ export class DatabaseService {
     const name = updates.name !== undefined ? updates.name : current.name;
     const description = updates.description !== undefined ? updates.description : current.description;
     const maxSizeMb = updates.max_size_mb !== undefined ? updates.max_size_mb : current.max_size_mb;
+    const backupSchedule = updates.backup_schedule !== undefined ? updates.backup_schedule : current.backup_schedule;
     const now = Date.now();
 
-    metaDb.prepare('UPDATE databases SET name = ?, description = ?, max_size_mb = ?, updated_at = ? WHERE id = ?').run(
+    metaDb.prepare('UPDATE databases SET name = ?, description = ?, max_size_mb = ?, backup_schedule = ?, updated_at = ? WHERE id = ?').run(
       name,
       description,
       maxSizeMb || null,
+      backupSchedule || null,
       now,
       databaseId
     );
@@ -152,6 +174,7 @@ export class DatabaseService {
       name,
       description,
       max_size_mb: maxSizeMb || null,
+      backup_schedule: backupSchedule || null,
       updated_at: now,
     };
   }
@@ -197,11 +220,12 @@ export class DatabaseService {
     return true;
   }
 
-  public duplicateDatabase(sourceDatabaseId: string, newName: string): DatabaseRecord {
+  public duplicateDatabase(sourceDatabaseId: string, newName: string, ownerId?: string | null): DatabaseRecord {
     const source = this.getDatabase(sourceDatabaseId);
     if (!source) throw new Error(`Source database not found: ${sourceDatabaseId}`);
 
-    const newRecord = this.createDatabase(newName, `Duplicate of ${source.name}`);
+    const effectiveOwnerId = ownerId !== undefined ? ownerId : source.owner_id;
+    const newRecord = this.createDatabase(newName, `Duplicate of ${source.name}`, effectiveOwnerId, source.max_size_mb);
     dbManager.close(newRecord.id);
 
     const sourcePath = dbManager.resolveDatabasePath(sourceDatabaseId);

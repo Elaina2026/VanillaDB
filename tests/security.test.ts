@@ -1248,4 +1248,289 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
       }
     });
   });
+
+  // =========================================================================
+  // GROUP 10: ADVANCED DEFENSES (DDL SCOPE, DATA PLANE BOLA, CRON RBAC, QUOTAS)
+  // =========================================================================
+  describe('Group 10: Advanced Defenses & Vulnerability Regression Suite', () => {
+    let tenantXCookie: string;
+    let tenantXDbId: string;
+    let tenantYCookie: string;
+    let tenantYUserId: string;
+
+    beforeAll(async () => {
+      // 1. Setup Tenant X
+      const regX = await app.inject({
+        method: 'POST',
+        url: '/api/auth/register',
+        payload: { email: `reg_tx_${runId}@test.com`, username: `reg_tx_${runId}`, password: 'Password123!' },
+      });
+      tenantXCookie = `vdb_session=${regX.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+
+      const dbX = await app.inject({
+        method: 'POST',
+        url: '/api/admin/databases',
+        headers: { cookie: tenantXCookie },
+        payload: { name: `Tenant X Database ${runId}` },
+      });
+      tenantXDbId = dbX.json().data.id;
+
+      // 2. Setup Tenant Y
+      const regY = await app.inject({
+        method: 'POST',
+        url: '/api/auth/register',
+        payload: { email: `reg_ty_${runId}@test.com`, username: `reg_ty_${runId}`, password: 'Password123!' },
+      });
+      tenantYCookie = `vdb_session=${regY.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+      tenantYUserId = regY.json().data.user.id;
+    });
+
+    afterAll(async () => {
+      try {
+        if (tenantXDbId) databaseService.deleteDatabase(tenantXDbId);
+      } catch {}
+    });
+
+    it('Data Plane BOLA: Session cookie from Tenant Y cannot access Tenant X database via /v1/databases/:id', async () => {
+      // Query endpoint
+      const queryRes = await app.inject({
+        method: 'POST',
+        url: `/v1/databases/${tenantXDbId}/query`,
+        headers: { cookie: tenantYCookie },
+        payload: { sql: 'SELECT 1;' },
+      });
+      expect(queryRes.statusCode).toBe(403);
+      expect(queryRes.json().error.code).toBe('FORBIDDEN');
+
+      // Table rows endpoint
+      const rowsRes = await app.inject({
+        method: 'GET',
+        url: `/v1/databases/${tenantXDbId}/tables/_vdb_meta/rows`,
+        headers: { cookie: tenantYCookie },
+      });
+      expect(rowsRes.statusCode).toBe(403);
+      expect(rowsRes.json().error.code).toBe('FORBIDDEN');
+    });
+
+    it('Data Plane Viewer Restriction: Viewer session cookie cannot execute write operations', async () => {
+      // Invite Tenant Y as viewer to Tenant X database
+      await app.inject({
+        method: 'POST',
+        url: `/api/admin/databases/${tenantXDbId}/members`,
+        headers: { cookie: tenantXCookie },
+        payload: { emailOrUsername: `reg_ty_${runId}`, role: 'viewer' },
+      });
+
+      // Write via table rows endpoint
+      const insertRes = await app.inject({
+        method: 'POST',
+        url: `/v1/databases/${tenantXDbId}/tables/_vdb_meta/rows`,
+        headers: { cookie: tenantYCookie },
+        payload: { key: 'hacked', value: 'yes' },
+      });
+      expect(insertRes.statusCode).toBe(403);
+      expect(insertRes.json().error.code).toBe('FORBIDDEN');
+    });
+
+    it('DDL Scoping: Token with database:write cannot execute DDL statements (CREATE/ALTER/DROP)', async () => {
+      // Create a token with write only (no database:ddl, no database:admin)
+      const tokRes = await app.inject({
+        method: 'POST',
+        url: `/api/admin/databases/${tenantXDbId}/tokens`,
+        headers: { cookie: tenantXCookie },
+        payload: {
+          name: 'Write-Only Token',
+          permissions: ['database:read', 'database:write'],
+        },
+      });
+      expect(tokRes.statusCode).toBe(201);
+      const writeOnlyToken = tokRes.json().data.plainSecret;
+
+      // 1. CREATE TABLE via /query -> 403
+      const createRes = await app.inject({
+        method: 'POST',
+        url: `/v1/databases/${tenantXDbId}/query`,
+        headers: { authorization: `Bearer ${writeOnlyToken}` },
+        payload: { sql: 'CREATE TABLE forbidden_table (id INTEGER PRIMARY KEY);' },
+      });
+      expect(createRes.statusCode).toBe(403);
+      expect(createRes.json().error.message).toContain('DDL');
+
+      // 2. DROP TABLE via /batch -> 403
+      const batchRes = await app.inject({
+        method: 'POST',
+        url: `/v1/databases/${tenantXDbId}/batch`,
+        headers: { authorization: `Bearer ${writeOnlyToken}` },
+        payload: {
+          statements: [
+            { sql: 'DROP TABLE _vdb_meta;' },
+          ],
+        },
+      });
+      expect(batchRes.statusCode).toBe(403);
+      expect(batchRes.json().error.message).toContain('DDL');
+    });
+
+    it('Scheduled Jobs IDOR: Unauthorized user cannot modify, trigger, or delete foreign scheduled jobs', async () => {
+      // Tenant X creates a job
+      const createJob = await app.inject({
+        method: 'POST',
+        url: `/api/admin/databases/${tenantXDbId}/jobs`,
+        headers: { cookie: tenantXCookie },
+        payload: {
+          name: 'Hourly Cleanup',
+          cron_expression: '0 * * * *',
+          sql_query: 'SELECT 1;',
+          enabled: true,
+        },
+      });
+      expect(createJob.statusCode).toBe(201);
+      const jobId = createJob.json().data.id;
+
+      // Tenant Y attempts to modify job -> 403
+      const patchJob = await app.inject({
+        method: 'PATCH',
+        url: `/api/admin/jobs/${jobId}`,
+        headers: { cookie: tenantYCookie },
+        payload: { sql_query: 'DROP TABLE users;' },
+      });
+      expect(patchJob.statusCode).toBe(403);
+
+      // Tenant Y attempts to trigger job -> 403
+      const runJob = await app.inject({
+        method: 'POST',
+        url: `/api/admin/jobs/${jobId}/run`,
+        headers: { cookie: tenantYCookie },
+      });
+      expect(runJob.statusCode).toBe(403);
+
+      // Tenant Y attempts to delete job -> 403
+      const delJob = await app.inject({
+        method: 'DELETE',
+        url: `/api/admin/jobs/${jobId}`,
+        headers: { cookie: tenantYCookie },
+      });
+      expect(delJob.statusCode).toBe(403);
+    });
+
+    it('Database Quota Defense: Duplicating a database honors max_databases quota', async () => {
+      // Update Tenant Y's max_databases to 1 using super_admin session
+      const setQuota = await app.inject({
+        method: 'PATCH',
+        url: `/api/admin/users/${tenantYUserId}`,
+        headers: { cookie: adminCookie },
+        payload: { maxDatabases: 1 },
+      });
+      expect(setQuota.statusCode).toBe(200);
+
+      // Tenant Y creates 1 database (reaches their quota of 1)
+      const db1 = await app.inject({
+        method: 'POST',
+        url: '/api/admin/databases',
+        headers: { cookie: tenantYCookie },
+        payload: { name: `Tenant Y Primary DB ${runId}` },
+      });
+      expect(db1.statusCode).toBe(201);
+      const yDbId = db1.json().data.id;
+
+      // Tenant Y attempts to clone/duplicate the database -> rejected by quota
+      const cloneRes = await app.inject({
+        method: 'POST',
+        url: `/api/admin/databases/${yDbId}/clone`,
+        headers: { cookie: tenantYCookie },
+        payload: { name: `Tenant Y Cloned DB ${runId}` },
+      });
+      expect(cloneRes.statusCode).toBe(400);
+      expect(cloneRes.json().error.code).toBe('DATABASE_DUPLICATE_ERROR');
+      expect(cloneRes.json().error.message).toContain('Database creation limit reached');
+
+      // Clean up
+      try { databaseService.deleteDatabase(yDbId); } catch {}
+    });
+
+    it('Quota Escalation Defense: Regular user cannot set disk quota beyond platform default', async () => {
+      const patchRes = await app.inject({
+        method: 'PATCH',
+        url: `/api/admin/databases/${tenantXDbId}`,
+        headers: { cookie: tenantXCookie },
+        payload: { maxSizeMb: 999999 },
+      });
+      expect(patchRes.statusCode).toBe(403);
+      expect(patchRes.json().error.code).toBe('FORBIDDEN');
+    });
+
+    it('SSRF Defense: Webhook registration rejects non-HTTP/HTTPS protocols', async () => {
+      const gopherRes = await app.inject({
+        method: 'POST',
+        url: `/api/admin/databases/${tenantXDbId}/webhooks`,
+        headers: { cookie: tenantXCookie },
+        payload: {
+          name: 'SSRF Attack',
+          url: 'gopher://127.0.0.1:6379/_flushall',
+          events: ['insert'],
+        },
+      });
+      expect(gopherRes.statusCode).toBe(400);
+
+      const fileRes = await app.inject({
+        method: 'POST',
+        url: `/api/admin/databases/${tenantXDbId}/webhooks`,
+        headers: { cookie: tenantXCookie },
+        payload: {
+          name: 'File Protocol Attack',
+          url: 'file:///etc/passwd',
+          events: ['insert'],
+        },
+      });
+      expect(fileRes.statusCode).toBe(400);
+    });
+
+    it('Self-Demotion & Disabling Protection: Super admin cannot demote or disable themselves', async () => {
+      // 1. Get current super admin ID
+      const meRes = await app.inject({
+        method: 'GET',
+        url: '/api/auth/me',
+        headers: { cookie: adminCookie },
+      });
+      expect(meRes.statusCode).toBe(200);
+      const superAdminId = meRes.json().data.user.userId;
+
+      // 2. Try to demote self to user -> 400 CANNOT_DEMOTE_SELF
+      const demoteRes = await app.inject({
+        method: 'PATCH',
+        url: `/api/admin/users/${superAdminId}`,
+        headers: { cookie: adminCookie },
+        payload: { role: 'user' },
+      });
+      expect(demoteRes.statusCode).toBe(400);
+      expect(demoteRes.json().error.code).toBe('CANNOT_DEMOTE_SELF');
+
+      // 3. Try to disable self -> 400 CANNOT_DISABLE_SELF
+      const disableRes = await app.inject({
+        method: 'PATCH',
+        url: `/api/admin/users/${superAdminId}`,
+        headers: { cookie: adminCookie },
+        payload: { status: 'disabled' },
+      });
+      expect(disableRes.statusCode).toBe(400);
+      expect(disableRes.json().error.code).toBe('CANNOT_DISABLE_SELF');
+    });
+
+    it('Brute Force Defense: Auth endpoint rate limiting throttles excessive attempts', async () => {
+      let hitRateLimit = false;
+      for (let i = 0; i < 12; i++) {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/auth/login/2fa',
+          payload: { tempToken: 'fake_temp_token', code: '123456' },
+        });
+        if (res.statusCode === 429) {
+          hitRateLimit = true;
+          expect(res.json().error.code).toBe('RATE_LIMIT_EXCEEDED');
+          break;
+        }
+      }
+      expect(hitRateLimit).toBe(true);
+    });
+  });
 });

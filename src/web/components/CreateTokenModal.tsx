@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Key, Copy, Check, ShieldCheck, AlertCircle } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useI18n } from '../hooks/useI18n.js';
+import { useAuth } from '../hooks/useAuth.js';
 import type { TokenPermission } from '@shared/index.js';
 
 export const CreateTokenModal: React.FC<{
@@ -11,12 +12,13 @@ export const CreateTokenModal: React.FC<{
   onClose: () => void;
 }> = ({ isOpen, databaseId, onClose }) => {
   const { t } = useI18n();
+  const { user: currentUser } = useAuth();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [permissions, setPermissions] = useState<TokenPermission[]>(['database:read', 'database:write']);
   const [expiresInDays, setExpiresInDays] = useState<number | null>(null);
   const [rateLimit, setRateLimit] = useState<number | null>(null);
-  const [type, setType] = useState<'live' | 'test'>('live');
+  const [type] = useState<'live'>('live'); // Always live prefix, test prefix removed
 
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -212,46 +214,57 @@ export const CreateTokenModal: React.FC<{
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Expiration</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  {t('tokens.expiration', 'Expiration')}
+                </label>
                 <select
                   value={expiresInDays ?? ''}
                   onChange={(e) => setExpiresInDays(e.target.value ? parseInt(e.target.value, 10) : null)}
                   className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded-md"
                 >
-                  <option value="">Never</option>
-                  <option value="7">7 Days</option>
-                  <option value="30">30 Days</option>
-                  <option value="90">90 Days</option>
-                  <option value="365">1 Year</option>
+                  <option value="">{t('tokens.expNever', 'Never')}</option>
+                  <option value="7">7 {t('tokens.days', 'Days')}</option>
+                  <option value="30">30 {t('tokens.days', 'Days')}</option>
+                  <option value="90">90 {t('tokens.days', 'Days')}</option>
+                  <option value="365">1 {t('tokens.year', 'Year')}</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Rate Limit</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  {t('tokens.rateLimit', 'Rate Limit')}
+                </label>
                 <select
                   value={rateLimit ?? ''}
-                  onChange={(e) => setRateLimit(e.target.value ? parseInt(e.target.value, 10) : null)}
+                  onChange={(e) => {
+                    const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                    const maxRate = currentUser?.role === 'super_admin' ? 1000 : (currentUser?.rate_limit_per_minute || 180);
+                    setRateLimit(val ? Math.min(val, maxRate) : null);
+                  }}
                   className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded-md"
                 >
-                  <option value="">Unlimited</option>
-                  <option value="60">60 req/min</option>
-                  <option value="300">300 req/min</option>
-                  <option value="600">600 req/min</option>
-                  <option value="1200">1200 req/min</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Prefix</label>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value as any)}
-                  className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded-md"
-                >
-                  <option value="live">vdb_live_</option>
-                  <option value="test">vdb_test_</option>
+                  {(() => {
+                    const maxRate = currentUser?.role === 'super_admin' ? 1000 : (currentUser?.rate_limit_per_minute || 180);
+                    const baseOptions = [30, 60, 120, 180].filter((o) => o <= maxRate);
+                    if (!baseOptions.includes(maxRate) && maxRate > 0) {
+                      baseOptions.push(maxRate);
+                    }
+                    return (
+                      <>
+                        <option value="">{t('tokens.defaultRate', `Mặc định (${maxRate} req/phút)`)}</option>
+                        {baseOptions.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt} req/phút {opt === maxRate ? `(${t('tokens.maxRate', 'Tối đa')})` : ''}
+                          </option>
+                        ))}
+                        {currentUser?.role === 'super_admin' && (
+                          <option value="">{t('tokens.unlimited', 'Unlimited')}</option>
+                        )}
+                      </>
+                    );
+                  })()}
                 </select>
               </div>
             </div>

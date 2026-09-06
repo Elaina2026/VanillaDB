@@ -130,7 +130,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
     }
 
     if (recoveryMethod === 'backup' && recoveryBackupCode.trim().length < 8) {
-      setRecoveryStatus({ type: 'error', message: 'Mã dự phòng khôi phục phải có ít nhất 8 ký tự' });
+      setRecoveryStatus({ type: 'error', message: t('auth.backupCodeMinLength', 'Recovery backup code must be at least 8 characters') });
       return;
     }
 
@@ -183,7 +183,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
       if (!initialized) {
         // Setup flow
         if (password !== confirmPassword) {
-          throw new Error('Mật khẩu xác nhận không khớp');
+          throw new Error(t('auth.passwordMismatch', 'Confirmation password does not match'));
         }
         await apiRequest('/api/auth/setup', {
           method: 'POST',
@@ -193,7 +193,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
       } else if (authMode === 'register') {
         // Register flow
         if (password !== confirmPassword) {
-          throw new Error('Mật khẩu xác nhận không khớp');
+          throw new Error(t('auth.passwordMismatch', 'Confirmation password does not match'));
         }
         await apiRequest('/api/auth/register', {
           method: 'POST',
@@ -218,7 +218,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
         refetchStatus();
       }
     } catch (err: any) {
-      setError(err.message || 'Xác thực thất bại');
+      setError(err.message || t('auth.failed', 'Authentication failed'));
     } finally {
       setLoading(false);
     }
@@ -402,7 +402,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
                   }`}
                 >
                   <Smartphone className="w-3.5 h-3.5 text-blue-500" />
-                  <span>2FA OTP (6 số)</span>
+                  <span>{t('auth.methodTotpShort', '2FA OTP (6 digits)')}</span>
                 </button>
                 <button
                   type="button"
@@ -412,7 +412,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
                   }`}
                 >
                   <Key className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Mã dự phòng</span>
+                  <span>{t('auth.methodBackupShort', 'Backup Code')}</span>
                 </button>
               </div>
             </div>

@@ -7,6 +7,19 @@ import { I18nProvider } from './hooks/useI18n.js';
 import { App } from './App.js';
 import './index.css';
 
+// Defensive handler to suppress external extension/web-vitals startTime crashes
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (event) => {
+    if (
+      event.message?.includes("reading 'startTime'") ||
+      (event.error && typeof event.error === 'object' && 'message' in event.error && String(event.error.message).includes("reading 'startTime'"))
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

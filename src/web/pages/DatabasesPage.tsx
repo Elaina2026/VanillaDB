@@ -16,21 +16,22 @@ import {
   X,
   Share2,
   ShieldAlert,
-  SlidersHorizontal
+  SlidersHorizontal,
+  AlertTriangle
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatTimeAgo } from '../lib/utils.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
-import type { DatabaseRecord } from '@shared/index.js';
+import type { DatabaseRecord, UserDashboardStats } from '@shared/index.js';
 
 export const DatabasesPage: React.FC<{
   onSelectDatabase: (id: string) => void;
   onOpenCreateModal: () => void;
 }> = ({ onSelectDatabase, onOpenCreateModal }) => {
   const { user: currentUser } = useAuth();
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'mine' | 'shared'>('all');
   const [deletingDb, setDeletingDb] = useState<DatabaseRecord | null>(null);
@@ -40,6 +41,12 @@ export const DatabasesPage: React.FC<{
   const { data: databases = [], isLoading } = useQuery<DatabaseRecord[]>({
     queryKey: ['databases'],
     queryFn: () => apiRequest('/api/admin/databases'),
+  });
+
+  const { data: userStats } = useQuery<UserDashboardStats>({
+    queryKey: ['userDashboardStats'],
+    queryFn: () => apiRequest('/api/admin/user/dashboard'),
+    refetchInterval: 15000,
   });
 
   const deleteDbMutation = useMutation({
@@ -308,6 +315,13 @@ export const DatabasesPage: React.FC<{
                         {db.max_size_mb} MB
                       </span>
                     )}
+
+                    {userStats?.rateLimitWarnings?.some((w) => w.databaseId === db.id) && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-md font-semibold">
+                        <AlertTriangle className="w-2.5 h-2.5" />
+                        Rate limit
+                      </span>
+                    )}
                   </div>
 
                   {/* Description */}
@@ -320,7 +334,7 @@ export const DatabasesPage: React.FC<{
                 <div className="pt-3.5 border-t border-border mt-4 flex items-center justify-between text-[11px] text-muted-foreground">
                   <div className="flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
                     <Clock className="w-3 h-3 text-muted-foreground/70" />
-                    <span>{formatTimeAgo(db.last_accessed_at || db.created_at)}</span>
+                    <span>{formatTimeAgo(db.last_accessed_at || db.created_at, language)}</span>
                   </div>
 
                   <div className="flex items-center gap-2">

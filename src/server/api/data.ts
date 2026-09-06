@@ -82,7 +82,8 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     preHandler: [requireTokenPermission('database:read')],
   }, async (req, reply) => {
     const databaseId = req.databaseId!;
-    const token = req.apiToken!;
+    const token = req.apiToken;
+    const sessionUser = req.adminUser;
 
     const Schema = z.object({
       sql: z.string().min(1),
@@ -99,28 +100,42 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
     const trimmed = parsed.data.sql.trim();
     const isSelect = /^(SELECT|WITH|EXPLAIN|PRAGMA)\b/i.test(trimmed);
+    const isDdl = /^(CREATE|ALTER|DROP)\b/i.test(trimmed);
 
-    // If writing, verify token has write permission
-    const hasWrite = token.permissions.includes('database:admin') || token.permissions.includes('database:write') || token.permissions.includes('database:ddl');
-    if (!isSelect && !hasWrite) {
-      return reply.status(403).send({
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Token does not have write permissions', requestId: req.id },
-      });
+    // If writing or executing DDL with API token, enforce token scope
+    let hasWrite = true;
+    if (token) {
+      const hasAdmin = token.permissions.includes('database:admin');
+      const hasDdl = hasAdmin || token.permissions.includes('database:ddl');
+      hasWrite = hasAdmin || hasDdl || token.permissions.includes('database:write');
+
+      if (isDdl && !hasDdl) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Token does not have DDL (schema modification) permissions', requestId: req.id },
+        });
+      }
+
+      if (!isSelect && !hasWrite) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Token does not have write permissions', requestId: req.id },
+        });
+      }
     }
 
     const startTime = performance.now();
     try {
       const result = dbManager.executeSql(databaseId, parsed.data.sql, parsed.data.params, {
         readonly: !hasWrite,
-        allowedTables: token.allowed_tables,
-        deniedTables: token.denied_tables,
+        allowedTables: token?.allowed_tables || null,
+        deniedTables: token?.denied_tables || null,
       });
 
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
       activityService.recordActivity({
         databaseId,
-        tokenId: token.id,
+        tokenId: token?.id || `admin:${sessionUser?.username || 'user'}`,
         operation: 'SQL_QUERY',
         durationMs,
         status: 'success',
@@ -142,7 +157,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
       activityService.recordActivity({
         databaseId,
-        tokenId: token.id,
+        tokenId: token?.id || `admin:${sessionUser?.username || 'user'}`,
         operation: 'SQL_QUERY',
         durationMs,
         status: 'error',
@@ -165,7 +180,8 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     preHandler: [requireTokenPermission('database:write')],
   }, async (req, reply) => {
     const databaseId = req.databaseId!;
-    const token = req.apiToken!;
+    const token = req.apiToken;
+    const sessionUser = req.adminUser;
 
     const Schema = z.object({
       transaction: z.boolean().optional().default(true),
@@ -183,18 +199,31 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    if (token) {
+      const hasAdmin = token.permissions.includes('database:admin');
+      const hasDdl = hasAdmin || token.permissions.includes('database:ddl');
+      for (const stmt of parsed.data.statements) {
+        if (/^(CREATE|ALTER|DROP)\b/i.test(stmt.sql.trim()) && !hasDdl) {
+          return reply.status(403).send({
+            success: false,
+            error: { code: 'FORBIDDEN', message: 'Batch contains DDL statements but token lacks database:ddl permission', requestId: req.id },
+          });
+        }
+      }
+    }
+
     const startTime = performance.now();
     try {
       const result = dbManager.executeBatch(databaseId, parsed.data.statements, parsed.data.transaction, {
         readonly: false,
-        allowedTables: token.allowed_tables,
-        deniedTables: token.denied_tables,
+        allowedTables: token?.allowed_tables || null,
+        deniedTables: token?.denied_tables || null,
       });
 
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
       activityService.recordActivity({
         databaseId,
-        tokenId: token.id,
+        tokenId: token?.id || `admin:${sessionUser?.username || 'user'}`,
         operation: 'BATCH_QUERY',
         durationMs,
         status: 'success',
@@ -212,7 +241,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
       activityService.recordActivity({
         databaseId,
-        tokenId: token.id,
+        tokenId: token?.id || `admin:${sessionUser?.username || 'user'}`,
         operation: 'BATCH_QUERY',
         durationMs,
         status: 'error',

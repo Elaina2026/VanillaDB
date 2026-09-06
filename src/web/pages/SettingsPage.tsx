@@ -113,7 +113,7 @@ export const SettingsPage: React.FC = () => {
       setTimeout(() => setSaved(false), 3000);
     },
     onError: (err: any) => {
-      setSaveError(err.message || 'Lưu cài đặt thất bại');
+      setSaveError(err.message || t('settings.saveError', 'Failed to save system settings'));
       setTimeout(() => setSaveError(null), 4000);
     },
   });
@@ -162,7 +162,7 @@ export const SettingsPage: React.FC = () => {
       setGeneratedBackupCodes(codes);
       setIsBackupCodesModalOpen(true);
     } catch (err: any) {
-      setRegenerateStatus({ type: 'error', message: err.message || 'Tái tạo mã dự phòng thất bại' });
+      setRegenerateStatus({ type: 'error', message: err.message || t('settings.regenerateFailed', 'Failed to regenerate backup codes') });
     } finally {
       setIsRegenerating(false);
     }
@@ -686,7 +686,7 @@ export const SettingsPage: React.FC = () => {
           {disableSuccessNotice && (
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-lg text-xs flex items-center gap-2 animate-in fade-in duration-150">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>Đã tắt bảo mật 2 lớp (2FA) thành công cho tài khoản của bạn.</span>
+              <span>{t('settings.disable2faSuccess', 'Two-Factor Authentication (2FA) has been successfully disabled for your account.')}</span>
             </div>
           )}
 
@@ -1453,7 +1453,7 @@ export const SettingsPage: React.FC = () => {
                       className="px-2.5 py-1.5 bg-muted hover:bg-accent border border-border rounded text-[11px] font-medium text-foreground flex items-center gap-1 cursor-pointer"
                     >
                       {showCodesInSettings ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      <span>{showCodesInSettings ? 'Ẩn mã' : 'Xem mã'}</span>
+                      <span>{showCodesInSettings ? t('settings.hideCodes', 'Hide Codes') : t('settings.showCodes', 'Show Codes')}</span>
                     </button>
                     <button
                       type="button"
@@ -1473,7 +1473,7 @@ export const SettingsPage: React.FC = () => {
                 {/* Codes list / status pills */}
                 {isBackupCodesLoading ? (
                   <div className="text-center py-4 text-xs text-muted-foreground font-mono">
-                    Đang tải danh sách mã dự phòng...
+                    {t('settings.loadingBackupCodes', 'Loading backup codes...')}
                   </div>
                 ) : backupCodesData && backupCodesData.codes.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 font-mono text-xs">
@@ -1508,7 +1508,7 @@ export const SettingsPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="text-center py-3 text-xs text-muted-foreground">
-                    Chưa tìm thấy mã dự phòng. Bấm &quot;Tạo mã dự phòng mới&quot; để sinh 6 mã khôi phục.
+                    {t('settings.noBackupCodesFound', 'No backup codes found. Click "Regenerate Backup Codes" to generate 6 recovery codes.')}
                   </div>
                 )}
               </div>
@@ -1567,7 +1567,7 @@ export const SettingsPage: React.FC = () => {
                       onClick={() => setIsRegenerateModalOpen(false)}
                       className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded cursor-pointer"
                     >
-                      {t('common.cancel', 'Hủy')}
+                      {t('common.cancel', 'Cancel')}
                     </button>
                     <button
                       type="submit"
@@ -1575,7 +1575,7 @@ export const SettingsPage: React.FC = () => {
                       className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
-                      <span>{isRegenerating ? t('settings.regenerating', 'Đang tạo mới...') : t('settings.regenerateCodes', 'Tạo mã mới')}</span>
+                      <span>{isRegenerating ? t('settings.regenerating', 'Regenerating...') : t('settings.regenerateCodes', 'Regenerate Codes')}</span>
                     </button>
                   </div>
                 </form>

@@ -38,6 +38,8 @@ export interface DatabaseRecord {
   size_bytes?: number;
   owner_id?: string | null;
   owner_username?: string | null;
+  owner_avatar_url?: string | null;
+  backup_schedule?: 'inherit' | 'disabled' | 'hourly' | '6hours' | '12hours' | 'daily' | 'weekly' | null;
   access_role?: MemberRole;
   is_shared?: boolean;
   member_count?: number;
@@ -405,13 +407,23 @@ export interface DatabaseInviteRecord {
   expires_at: number;
 }
 
+export interface DatabaseRateLimitWarning {
+  databaseId: string;
+  databaseName: string;
+  currentCount: number;
+  limit: number;
+  percentage: number;
+}
+
 export interface UserDashboardStats {
   databasesCount: number;
   maxDatabases: number;
   sharedDatabasesCount: number;
   storageUsedBytes: number;
+  maxStorageMb?: number | null;
   activeTokensCount: number;
   recentActivity: ActivityRecord[];
+  rateLimitWarnings?: DatabaseRateLimitWarning[];
 }
 
 export interface MetricHistoryPoint {

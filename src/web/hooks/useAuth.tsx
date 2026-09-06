@@ -10,6 +10,7 @@ interface AuthUser {
   email?: string | null;
   avatar_url?: string | null;
   totp_enabled?: boolean;
+  rate_limit_per_minute?: number;
 }
 
 interface AuthContextType {

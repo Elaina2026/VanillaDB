@@ -48,10 +48,22 @@ export class BackupScheduler {
       }
 
       const metaDb = getMetadataDb();
-      const databases = metaDb.prepare('SELECT id, name FROM databases').all() as { id: string; name: string }[];
+      const databases = metaDb.prepare('SELECT id, name, backup_schedule FROM databases').all() as {
+        id: string;
+        name: string;
+        backup_schedule?: string | null;
+      }[];
 
       for (const db of databases) {
         try {
+          const effectiveSchedule = (db.backup_schedule && db.backup_schedule !== 'inherit')
+            ? db.backup_schedule
+            : settings.backup_schedule;
+
+          if (!effectiveSchedule || effectiveSchedule === 'disabled') {
+            continue;
+          }
+
           const lastBackup = metaDb.prepare(
             "SELECT created_at FROM database_backups WHERE database_id = ? AND backup_type = 'scheduled' ORDER BY created_at DESC LIMIT 1"
           ).get(db.id) as { created_at: number } | undefined;
@@ -63,11 +75,11 @@ export class BackupScheduler {
             shouldBackup = true;
           } else {
             const elapsedHours = (now - lastBackup.created_at) / (1000 * 60 * 60);
-            if (settings.backup_schedule === 'hourly' && elapsedHours >= 1) shouldBackup = true;
-            else if (settings.backup_schedule === '6hours' && elapsedHours >= 6) shouldBackup = true;
-            else if (settings.backup_schedule === '12hours' && elapsedHours >= 12) shouldBackup = true;
-            else if (settings.backup_schedule === 'daily' && elapsedHours >= 24) shouldBackup = true;
-            else if (settings.backup_schedule === 'weekly' && elapsedHours >= 168) shouldBackup = true;
+            if (effectiveSchedule === 'hourly' && elapsedHours >= 1) shouldBackup = true;
+            else if (effectiveSchedule === '6hours' && elapsedHours >= 6) shouldBackup = true;
+            else if (effectiveSchedule === '12hours' && elapsedHours >= 12) shouldBackup = true;
+            else if (effectiveSchedule === 'daily' && elapsedHours >= 24) shouldBackup = true;
+            else if (effectiveSchedule === 'weekly' && elapsedHours >= 168) shouldBackup = true;
           }
 
           if (shouldBackup) {

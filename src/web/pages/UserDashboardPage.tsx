@@ -18,7 +18,8 @@ import {
   QrCode,
   Copy,
   Check,
-  Download
+  Download,
+  AlertTriangle
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatDate } from '../lib/utils.js';
@@ -147,6 +148,11 @@ export const UserDashboardPage: React.FC<{
       ? Math.min(100, Math.round((stats.databasesCount / stats.maxDatabases) * 100))
       : 0;
 
+  const storagePercent =
+    stats?.maxStorageMb && stats.maxStorageMb > 0
+      ? Math.min(100, Math.round(((stats.storageUsedBytes ?? 0) / (stats.maxStorageMb * 1024 * 1024)) * 100))
+      : 0;
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6 select-none animate-in fade-in duration-150">
       {/* Personalized Welcome Banner */}
@@ -182,6 +188,28 @@ export const UserDashboardPage: React.FC<{
           <span>{t('userDashboard.createNewDb', 'Tạo Database mới')}</span>
         </button>
       </div>
+
+      {/* Rate Limit Warning Alerts */}
+      {stats?.rateLimitWarnings && stats.rateLimitWarnings.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 space-y-2 text-amber-700 dark:text-amber-300 animate-in fade-in">
+          <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+            <span>{t('userDashboard.rateLimitWarningTitle', 'Cảnh báo: Database sắp chạm ngưỡng Rate Limit')}</span>
+          </div>
+          <div className="text-xs space-y-1.5 pl-6">
+            {stats.rateLimitWarnings.map((w) => (
+              <div key={w.databaseId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 bg-amber-500/5 p-2 rounded border border-amber-500/20">
+                <span>
+                  <strong>{w.databaseName}</strong> ({w.currentCount}/{w.limit} req/phút • {w.percentage}%)
+                </span>
+                <span className="text-[10px] font-semibold bg-amber-500/20 px-2 py-0.5 rounded text-amber-600 dark:text-amber-400 self-start sm:self-auto">
+                  {t('userDashboard.rateLimitHighLoad', 'Sắp đạt giới hạn')}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Quota & Resource Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -226,8 +254,22 @@ export const UserDashboardPage: React.FC<{
             <span className="text-xs font-medium">{t('userDashboard.storageUsed', 'Dung lượng sử dụng')}</span>
             <HardDrive className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="text-2xl font-bold text-foreground">
-            {formatBytes(stats?.storageUsedBytes ?? 0)}
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-foreground">
+              {formatBytes(stats?.storageUsedBytes ?? 0)}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              / {stats?.maxStorageMb ? `${stats.maxStorageMb} MB` : '∞'}
+            </span>
+          </div>
+          {/* Progress bar */}
+          <div className="w-full bg-muted/60 h-1.5 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-300 ${
+                storagePercent > 80 ? 'bg-red-500' : 'bg-amber-500'
+              }`}
+              style={{ width: `${stats?.maxStorageMb ? storagePercent : 0}%` }}
+            />
           </div>
           <span className="text-[10px] text-muted-foreground block">
             {t('userDashboard.storageUsedDesc', 'Bao gồm file SQLite chính và WAL buffer')}
@@ -280,13 +322,19 @@ export const UserDashboardPage: React.FC<{
                   className="p-4 hover:bg-accent/40 transition-colors flex items-center justify-between cursor-pointer group"
                 >
                   <div className="min-w-0 flex-1 pr-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-bold text-foreground group-hover:text-blue-500 transition-colors truncate">
                         {db.name}
                       </span>
                       <span className="text-[10px] font-mono text-muted-foreground px-1.5 py-0.2 bg-muted rounded border border-border">
                         {db.id}
                       </span>
+                      {stats?.rateLimitWarnings?.some((w) => w.databaseId === db.id) && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/30 flex items-center gap-1">
+                          <AlertTriangle className="w-2.5 h-2.5" />
+                          Rate limit
+                        </span>
+                      )}
                     </div>
                     <p className="text-[11px] text-muted-foreground truncate mt-0.5">
                       {db.description || t('db.defaultDescription', 'SQLite DB with WAL mode')}

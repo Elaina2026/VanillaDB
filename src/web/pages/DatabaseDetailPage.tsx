@@ -70,7 +70,8 @@ import type {
   SqlWriteResult,
   ScheduledJobRecord,
   DatabaseMemberRecord,
-  DatabaseInviteRecord
+  DatabaseInviteRecord,
+  UserDashboardStats
 } from '@shared/index.js';
 
 export const DatabaseDetailPage: React.FC<{
@@ -81,7 +82,7 @@ export const DatabaseDetailPage: React.FC<{
   onOpenCreateToken: (dbId: string) => void;
 }> = ({ databaseId, initialTab = 'overview', onTabChange, onBack, onOpenCreateToken }) => {
   const { user: currentUser } = useAuth();
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'jobs' | 'backups' | 'members' | 'settings'>(initialTab);
   const queryClient = useQueryClient();
 
@@ -191,6 +192,13 @@ export const DatabaseDetailPage: React.FC<{
     enabled: activeTab === 'members' || activeTab === 'overview',
   });
 
+  const { data: userStats } = useQuery<UserDashboardStats>({
+    queryKey: ['userDashboardStats'],
+    queryFn: () => apiRequest('/api/admin/user/dashboard'),
+    refetchInterval: 15000,
+  });
+  const dbRateWarning = userStats?.rateLimitWarnings?.find((w) => w.databaseId === databaseId);
+
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmailOrUser, setInviteEmailOrUser] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'editor' | 'viewer'>('viewer');
@@ -233,6 +241,18 @@ export const DatabaseDetailPage: React.FC<{
       }),
     onSuccess: () => {
       refetchMembers();
+    },
+  });
+
+  const updateDbMutation = useMutation({
+    mutationFn: (payload: { backupSchedule?: string | null; name?: string; description?: string; maxSizeMb?: number | null }) =>
+      apiRequest(`/api/admin/databases/${databaseId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      refetchStats();
+      queryClient.invalidateQueries({ queryKey: ['databases'] });
     },
   });
 
@@ -847,6 +867,21 @@ export const DatabaseDetailPage: React.FC<{
 
       {/* Main Tab Content */}
       <div className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
+        {/* Active Rate Limit Warning Banner */}
+        {dbRateWarning && (
+          <div className="mb-5 max-w-7xl mx-auto bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 text-amber-700 dark:text-amber-300 flex items-center justify-between gap-3 animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+              <span className="text-xs font-semibold">
+                {t('db.rateLimitWarning', 'Cảnh báo: Database này đang có lưu lượng truy cập cao')} ({dbRateWarning.currentCount}/{dbRateWarning.limit} req/phút • {dbRateWarning.percentage}%), {t('db.rateLimitApproaching', 'sắp chạm ngưỡng giới hạn!')}
+              </span>
+            </div>
+            <span className="text-[10px] font-semibold bg-amber-500/20 px-2 py-0.5 rounded shrink-0 text-amber-600 dark:text-amber-400">
+              {t('db.highLoad', 'Tải cao')}
+            </span>
+          </div>
+        )}
+
         {/* OVERVIEW & FULL STATISTICAL DASHBOARD */}
         {activeTab === 'overview' && (
           <div className="max-w-7xl mx-auto space-y-6">
@@ -3318,9 +3353,9 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     <div className="text-[11px] text-muted-foreground flex items-center gap-3 mt-1.5">
                       <span>{t('tokens.permissions', 'Permissions')}: <strong className="text-foreground">{tok.permissions.join(', ')}</strong></span>
                       <span>•</span>
-                      <span>{t('tokens.lastUsed', 'Last used')}: {formatTimeAgo(tok.last_used_at)}</span>
+                      <span>{t('tokens.lastUsed', 'Last used')}: {formatTimeAgo(tok.last_used_at, language)}</span>
                       <span>•</span>
-                      <span>{t('common.created', 'Created At')}: {formatDate(tok.created_at)}</span>
+                      <span>{t('common.created', 'Created At')}: {formatDate(tok.created_at, language)}</span>
                     </div>
                   </div>
 
@@ -3498,6 +3533,44 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
         {/* BACKUPS TAB */}
         {activeTab === 'backups' && (
           <div className="max-w-5xl mx-auto space-y-4">
+            {/* Automated Backup Schedule Setting */}
+            <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-blue-500" />
+                    {t('backups.scheduleTitle', 'Lịch sao lưu tự động định kỳ')}
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {t('backups.scheduleDesc', 'Hệ thống tự động sao lưu theo thời gian cài đặt. Bạn có thể tùy chỉnh lịch riêng cho database này (không bắt buộc) hoặc dùng mặc định hệ thống.')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <select
+                    value={stats?.database.backup_schedule || 'inherit'}
+                    onChange={(e) => {
+                      updateDbMutation.mutate({ backupSchedule: e.target.value as any });
+                    }}
+                    disabled={updateDbMutation.isPending}
+                    className="px-2.5 py-1.5 bg-background border border-border rounded-md text-xs font-medium focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                  >
+                    <option value="inherit">{t('backups.schedInherit', 'Mặc định hệ thống')}</option>
+                    <option value="hourly">{t('backups.schedHourly', 'Hàng giờ (Hourly)')}</option>
+                    <option value="6hours">{t('backups.sched6hours', 'Mỗi 6 giờ')}</option>
+                    <option value="12hours">{t('backups.sched12hours', 'Mỗi 12 giờ')}</option>
+                    <option value="daily">{t('backups.schedDaily', 'Hàng ngày (Daily)')}</option>
+                    <option value="weekly">{t('backups.schedWeekly', 'Hàng tuần (Weekly)')}</option>
+                    <option value="disabled">{t('backups.schedDisabled', 'Vô hiệu hóa (Tắt sao lưu)')}</option>
+                  </select>
+                  {updateDbMutation.isPending && (
+                    <span className="text-[10px] text-muted-foreground animate-pulse">
+                      {t('common.saving', 'Đang lưu...')}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between pb-2">
               <div>
                 <h3 className="text-sm font-bold text-foreground">{t('backups.title', 'Database Backups & Snapshots')}</h3>
@@ -3908,8 +3981,18 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 {/* Database Owner Entry */}
                 <div className="p-4 flex items-center justify-between hover:bg-accent/20 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-blue-600/10 border border-blue-500/30 flex items-center justify-center font-bold text-blue-600 text-xs">
-                      {stats?.database.owner_username?.slice(0, 2).toUpperCase() || 'OW'}
+                    <div className="w-9 h-9 rounded-full overflow-hidden border border-border bg-muted/60 flex items-center justify-center font-bold text-xs shrink-0">
+                      {stats?.database.owner_avatar_url ? (
+                        <img
+                          src={stats.database.owner_avatar_url}
+                          alt={stats.database.owner_username || 'Owner'}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-blue-600/10 border border-blue-500/30 flex items-center justify-center font-bold text-blue-600 text-xs">
+                          {stats?.database.owner_username?.slice(0, 2).toUpperCase() || 'OW'}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -3938,7 +4021,9 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                           {member.avatar_url ? (
                             <img src={member.avatar_url} alt={member.username} className="w-full h-full object-cover" />
                           ) : (
-                            <User className="w-4 h-4 text-muted-foreground" />
+                            <div className="w-full h-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold text-xs">
+                              {member.username.slice(0, 2).toUpperCase()}
+                            </div>
                           )}
                         </div>
                         <div>
@@ -4066,7 +4151,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   required
                   value={inviteEmailOrUser}
                   onChange={(e) => setInviteEmailOrUser(e.target.value)}
-                  placeholder="user@example.com hoặc username"
+                  placeholder={t('members.emailOrUserPlaceholder', 'user@example.com or username')}
                   className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-blue-500"
                 />
                 <p className="text-[10px] text-muted-foreground mt-1">
