@@ -54,6 +54,20 @@ server {
 }
 ```
 
+### Caddy Reverse Proxy (Automatic HTTPS / Let's Encrypt)
+
+```caddy
+db.yourdomain.com {
+    # Automatic SSL/TLS certificate management
+    reverse_proxy 127.0.0.1:3000 {
+        header_up X-Forwarded-Proto https
+        header_up Host {host}
+        # SSE realtime support
+        flush_interval -1
+    }
+}
+```
+
 ---
 
 ## 3. Systemd Service Setup (Linux)

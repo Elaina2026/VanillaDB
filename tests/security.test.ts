@@ -1567,6 +1567,76 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
         },
       });
       expect(fileRes.statusCode).toBe(400);
+
+      // Loopback & Private LAN blocking
+      const loopbackRes = await app.inject({
+        method: 'POST',
+        url: `/api/admin/databases/${tenantXDbId}/webhooks`,
+        headers: { cookie: tenantXCookie },
+        payload: {
+          name: 'Loopback Attack',
+          url: 'http://127.0.0.1:8080/internal',
+          events: ['insert'],
+        },
+      });
+      expect(loopbackRes.statusCode).toBe(400);
+
+      const lanRes = await app.inject({
+        method: 'POST',
+        url: `/api/admin/databases/${tenantXDbId}/webhooks`,
+        headers: { cookie: tenantXCookie },
+        payload: {
+          name: 'Private LAN Attack',
+          url: 'http://192.168.1.1/admin',
+          events: ['insert'],
+        },
+      });
+      expect(lanRes.statusCode).toBe(400);
+
+      const metadataRes = await app.inject({
+        method: 'POST',
+        url: `/api/admin/databases/${tenantXDbId}/webhooks`,
+        headers: { cookie: tenantXCookie },
+        payload: {
+          name: 'Cloud Metadata Attack',
+          url: 'http://169.254.169.254/latest/meta-data/',
+          events: ['insert'],
+        },
+      });
+      expect(metadataRes.statusCode).toBe(400);
+    });
+
+    it('OWASP A05 Defense: Helmet enables Content-Security-Policy with Monaco CDN allowlist', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/auth/status',
+      });
+      expect(res.headers['content-security-policy']).toBeDefined();
+      const csp = res.headers['content-security-policy'] as string;
+      expect(csp).toContain('default-src');
+      expect(csp).toContain('cdn.jsdelivr.net');
+      expect(csp).toContain("frame-ancestors 'none'");
+    });
+
+    it('OWASP A02/A07 Defense: HTTPS requests receive cookies with Secure flag enabled', async () => {
+      const httpsUser = `https_user_${Date.now()}`;
+      const regHttps = await app.inject({
+        method: 'POST',
+        url: '/api/auth/register',
+        headers: {
+          'x-forwarded-proto': 'https',
+        },
+        payload: {
+          username: httpsUser,
+          email: `${httpsUser}@test.com`,
+          password: 'SecurePassword123!',
+        },
+      });
+      expect(regHttps.statusCode).toBe(201);
+      const sessionCookieHeader = regHttps.headers['set-cookie'];
+      const rawCookie = Array.isArray(sessionCookieHeader) ? sessionCookieHeader[0] : sessionCookieHeader;
+      expect(rawCookie).toContain('Secure');
+      expect(rawCookie).toContain('HttpOnly');
     });
 
     it('Self-Demotion & Disabling Protection: Super admin cannot demote or disable themselves', async () => {

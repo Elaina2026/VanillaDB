@@ -1,9 +1,50 @@
 import crypto from 'crypto';
+import net from 'net';
 import { nanoid } from 'nanoid';
 import { getMetadataDb } from '../db/metadata.js';
 import { logger } from '../utils/logger.js';
 import { realtimeService } from './realtime.js';
 import type { RealtimeEventPayload, WebhookRecord } from '../../../shared/index.js';
+
+function isPrivateOrLoopbackIp(ip: string): boolean {
+  if (net.isIPv4(ip)) {
+    const parts = ip.split('.').map(Number);
+    if (parts.length !== 4 || parts.some(n => isNaN(n) || n < 0 || n > 255)) return true;
+    const [b0, b1] = parts;
+    // 0.0.0.0/8 (broadcast / current network)
+    if (b0 === 0) return true;
+    // 10.0.0.0/8 (RFC 1918 private)
+    if (b0 === 10) return true;
+    // 127.0.0.0/8 (loopback)
+    if (b0 === 127) return true;
+    // 169.254.0.0/16 (link-local & AWS/GCP cloud metadata)
+    if (b0 === 169 && b1 === 254) return true;
+    // 172.16.0.0/12 (RFC 1918 private: 172.16.0.0 - 172.31.255.255)
+    if (b0 === 172 && b1 >= 16 && b1 <= 31) return true;
+    // 192.168.0.0/16 (RFC 1918 private)
+    if (b0 === 192 && b1 === 168) return true;
+    // 100.64.0.0/10 (carrier-grade NAT)
+    if (b0 === 100 && b1 >= 64 && b1 <= 127) return true;
+    // 224.0.0.0/4 (multicast) & 240.0.0.0/4 (reserved)
+    if (b0 >= 224) return true;
+    return false;
+  }
+  if (net.isIPv6(ip)) {
+    const norm = ip.toLowerCase();
+    if (norm === '::' || norm === '::1' || norm === '0:0:0:0:0:0:0:1' || norm === '0000:0000:0000:0000:0000:0000:0000:0001') return true;
+    // fe80::/10 (link-local)
+    if (/^fe[89ab]/i.test(norm)) return true;
+    // fc00::/7 (unique local)
+    if (/^f[cd]/i.test(norm)) return true;
+    // IPv4-mapped IPv6 (::ffff:127.0.0.1)
+    if (norm.startsWith('::ffff:')) {
+      const v4 = norm.replace('::ffff:', '');
+      return isPrivateOrLoopbackIp(v4);
+    }
+    return false;
+  }
+  return false;
+}
 
 export class WebhookService {
   private retryQueue: Array<{
@@ -58,16 +99,29 @@ export class WebhookService {
       if (u.protocol !== 'http:' && u.protocol !== 'https:') {
         return { safe: false, reason: 'Webhook URL must use HTTP or HTTPS protocol' };
       }
-      const host = u.hostname.toLowerCase();
-      // Block AWS/GCP/Azure/OpenStack link-local cloud metadata addresses
+      const rawHost = u.hostname.toLowerCase();
+      const host = rawHost.replace(/^\[|\]$/g, '');
+
+      // 1. Block known cloud metadata endpoints & local hostname aliases
       if (
+        host === 'localhost' ||
+        host.endsWith('.localhost') ||
+        host.endsWith('.local') ||
+        host.endsWith('.internal') ||
+        host.endsWith('.lan') ||
         host === '169.254.169.254' ||
         host === 'metadata.google.internal' ||
         host === 'instance-data' ||
         host === '100.100.100.200'
       ) {
-        return { safe: false, reason: 'Cloud metadata IP addresses are strictly forbidden' };
+        return { safe: false, reason: 'Private, local hostnames and cloud metadata endpoints are strictly forbidden' };
       }
+
+      // 2. Block private LAN & loopback IP addresses (IPv4 & IPv6)
+      if (isPrivateOrLoopbackIp(host)) {
+        return { safe: false, reason: 'Private network and loopback IP addresses are strictly forbidden' };
+      }
+
       return { safe: true };
     } catch {
       return { safe: false, reason: 'Invalid webhook URL format' };

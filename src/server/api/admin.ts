@@ -8,7 +8,7 @@ import { databaseService } from '../services/database.js';
 import { tokenService } from '../services/tokens.js';
 import { backupService } from '../services/backup.js';
 import { storageService } from '../services/storage.js';
-import { webhookService } from '../services/webhook.js';
+import { webhookService, WebhookService } from '../services/webhook.js';
 import { realtimeService } from '../services/realtime.js';
 import { activityService } from '../services/activity.js';
 import { authService } from '../services/auth.js';
@@ -1257,11 +1257,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const Schema = z.object({
       name: z.string().min(1).max(100),
       url: z.string().url().refine(
-        u => {
-          const check = webhookService.constructor as any;
-          return (u.startsWith('http://') || u.startsWith('https://')) && !u.includes('169.254.169.254') && !u.includes('metadata.google.internal');
-        },
-        'Webhook URL must use HTTP or HTTPS protocol and not target cloud metadata endpoints'
+        u => WebhookService.isSafeWebhookUrl(u).safe,
+        u => ({ message: WebhookService.isSafeWebhookUrl(u).reason || 'Webhook URL is forbidden or targets private network' })
       ),
       secret: z.string().optional(),
       events: z.array(z.string()).min(1),

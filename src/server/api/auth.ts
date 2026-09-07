@@ -36,6 +36,12 @@ function checkAuthRateLimit(ipOrId: string, maxAttempts = 10, windowMs = 60 * 10
   return entry.count <= maxAttempts;
 }
 
+export function isSecureCookie(req: any): boolean {
+  if (config.isProduction) return true;
+  const proto = req.headers?.['x-forwarded-proto'] || req.protocol;
+  return proto === 'https';
+}
+
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/status', async (req, reply) => {
     const hasAdmin = authService.hasAdminUser();
@@ -119,7 +125,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       reply.setCookie('vdb_session', cookieValue, {
         path: '/',
         httpOnly: true,
-        secure: config.isProduction,
+        secure: isSecureCookie(req),
         sameSite: 'lax',
         expires,
       });
@@ -186,7 +192,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     reply.setCookie('vdb_session', cookieValue, {
       path: '/',
       httpOnly: true,
-      secure: config.isProduction,
+      secure: isSecureCookie(req),
       sameSite: 'lax',
       expires,
     });
@@ -270,7 +276,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     reply.setCookie('vdb_session', cookieValue, {
       path: '/',
       httpOnly: true,
-      secure: config.isProduction,
+      secure: isSecureCookie(req),
       sameSite: 'lax',
       expires,
     });
@@ -406,7 +412,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     reply.setCookie('vdb_session', cookieValue, {
       path: '/',
       httpOnly: true,
-      secure: config.isProduction,
+      secure: isSecureCookie(req),
       sameSite: 'lax',
       expires,
     });
@@ -429,7 +435,12 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/logout', { preHandler: [requireAdminAuth] }, async (req, reply) => {
-    reply.clearCookie('vdb_session', { path: '/' });
+    reply.clearCookie('vdb_session', {
+      path: '/',
+      httpOnly: true,
+      secure: isSecureCookie(req),
+      sameSite: 'lax',
+    });
 
     if (req.adminUser) {
       activityService.recordAudit({
@@ -520,7 +531,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     reply.setCookie('vdb_session', cookieValue, {
       path: '/',
       httpOnly: true,
-      secure: config.isProduction,
+      secure: isSecureCookie(req),
       sameSite: 'lax',
       expires,
     });

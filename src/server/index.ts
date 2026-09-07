@@ -104,9 +104,48 @@ export async function buildApp() {
     }
   });
 
-  // Security headers (Helmet) - configured for compatibility with Monaco Editor CDN & plain HTTP / IP hostnames
+  // Security headers (Helmet) - OWASP compliant with strict CSP and Monaco CDN whitelist
   await app.register(helmet, {
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'", // Required for frontend inline suppression scripts and Vite runtime
+          "'unsafe-eval'",   // Required by Monaco Editor code runner & Web Workers
+          'https://cdn.jsdelivr.net',
+          'https://cdnjs.cloudflare.com',
+          'blob:',
+        ],
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          'https://cdn.jsdelivr.net',
+          'https://fonts.googleapis.com',
+        ],
+        fontSrc: [
+          "'self'",
+          'https://cdn.jsdelivr.net',
+          'https://fonts.gstatic.com',
+          'data:',
+        ],
+        imgSrc: [
+          "'self'",
+          'data:',
+          'blob:',
+          'https://vanilladatabase.elaina2026.io.vn',
+        ],
+        connectSrc: [
+          "'self'",
+          'blob:',
+          'https://cdn.jsdelivr.net',
+        ],
+        workerSrc: ["'self'", 'blob:'],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        frameAncestors: ["'none'"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
     crossOriginOpenerPolicy: false,
     originAgentCluster: false,

@@ -54,6 +54,20 @@ server {
 }
 ```
 
+### Cấu hình Caddy (Tự động cấp chứng chỉ HTTPS / Let's Encrypt)
+
+```caddy
+db.yourdomain.com {
+    # Tự động cấp và làm mới SSL/TLS
+    reverse_proxy 127.0.0.1:3000 {
+        header_up X-Forwarded-Proto https
+        header_up Host {host}
+        # Hỗ trợ SSE realtime streaming
+        flush_interval -1
+    }
+}
+```
+
 ---
 
 ## 3. Cấu hình Dịch vụ Systemd (Linux)
