@@ -133,7 +133,13 @@ export async function buildApp() {
           "'self'",
           'data:',
           'blob:',
-          'https://vanilladatabase.elaina2026.io.vn',
+          'https:', // Allow HTTPS external avatars, OAuth avatars, and database media assets
+        ],
+        mediaSrc: [
+          "'self'",
+          'data:',
+          'blob:',
+          'https:',
         ],
         connectSrc: [
           "'self'",
