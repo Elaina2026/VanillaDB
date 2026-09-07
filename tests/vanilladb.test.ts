@@ -1574,32 +1574,5 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     expect(auditCsv.headers['content-type']).toContain('text/csv');
     expect(auditCsv.body).toContain('ID,User,Action,Resource,Result');
   });
-
-  // 26. OpenAPI 3.0 Specification & Swagger UI Playground
-  it('should serve OpenAPI 3.0 specification at /v1/openapi.json and Swagger UI at /v1/docs', async () => {
-    // 1. OpenAPI Spec JSON
-    const specRes = await app.inject({
-      method: 'GET',
-      url: '/v1/openapi.json',
-    });
-    expect(specRes.statusCode).toBe(200);
-    const spec = specRes.json();
-    expect(spec.openapi).toBe('3.0.3');
-    expect(spec.info.title).toContain('VanillaDatabase');
-    expect(spec.paths['/v1/databases/{databaseId}/query']).toBeDefined();
-    expect(spec.paths['/v1/databases/{databaseId}/batch']).toBeDefined();
-    expect(spec.paths['/v1/databases/{databaseId}/tables/{table}/rows']).toBeDefined();
-    expect(spec.paths['/v1/databases/{databaseId}/realtime']).toBeDefined();
-
-    // 2. Swagger UI HTML
-    const docsRes = await app.inject({
-      method: 'GET',
-      url: '/v1/docs',
-    });
-    expect(docsRes.statusCode).toBe(200);
-    expect(docsRes.headers['content-type']).toContain('text/html');
-    expect(docsRes.body).toContain('swagger-ui');
-    expect(docsRes.body).toContain('/v1/openapi.json');
-  });
 });
 

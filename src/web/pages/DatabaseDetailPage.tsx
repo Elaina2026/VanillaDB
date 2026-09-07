@@ -3330,16 +3330,6 @@ export const DatabaseDetailPage: React.FC<{
                     {t('api.unifiedDesc', 'Single unified Database Base URL. All access rights (Query, Batch, Realtime SSE, Media Storage) are controlled directly via API Tokens.')}
                   </p>
                 </div>
-                <a
-                  href="/v1/docs"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors shrink-0 cursor-pointer self-start sm:self-auto"
-                  title="Swagger UI / OpenAPI Documentation"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>{t('api.swaggerPlayground', 'Interactive API Docs (/v1/docs)')}</span>
-                </a>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
