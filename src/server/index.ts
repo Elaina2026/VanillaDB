@@ -115,6 +115,7 @@ export async function buildApp() {
           "'unsafe-eval'",   // Required by Monaco Editor code runner & Web Workers
           'https://cdn.jsdelivr.net',
           'https://cdnjs.cloudflare.com',
+          'https://static.cloudflareinsights.com', // Cloudflare Web Analytics / Insights beacon
           'blob:',
         ],
         styleSrc: [
@@ -145,6 +146,7 @@ export async function buildApp() {
           "'self'",
           'blob:',
           'https://cdn.jsdelivr.net',
+          'https://cloudflareinsights.com',
         ],
         workerSrc: ["'self'", 'blob:'],
         objectSrc: ["'none'"],
