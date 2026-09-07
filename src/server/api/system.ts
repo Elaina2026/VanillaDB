@@ -1,17 +1,17 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { systemService } from '../services/system.js';
-import { requireAdminAuth, requireRole } from '../middleware/auth.js';
+import { requireRole } from '../middleware/auth.js';
 
 export const systemRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.addHook('preHandler', requireAdminAuth);
+  fastify.addHook('preHandler', requireRole(['super_admin', 'admin']));
 
   fastify.get('/settings', async (req, reply) => {
     const settings = systemService.getSettings();
     return reply.send({ success: true, data: settings });
   });
 
-  fastify.post('/settings', { preHandler: requireRole(['super_admin', 'admin']) }, async (req, reply) => {
+  fastify.post('/settings', async (req, reply) => {
     const Schema = z.object({
       instance_name: z.string().min(1).max(100).optional(),
       base_url: z.string().url().optional(),

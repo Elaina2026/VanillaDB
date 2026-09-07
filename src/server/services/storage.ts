@@ -15,10 +15,13 @@ export class StorageService {
       throw new Error('Database ID is required for storage path');
     }
     const sanitizedDbId = databaseId.replace(/[^a-zA-Z0-9_-]/g, '');
-    const dbDir = path.resolve(config.storageDir, sanitizedDbId);
+    if (!sanitizedDbId) {
+      throw new Error('Invalid database ID for storage path');
+    }
     const storageRoot = path.resolve(config.storageDir);
+    const dbDir = path.resolve(storageRoot, sanitizedDbId);
 
-    if (!dbDir.startsWith(storageRoot)) {
+    if (dbDir !== storageRoot && !dbDir.startsWith(storageRoot + path.sep)) {
       throw new Error('Invalid database storage directory path traversal');
     }
 
@@ -28,8 +31,11 @@ export class StorageService {
 
     if (filename) {
       const sanitizedFilename = path.basename(filename);
+      if (!sanitizedFilename || sanitizedFilename === '.' || sanitizedFilename === '..') {
+        throw new Error('Invalid filename for storage path');
+      }
       const filePath = path.resolve(dbDir, sanitizedFilename);
-      if (!filePath.startsWith(dbDir)) {
+      if (filePath !== dbDir && !filePath.startsWith(dbDir + path.sep)) {
         throw new Error('Invalid file path traversal');
       }
       return filePath;
@@ -47,58 +53,88 @@ export class StorageService {
   }): Promise<FileRecord> {
     const metaDb = getMetadataDb();
     const id = `file_${nanoid(16)}`;
-    const ext = path.extname(params.originalName);
+    const ext = path.extname(params.originalName || '').replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 16);
     const filename = `${id}${ext}`;
     const filePath = this.getStoragePath(params.databaseId, filename);
 
+    const maxSizeBytes = (config.maxImportMb || 1024) * 1024 * 1024;
+    let totalBytes = 0;
     const chunks: Buffer[] = [];
-    params.stream.on('data', (chunk: Buffer) => {
-      chunks.push(chunk);
-    });
+    const hash = crypto.createHash('sha256');
 
-    await new Promise((resolve, reject) => {
-      params.stream.on('end', resolve);
-      params.stream.on('error', reject);
-    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onData = (chunk: Buffer) => {
+          totalBytes += chunk.length;
+          if (totalBytes > maxSizeBytes) {
+            params.stream.destroy(new Error(`File exceeds maximum upload size limit`));
+            reject(new Error(`File exceeds maximum upload size limit`));
+            return;
+          }
+          chunks.push(chunk);
+          hash.update(chunk);
+        };
+        const onEnd = () => resolve();
+        const onError = (err: any) => reject(err);
+        const onClose = () => {
+          if (totalBytes === 0 && chunks.length === 0) {
+            reject(new Error('Upload stream closed prematurely'));
+          } else {
+            resolve();
+          }
+        };
 
-    const plainBuffer = Buffer.concat(chunks);
-    const sizeBytes = plainBuffer.length;
-    const checksum = crypto.createHash('sha256').update(plainBuffer).digest('hex');
+        params.stream.on('data', onData);
+        params.stream.once('end', onEnd);
+        params.stream.once('error', onError);
+        params.stream.once('close', onClose);
+      });
 
-    // Encrypt at rest
-    const encryptedBuffer = encryptBuffer(plainBuffer);
-    fs.writeFileSync(filePath, encryptedBuffer);
+      const plainBuffer = Buffer.concat(chunks);
+      chunks.length = 0; // release individual chunks to GC immediately
+      const sizeBytes = plainBuffer.length;
+      const checksum = hash.digest('hex');
 
-    const now = Date.now();
+      // Encrypt at rest
+      const encryptedBuffer = encryptBuffer(plainBuffer);
+      fs.writeFileSync(filePath, encryptedBuffer);
 
-    metaDb.prepare(`
-      INSERT INTO files (id, database_id, filename, original_name, mime_type, size_bytes, checksum, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      params.databaseId,
-      filename,
-      params.originalName,
-      params.mimeType || 'application/octet-stream',
-      sizeBytes,
-      checksum,
-      params.metadata || null,
-      now,
-      now
-    );
+      const now = Date.now();
 
-    return {
-      id,
-      database_id: params.databaseId,
-      filename,
-      original_name: params.originalName,
-      mime_type: params.mimeType || 'application/octet-stream',
-      size_bytes: sizeBytes,
-      checksum,
-      metadata: params.metadata || null,
-      created_at: now,
-      updated_at: now,
-    };
+      metaDb.prepare(`
+        INSERT INTO files (id, database_id, filename, original_name, mime_type, size_bytes, checksum, metadata, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        params.databaseId,
+        filename,
+        params.originalName,
+        params.mimeType || 'application/octet-stream',
+        sizeBytes,
+        checksum,
+        params.metadata || null,
+        now,
+        now
+      );
+
+      return {
+        id,
+        database_id: params.databaseId,
+        filename,
+        original_name: params.originalName,
+        mime_type: params.mimeType || 'application/octet-stream',
+        size_bytes: sizeBytes,
+        checksum,
+        metadata: params.metadata || null,
+        created_at: now,
+        updated_at: now,
+      };
+    } catch (err) {
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch {}
+      throw err;
+    }
   }
 
   public createFile(params: {
@@ -185,11 +221,13 @@ export class StorageService {
   }
 
   public deleteDatabaseFiles(databaseId: string): void {
+    if (!databaseId || typeof databaseId !== 'string') return;
     const sanitizedDbId = databaseId.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!sanitizedDbId) return;
     const storageRoot = path.resolve(config.storageDir);
-    const dbDir = path.resolve(config.storageDir, sanitizedDbId);
+    const dbDir = path.resolve(storageRoot, sanitizedDbId);
 
-    if (dbDir.startsWith(storageRoot) && dbDir !== storageRoot && fs.existsSync(dbDir)) {
+    if (dbDir !== storageRoot && dbDir.startsWith(storageRoot + path.sep) && fs.existsSync(dbDir)) {
       try {
         fs.rmSync(dbDir, { recursive: true, force: true });
       } catch {}

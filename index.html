@@ -31,6 +31,80 @@
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+
+    <!-- Global Error & Extension Crash Suppression Handler -->
+    <script>
+      (function() {
+        function shouldSuppress(err, msg) {
+          var str = '';
+          if (typeof err === 'string') str += err + ' ';
+          if (err && typeof err === 'object') {
+            str += (err.message || '') + ' ' + (err.stack || '') + ' ';
+          }
+          if (typeof msg === 'string') str += msg + ' ';
+          return (
+            str.indexOf("reading 'startTime'") !== -1 ||
+            str.indexOf("reading 'processingStart'") !== -1 ||
+            str.indexOf('reportAllChanges') !== -1
+          );
+        }
+
+        var prevOnError = window.onerror;
+        window.onerror = function(message, source, lineno, colno, error) {
+          if (shouldSuppress(error, message)) {
+            return true;
+          }
+          if (typeof prevOnError === 'function') {
+            return prevOnError.apply(this, arguments);
+          }
+          return false;
+        };
+
+        window.addEventListener(
+          'error',
+          function(event) {
+            if (shouldSuppress(event.error, event.message)) {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+              return true;
+            }
+          },
+          true
+        );
+
+        window.addEventListener(
+          'unhandledrejection',
+          function(event) {
+            if (shouldSuppress(event.reason, event.reason && event.reason.message)) {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+            }
+          },
+          true
+        );
+
+        if (typeof window.performance !== 'undefined') {
+          var origGetEntriesByType = window.performance.getEntriesByType;
+          if (typeof origGetEntriesByType === 'function') {
+            window.performance.getEntriesByType = function(type) {
+              try {
+                var list = origGetEntriesByType.call(window.performance, type);
+                if (Array.isArray(list)) {
+                  for (var i = 0; i < list.length; i++) {
+                    if (list[i] && typeof list[i].startTime === 'undefined') {
+                      list[i].startTime = 0;
+                    }
+                  }
+                }
+                return list;
+              } catch (e) {
+                return [];
+              }
+            };
+          }
+        }
+      })();
+    </script>
   </head>
   <body class="bg-background text-foreground antialiased selection:bg-blue-500 selection:text-white min-h-screen">
     <div id="root"></div>

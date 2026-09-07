@@ -20,6 +20,8 @@ import { SqlTranslator } from '../utils/sqlTranslator.js';
 import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
 import { TokenPermissionSchema, type MemberRole } from '../../../shared/index.js';
 
+const IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', requireAdminAuth);
 
@@ -323,9 +325,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id, table } = req.params as { id: string; table: string };
     const dbRecord = requireDatabaseAccess(req, reply, id, 'editor');
     if (!dbRecord) return;
-    const schema = dbManager.getSchema(id);
-    const tableExists = schema.some(t => t.name === table);
-    if (!tableExists) {
+
+    const tableInfo = dbManager.getTableInfo(id, table);
+    if (!tableInfo) {
       return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
     }
 
@@ -334,16 +336,17 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: { code: 'INVALID_PAYLOAD', message: 'JSON object required' } });
     }
 
+    const validCols = new Set(tableInfo.columns.map(c => c.name));
     const keys = Object.keys(row);
-    if (keys.length === 0) {
-      return reply.status(400).send({ success: false, error: { code: 'EMPTY_ROW', message: 'At least one column required' } });
+    if (keys.length === 0 || !keys.every(k => validCols.has(k))) {
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_COLUMNS', message: 'Invalid or unknown columns provided' } });
     }
 
-    const cols = keys.map(k => `"${k.replace(/"/g, '""')}"`).join(', ');
+    const cols = keys.map(k => dbManager.escapeIdentifier(k)).join(', ');
     const placeholders = keys.map(() => '?').join(', ');
     const values = Object.values(row);
 
-    const sql = `INSERT INTO "${table}" (${cols}) VALUES (${placeholders})`;
+    const sql = `INSERT INTO ${dbManager.escapeIdentifier(tableInfo.name)} (${cols}) VALUES (${placeholders})`;
 
     try {
       const startTime = performance.now();
@@ -353,7 +356,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       activityService.recordActivity({
         databaseId: id,
         tokenId: `admin:${req.adminUser!.username}`,
-        operation: `INSERT_ROW:${table}`,
+        operation: `INSERT_ROW:${tableInfo.name}`,
         durationMs,
         status: 'success',
         rowCount: 1,
@@ -361,7 +364,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
       realtimeService.emitEvent({
         databaseId: id,
-        table,
+        table: tableInfo.name,
         type: 'insert',
         data: { row, result },
         timestamp: Date.now(),
@@ -381,6 +384,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id, table } = req.params as { id: string; table: string };
     const dbRecord = requireDatabaseAccess(req, reply, id, 'editor');
     if (!dbRecord) return;
+
+    const tableInfo = dbManager.getTableInfo(id, table);
+    if (!tableInfo) {
+      return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
+    }
+
     const Schema = z.object({
       pkCol: z.string(),
       pkVal: z.any(),
@@ -392,13 +401,18 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const { pkCol, pkVal, values } = parsed.data;
-    const updateKeys = Object.keys(values);
-    if (updateKeys.length === 0) {
-      return reply.status(400).send({ success: false, error: { code: 'EMPTY_UPDATE', message: 'No values to update' } });
+    const validCols = new Set(tableInfo.columns.map(c => c.name));
+    if (!validCols.has(pkCol)) {
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_PK_COLUMN', message: `Column "${pkCol}" not found in table` } });
     }
 
-    const setClauses = updateKeys.map(k => `"${k.replace(/"/g, '""')}" = ?`).join(', ');
-    const sql = `UPDATE "${table}" SET ${setClauses} WHERE "${pkCol.replace(/"/g, '""')}" = ?`;
+    const updateKeys = Object.keys(values);
+    if (updateKeys.length === 0 || !updateKeys.every(k => validCols.has(k))) {
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_COLUMNS', message: 'Invalid update columns' } });
+    }
+
+    const setClauses = updateKeys.map(k => `${dbManager.escapeIdentifier(k)} = ?`).join(', ');
+    const sql = `UPDATE ${dbManager.escapeIdentifier(tableInfo.name)} SET ${setClauses} WHERE ${dbManager.escapeIdentifier(pkCol)} = ?`;
     const params = [...Object.values(values), pkVal];
 
     try {
@@ -409,7 +423,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       activityService.recordActivity({
         databaseId: id,
         tokenId: `admin:${req.adminUser!.username}`,
-        operation: `UPDATE_ROW:${table}`,
+        operation: `UPDATE_ROW:${tableInfo.name}`,
         durationMs,
         status: 'success',
         rowCount: (result as any).changes || 1,
@@ -417,7 +431,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
       realtimeService.emitEvent({
         databaseId: id,
-        table,
+        table: tableInfo.name,
         type: 'update',
         data: { pkCol, pkVal, values, result },
         timestamp: Date.now(),
@@ -437,6 +451,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id, table } = req.params as { id: string; table: string };
     const dbRecord = requireDatabaseAccess(req, reply, id, 'editor');
     if (!dbRecord) return;
+
+    const tableInfo = dbManager.getTableInfo(id, table);
+    if (!tableInfo) {
+      return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
+    }
+
     const Schema = z.object({
       pkCol: z.string(),
       pkValues: z.array(z.any()).min(1),
@@ -447,8 +467,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const { pkCol, pkValues } = parsed.data;
+    const validCols = new Set(tableInfo.columns.map(c => c.name));
+    if (!validCols.has(pkCol)) {
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_PK_COLUMN', message: `Column "${pkCol}" not found in table` } });
+    }
+
     const placeholders = pkValues.map(() => '?').join(', ');
-    const sql = `DELETE FROM "${table}" WHERE "${pkCol.replace(/"/g, '""')}" IN (${placeholders})`;
+    const sql = `DELETE FROM ${dbManager.escapeIdentifier(tableInfo.name)} WHERE ${dbManager.escapeIdentifier(pkCol)} IN (${placeholders})`;
 
     try {
       const startTime = performance.now();
@@ -458,7 +483,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       activityService.recordActivity({
         databaseId: id,
         tokenId: `admin:${req.adminUser!.username}`,
-        operation: `DELETE_ROWS:${table}`,
+        operation: `DELETE_ROWS:${tableInfo.name}`,
         durationMs,
         status: 'success',
         rowCount: (result as any).changes || pkValues.length,
@@ -466,7 +491,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
       realtimeService.emitEvent({
         databaseId: id,
-        table,
+        table: tableInfo.name,
         type: 'delete',
         data: { pkCol, pkValues, count: (result as any).changes || pkValues.length },
         timestamp: Date.now(),
@@ -486,16 +511,28 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id, table } = req.params as { id: string; table: string };
     const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
     if (!dbRecord) return;
-    const Schema = z.object({ newName: z.string().min(1).max(100) });
+
+    const tableInfo = dbManager.getTableInfo(id, table);
+    if (!tableInfo) {
+      return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
+    }
+
+    const Schema = z.object({
+      newName: z.string().min(1).max(100).regex(IDENTIFIER_REGEX, 'Identifier must be alphanumeric/underscores'),
+    });
     const parsed = Schema.safeParse(req.body);
     if (!parsed.success) {
-      return reply.status(400).send({ success: false, error: { code: 'INVALID_PAYLOAD', message: 'newName is required' } });
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_NAME', message: parsed.error.issues[0]?.message || 'Invalid newName' } });
     }
 
     const newName = parsed.data.newName.trim();
-    const sql = `ALTER TABLE "${table}" RENAME TO "${newName.replace(/"/g, '""')}"`;
+    if (dbManager.getTableInfo(id, newName)) {
+      return reply.status(409).send({ success: false, error: { code: 'TABLE_ALREADY_EXISTS', message: `Target table "${newName}" already exists` } });
+    }
+
+    const sql = `ALTER TABLE ${dbManager.escapeIdentifier(tableInfo.name)} RENAME TO ${dbManager.escapeIdentifier(newName)}`;
     try {
-      dbManager.executeMultiStatements(id, sql);
+      dbManager.executeSql(id, sql);
 
       activityService.recordAudit({
         user: req.adminUser!.username,
@@ -503,14 +540,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         resource: id,
         result: 'success',
         requestId: req.id,
-        details: JSON.stringify({ oldName: table, newName }),
+        details: JSON.stringify({ oldName: tableInfo.name, newName }),
       });
 
       realtimeService.emitEvent({
         databaseId: id,
         type: 'schema',
         table: newName,
-        data: { action: 'rename', oldName: table, newName },
+        data: { action: 'rename', oldName: tableInfo.name, newName },
         timestamp: Date.now(),
       });
 
@@ -528,7 +565,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id, table } = req.params as { id: string; table: string };
     const dbRecord = requireDatabaseAccess(req, reply, id, 'editor');
     if (!dbRecord) return;
-    const sql = `DELETE FROM "${table}"`;
+
+    const tableInfo = dbManager.getTableInfo(id, table);
+    if (!tableInfo) {
+      return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
+    }
+
+    const sql = `DELETE FROM ${dbManager.escapeIdentifier(tableInfo.name)}`;
     try {
       const startTime = performance.now();
       const result = dbManager.executeSql(id, sql);
@@ -537,7 +580,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       activityService.recordActivity({
         databaseId: id,
         tokenId: `admin:${req.adminUser!.username}`,
-        operation: `TRUNCATE_TABLE:${table}`,
+        operation: `TRUNCATE_TABLE:${tableInfo.name}`,
         durationMs,
         status: 'success',
       });
@@ -548,14 +591,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         resource: id,
         result: 'success',
         requestId: req.id,
-        details: JSON.stringify({ table }),
+        details: JSON.stringify({ table: tableInfo.name }),
       });
 
       realtimeService.emitEvent({
         databaseId: id,
-        table,
+        table: tableInfo.name,
         type: 'delete',
-        data: { action: 'truncate', table },
+        data: { action: 'truncate', table: tableInfo.name },
         timestamp: Date.now(),
       });
 
@@ -573,9 +616,15 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id, table } = req.params as { id: string; table: string };
     const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
     if (!dbRecord) return;
-    const sql = `DROP TABLE IF EXISTS "${table}"`;
+
+    const tableInfo = dbManager.getTableInfo(id, table);
+    if (!tableInfo) {
+      return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
+    }
+
+    const sql = `DROP TABLE ${dbManager.escapeIdentifier(tableInfo.name)}`;
     try {
-      dbManager.executeMultiStatements(id, sql);
+      dbManager.executeSql(id, sql);
 
       activityService.recordAudit({
         user: req.adminUser!.username,
@@ -583,14 +632,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         resource: id,
         result: 'success',
         requestId: req.id,
-        details: JSON.stringify({ table }),
+        details: JSON.stringify({ table: tableInfo.name }),
       });
 
       realtimeService.emitEvent({
         databaseId: id,
         type: 'schema',
-        table,
-        data: { action: 'drop', table },
+        table: tableInfo.name,
+        data: { action: 'drop', table: tableInfo.name },
         timestamp: Date.now(),
       });
 
@@ -1046,9 +1095,30 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = req.params as { id: string };
     const dbRecord = requireDatabaseAccess(req, reply, id, 'editor');
     if (!dbRecord) return;
+
+    if (dbRecord.max_size_mb && dbRecord.max_size_mb > 0) {
+      const stats = databaseService.getDatabaseStorageStats(id);
+      const limitBytes = dbRecord.max_size_mb * 1024 * 1024;
+      if (stats.totalSizeBytes >= limitBytes) {
+        return reply.status(413).send({
+          success: false,
+          error: { code: 'STORAGE_QUOTA_EXCEEDED', message: `Database storage quota of ${dbRecord.max_size_mb}MB exceeded` }
+        });
+      }
+    }
+
     const data = await req.file();
     if (!data) {
       return reply.status(400).send({ success: false, error: { code: 'NO_FILE', message: 'Multipart file field required' } });
+    }
+
+    const ext = path.extname(data.filename || '').toLowerCase();
+    const dangerousExts = new Set(['.html', '.htm', '.xhtml', '.exe', '.sh', '.bat', '.cmd', '.php', '.js', '.mjs', '.vbs']);
+    if (dangerousExts.has(ext)) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'FORBIDDEN_FILE_TYPE', message: 'Direct executable and active script files are forbidden' }
+      });
     }
 
     const metadata = (data.fields?.metadata as any)?.value || null;
@@ -1481,16 +1551,37 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       const rows = lines.slice(1).map(l => l.split(',').map(v => v.trim().replace(/^"|"$/g, '')));
       const db = dbManager.get(id);
 
+      if (headers.length === 0 || !headers.every(h => IDENTIFIER_REGEX.test(h))) {
+        return reply.status(400).send({ success: false, error: { code: 'INVALID_HEADER_NAMES', message: 'CSV headers must be alphanumeric identifiers' } });
+      }
+
       let effectiveTable = targetTable;
-      if (!effectiveTable) {
+      if (effectiveTable) {
+        if (!IDENTIFIER_REGEX.test(effectiveTable)) {
+          return reply.status(400).send({ success: false, error: { code: 'INVALID_TABLE_NAME', message: 'Invalid target table name' } });
+        }
+      } else {
         effectiveTable = filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
-        const colsDef = headers.map(h => `"${h.replace(/"/g, '""')}" TEXT`).join(', ');
-        db.exec(`CREATE TABLE IF NOT EXISTS "${effectiveTable.replace(/"/g, '""')}" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, ${colsDef});`);
+        if (!IDENTIFIER_REGEX.test(effectiveTable)) {
+          effectiveTable = `import_${Date.now()}`;
+        }
+      }
+
+      const existingTable = dbManager.getTableInfo(id, effectiveTable);
+      if (!existingTable) {
+        const colsDef = headers.map(h => `${dbManager.escapeIdentifier(h)} TEXT`).join(', ');
+        db.exec(`CREATE TABLE IF NOT EXISTS ${dbManager.escapeIdentifier(effectiveTable)} ("id" INTEGER PRIMARY KEY AUTOINCREMENT, ${colsDef});`);
+      } else {
+        const validCols = new Set(existingTable.columns.map(c => c.name));
+        if (!headers.every(h => validCols.has(h))) {
+          return reply.status(400).send({ success: false, error: { code: 'INVALID_COLUMNS', message: 'CSV columns do not match target table schema' } });
+        }
+        effectiveTable = existingTable.name;
       }
 
       const placeholders = headers.map(() => '?').join(', ');
-      const cols = headers.map(h => `"${h.replace(/"/g, '""')}"`).join(', ');
-      const stmt = db.prepare(`INSERT INTO "${effectiveTable.replace(/"/g, '""')}" (${cols}) VALUES (${placeholders})`);
+      const cols = headers.map(h => dbManager.escapeIdentifier(h)).join(', ');
+      const stmt = db.prepare(`INSERT INTO ${dbManager.escapeIdentifier(effectiveTable)} (${cols}) VALUES (${placeholders})`);
 
       db.exec('BEGIN TRANSACTION;');
       try {

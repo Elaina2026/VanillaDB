@@ -347,6 +347,11 @@ export interface SystemStatus {
     heapUsed: number;
     external: number;
   };
+  diskSpace?: {
+    totalBytes: number;
+    freeBytes: number;
+    availableBytes: number;
+  };
   securityDiagnostics?: {
     atRestEncryptionActive: boolean;
     encryptionAlgorithm: string;

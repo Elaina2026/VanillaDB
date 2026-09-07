@@ -39,6 +39,7 @@ export class SystemService {
     mediaStorageBytes: 0,
     totalStorageBytes: 0,
   };
+  private cachedDiskSpace?: { totalBytes: number; freeBytes: number; availableBytes: number };
 
   // CPU measurement anchor
   private lastCpuUsage = process.cpuUsage();
@@ -60,10 +61,14 @@ export class SystemService {
       let walStorageBytes = 0;
 
       for (const db of dbs) {
-        const dbPath = path.resolve(config.databasesDir, db.filename);
-        if (fs.existsSync(dbPath)) databaseStorageBytes += fs.statSync(dbPath).size;
-        const walPath = `${dbPath}-wal`;
-        if (fs.existsSync(walPath)) walStorageBytes += fs.statSync(walPath).size;
+        try {
+          const dbPath = path.resolve(config.databasesDir, db.filename);
+          if (fs.existsSync(dbPath)) databaseStorageBytes += fs.statSync(dbPath).size;
+          const walPath = `${dbPath}-wal`;
+          if (fs.existsSync(walPath)) walStorageBytes += fs.statSync(walPath).size;
+        } catch {
+          // Ignore individual file stat error (concurrent deletion/lock)
+        }
       }
 
       // Aggregate backup and media file sizes from SQLite metadata tables (fast, non-blocking)
@@ -81,6 +86,18 @@ export class SystemService {
         mediaStorageBytes,
         totalStorageBytes,
       };
+
+      // Host disk storage via native fs.statfsSync
+      // ponytail: native fs.statfsSync; add OS-specific WMI/df fallback when running on virtualized network mounts without statfs support.
+      if (typeof fs.statfsSync === 'function') {
+        const stat = fs.statfsSync(config.dataDir);
+        const bsize = Number(stat.bsize);
+        this.cachedDiskSpace = {
+          totalBytes: bsize * Number(stat.blocks),
+          freeBytes: bsize * Number(stat.bfree),
+          availableBytes: bsize * Number(stat.bavail),
+        };
+      }
     } catch (err) {
       logger.warn({ err }, 'Failed to refresh storage cache');
     }
@@ -410,6 +427,24 @@ export class SystemService {
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
 
+    // Host disk storage via cached fs.statfsSync (or fallback on startup)
+    // ponytail: native fs.statfsSync; add OS-specific WMI/df fallback when running on virtualized network mounts without statfs support.
+    let diskSpace = this.cachedDiskSpace;
+    if (!diskSpace && typeof fs.statfsSync === 'function') {
+      try {
+        const stat = fs.statfsSync(config.dataDir);
+        const bsize = Number(stat.bsize);
+        diskSpace = {
+          totalBytes: bsize * Number(stat.blocks),
+          freeBytes: bsize * Number(stat.bfree),
+          availableBytes: bsize * Number(stat.bavail),
+        };
+        this.cachedDiskSpace = diskSpace;
+      } catch {
+        // Ignore if statfsSync fails
+      }
+    }
+
     return {
       version: '1.3.2',
       nodeVersion: process.version,
@@ -439,6 +474,7 @@ export class SystemService {
         heapUsed: mem.heapUsed,
         external: mem.external,
       },
+      diskSpace,
       securityDiagnostics: {
         atRestEncryptionActive: true,
         encryptionAlgorithm: 'AES-256-GCM (Authenticated)',

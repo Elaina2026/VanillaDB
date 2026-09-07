@@ -1453,5 +1453,69 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     // Cleanup temp DB
     databaseService.deleteDatabase(tempDb.id);
   });
+
+  // 23. System Status & Host Disk Space Telemetry
+  it('should return system status with host disk space telemetry for super_admin and reject non-admin users', async () => {
+    // Super admin access
+    const statusRes = await app.inject({
+      method: 'GET',
+      url: '/api/system/status',
+      headers: { cookie: adminCookie },
+    });
+    expect(statusRes.statusCode).toBe(200);
+    const data = statusRes.json().data;
+    expect(data.version).toBe('1.3.2');
+    expect(data.databaseCount).toBeGreaterThanOrEqual(1);
+    expect(data.osMemory.total).toBeGreaterThan(0);
+    if (data.diskSpace) {
+      expect(data.diskSpace.totalBytes).toBeGreaterThan(0);
+      expect(data.diskSpace.freeBytes).toBeGreaterThanOrEqual(0);
+    }
+
+    // Settings endpoint super_admin access
+    const settingsRes = await app.inject({
+      method: 'GET',
+      url: '/api/system/settings',
+      headers: { cookie: adminCookie },
+    });
+    expect(settingsRes.statusCode).toBe(200);
+
+    // Create a regular user to verify system endpoint guards
+    const regRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        email: `reguser_${Date.now()}@vanilladb.test`,
+        username: `reguser_${Date.now()}`,
+        password: 'Password123!',
+      },
+    });
+    expect(regRes.statusCode).toBe(201);
+    const regularCookie = `vdb_session=${regRes.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+
+    // Non-admin user must receive 403 on /api/system/status
+    const userStatusRes = await app.inject({
+      method: 'GET',
+      url: '/api/system/status',
+      headers: { cookie: regularCookie },
+    });
+    expect(userStatusRes.statusCode).toBe(403);
+
+    // Non-admin user must receive 403 on /api/system/settings
+    const userSettingsRes = await app.inject({
+      method: 'GET',
+      url: '/api/system/settings',
+      headers: { cookie: regularCookie },
+    });
+    expect(userSettingsRes.statusCode).toBe(403);
+
+    // Non-admin user must receive 403 on /api/system/metrics
+    const userMetricsRes = await app.inject({
+      method: 'GET',
+      url: '/api/system/metrics',
+      headers: { cookie: regularCookie },
+    });
+    expect(userMetricsRes.statusCode).toBe(403);
+  });
 });
 

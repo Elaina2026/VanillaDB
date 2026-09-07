@@ -94,8 +94,13 @@ export const OverviewPage: React.FC<{
             <span className="text-xs font-semibold uppercase tracking-wider">{t('overview.activeDatabases', 'Active Databases')}</span>
             <Database className="w-4 h-4 text-blue-500" />
           </div>
-          <div className="text-2xl font-bold tracking-tight text-foreground">
-            {status?.databaseCount ?? databases.length}
+          <div className="text-2xl font-bold tracking-tight text-foreground flex items-baseline gap-1.5">
+            <span>{status?.databaseCount ?? databases.length}</span>
+            {currentUser?.role === 'super_admin' && (
+              <span className="text-sm font-normal text-muted-foreground">
+                / {t('overview.unlimited', 'Unlimited')}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-2 text-[11px] text-muted-foreground">
             <span className="text-emerald-500 font-semibold flex items-center">
@@ -124,8 +129,13 @@ export const OverviewPage: React.FC<{
             <span className="text-xs font-semibold uppercase tracking-wider">{t('overview.totalStorage', 'Total Storage')}</span>
             <HardDrive className="w-4 h-4 text-purple-500" />
           </div>
-          <div className="text-2xl font-bold tracking-tight text-foreground">
-            {formatBytes(totalStorage)}
+          <div className="text-2xl font-bold tracking-tight text-foreground flex items-baseline gap-1.5">
+            <span>{formatBytes(totalStorage)}</span>
+            {currentUser?.role === 'super_admin' && status?.diskSpace?.totalBytes ? (
+              <span className="text-sm font-normal text-muted-foreground">
+                / {formatBytes(status.diskSpace.totalBytes)}
+              </span>
+            ) : null}
           </div>
           <div className="flex items-center gap-1.5 mt-2 text-[11px] text-muted-foreground">
             <span>{t('overview.storageBreakdown', 'DBs, WAL, Media & Backups')}</span>

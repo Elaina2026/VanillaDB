@@ -37,7 +37,7 @@ export const CreateTokenModal: React.FC<{
       setCreatedSecret(data.plainSecret);
     },
     onError: (err: any) => {
-      setError(err.message || 'Failed to create token');
+      setError(err.message || t('tokens.createError', 'Failed to create token'));
     },
   });
 
@@ -89,7 +89,7 @@ export const CreateTokenModal: React.FC<{
           <div className="flex items-center gap-2">
             <Key className="w-4 h-4 text-blue-500" />
             <h2 className="text-sm font-bold">
-              {createdSecret ? 'API Token Generated' : 'Create API Token'}
+              {createdSecret ? t('tokens.generatedTitle', 'API Token Generated') : t('tokens.createToken', 'Create API Token')}
             </h2>
           </div>
           <button onClick={handleClose} className="p-1 hover:bg-accent rounded text-muted-foreground">
@@ -102,15 +102,17 @@ export const CreateTokenModal: React.FC<{
             <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs rounded-md space-y-1">
               <div className="font-semibold flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5" />
-                Copy this token & Database URL now
+                {t('tokens.copyPrompt', 'Copy this token & Database URL now')}
               </div>
               <p className="text-[11px] opacity-90">
-                For security reasons, VanillaDatabase will never display this secret token again.
+                {t('tokens.securityNotice', 'For security reasons, VanillaDatabase will never display this secret token again.')}
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Database API Base URL</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                {t('tokens.dbApiUrl', 'Database API Base URL')}
+              </label>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -124,16 +126,18 @@ export const CreateTokenModal: React.FC<{
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
-                  className="px-3 py-2 bg-muted hover:bg-accent text-foreground rounded-md text-xs font-semibold flex items-center gap-1.5 shrink-0 border border-border"
+                  className="px-3 py-2 bg-muted hover:bg-accent text-foreground rounded-md text-xs font-semibold flex items-center gap-1.5 shrink-0 border border-border cursor-pointer"
                 >
                   <Copy className="w-3.5 h-3.5" />
-                  Copy URL
+                  {copied ? t('common.copied', 'Copied') : t('storage.copyUrl', 'Copy URL')}
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Your Token Secret</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                {t('tokens.tokenSecret', 'Your Token Secret')}
+              </label>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -143,16 +147,18 @@ export const CreateTokenModal: React.FC<{
                 />
                 <button
                   onClick={handleCopy}
-                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 shrink-0"
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer"
                 >
                   {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copied ? 'Copied' : 'Copy Secret'}
+                  {copied ? t('common.copied', 'Copied') : t('tokens.copySecret', 'Copy Secret')}
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">TypeScript / Python Connection Snippet</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                {t('tokens.snippetTitle', 'TypeScript / Python Connection Snippet')}
+              </label>
               <div className="p-2.5 bg-muted/60 border border-border rounded-md text-[11px] font-mono text-muted-foreground space-y-1 overflow-x-auto break-all whitespace-pre-wrap">
                 <div className="text-foreground select-all">
                   <span className="text-purple-400">new</span> VanillaDatabase&#123; url: <span className="text-emerald-400">'{window.location.origin}/v1/databases/{databaseId}'</span>, token: <span className="text-emerald-400">'{createdSecret}'</span> &#125;
@@ -163,9 +169,9 @@ export const CreateTokenModal: React.FC<{
             <div className="pt-2 flex justify-end">
               <button
                 onClick={handleClose}
-                className="px-4 py-1.5 text-xs bg-muted hover:bg-accent text-foreground font-semibold rounded-md transition-colors"
+                className="px-4 py-1.5 text-xs bg-muted hover:bg-accent text-foreground font-semibold rounded-md transition-colors cursor-pointer"
               >
-                Done
+                {t('common.done', 'Done')}
               </button>
             </div>
           </div>
@@ -178,11 +184,13 @@ export const CreateTokenModal: React.FC<{
             )}
 
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Token Name</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                {t('tokens.nameLabel', 'Token Name')}
+              </label>
               <input
                 type="text"
                 required
-                placeholder="e.g. Discord Bot Production"
+                placeholder={t('tokens.namePlaceholder', 'e.g. Discord Bot Production')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500"
@@ -190,13 +198,15 @@ export const CreateTokenModal: React.FC<{
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Permissions</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                {t('tokens.permissions', 'Permissions')}
+              </label>
               <div className="grid grid-cols-2 gap-2 mt-1">
                 {[
-                  { id: 'database:read', label: 'Read (SELECT)' },
-                  { id: 'database:write', label: 'Write (INSERT/UPDATE/DELETE)' },
-                  { id: 'database:ddl', label: 'DDL (Schema changes)' },
-                  { id: 'database:admin', label: 'Admin (Full access)' },
+                  { id: 'database:read', label: t('tokens.permRead', 'Read (SELECT)') },
+                  { id: 'database:write', label: t('tokens.permWrite', 'Write (INSERT/UPDATE/DELETE)') },
+                  { id: 'database:ddl', label: t('tokens.permDdl', 'DDL (Schema changes)') },
+                  { id: 'database:admin', label: t('tokens.permAdmin', 'Admin (Full access)') },
                 ].map((p) => (
                   <label
                     key={p.id}
@@ -253,10 +263,10 @@ export const CreateTokenModal: React.FC<{
                     }
                     return (
                       <>
-                        <option value="">{t('tokens.defaultRate', `Mặc định (${maxRate} req/phút)`)}</option>
+                        <option value="">{t('tokens.defaultRateLimit', `Default (${maxRate} req/min)`).replace('{maxRate}', String(maxRate))}</option>
                         {baseOptions.map((opt) => (
                           <option key={opt} value={opt}>
-                            {opt} req/phút {opt === maxRate ? `(${t('tokens.maxRate', 'Tối đa')})` : ''}
+                            {opt} {t('tokens.reqPerMin', 'req/min')} {opt === maxRate ? `(${t('tokens.maxRate', 'Max')})` : ''}
                           </option>
                         ))}
                         {currentUser?.role === 'super_admin' && (

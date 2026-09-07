@@ -489,7 +489,7 @@ export class DatabaseManager {
 
     if (options?.allowedTables && options.allowedTables.length > 0) {
       const allowedSet = new Set(options.allowedTables.map(t => t.toLowerCase()));
-      const tableMatches = stripped.matchAll(/\b(?:FROM|JOIN|INTO|UPDATE|TABLE)\s+(?:["`]?([a-zA-Z0-9_]+)["`]?)/gi);
+      const tableMatches = stripped.matchAll(/\b(?:FROM|JOIN|INTO|UPDATE|TABLE)(?:\s+|(?=["`[]))(?:["`[]?([a-zA-Z0-9_]+)["`\]]?)/gi);
       for (const match of tableMatches) {
         const table = match[1]?.toLowerCase();
         if (table && !['sqlite_master', 'sqlite_schema', 'sqlite_temp_master', 'sqlite_temp_schema'].includes(table)) {
@@ -502,17 +502,22 @@ export class DatabaseManager {
     }
   }
 
-  public getTableInfo(databaseId: string, tableName: string): { exists: boolean; pkCol: string; columns: TableColumnInfo[] } | null {
+  public escapeIdentifier(identifier: string): string {
+    return `"${identifier.replace(/"/g, '""')}"`;
+  }
+
+  public getTableInfo(databaseId: string, tableName: string): { exists: boolean; name: string; pkCol: string; columns: TableColumnInfo[] } | null {
     const db = this.get(databaseId);
     const tableRow = db.prepare(`SELECT name FROM sqlite_schema WHERE type IN ('table', 'view') AND (name = ? OR LOWER(name) = LOWER(?)) LIMIT 1`).get(tableName, tableName) as { name: string } | undefined;
     if (!tableRow) return null;
 
     const actualName = tableRow.name;
-    const cols = db.prepare(`PRAGMA table_info("${actualName.replace(/"/g, '""')}")`).all() as unknown as TableColumnInfo[];
+    const cols = db.prepare('SELECT * FROM pragma_table_info(?)').all(actualName) as unknown as TableColumnInfo[];
     const pkCol = cols.find(c => c.pk === 1)?.name || cols.find(c => c.name.toLowerCase() === 'id')?.name || 'rowid';
 
     return {
       exists: true,
+      name: actualName,
       pkCol,
       columns: cols,
     };
@@ -535,13 +540,13 @@ export class DatabaseManager {
 
     for (const item of [...tables, ...views]) {
       const isView = item.type === 'view';
-      const cleanItemName = item.name.replace(/"/g, '""');
-      const cols = db.prepare(`PRAGMA table_info("${cleanItemName}")`).all() as unknown as TableColumnInfo[];
-      const indexes = isView ? [] : (db.prepare(`PRAGMA index_list("${cleanItemName}")`).all() as any[]);
-      const fks = isView ? [] : (db.prepare(`PRAGMA foreign_key_list("${cleanItemName}")`).all() as unknown as TableForeignKeyInfo[]);
+      const cleanItemName = item.name;
+      const cols = db.prepare('SELECT * FROM pragma_table_info(?)').all(cleanItemName) as unknown as TableColumnInfo[];
+      const indexes = isView ? [] : (db.prepare('SELECT * FROM pragma_index_list(?)').all(cleanItemName) as any[]);
+      const fks = isView ? [] : (db.prepare('SELECT * FROM pragma_foreign_key_list(?)').all(cleanItemName) as unknown as TableForeignKeyInfo[]);
 
       const detailedIndexes: TableIndexInfo[] = indexes.map((idx: any) => {
-        const idxCols = db.prepare(`PRAGMA index_info("${String(idx.name).replace(/"/g, '""')}")`).all() as Array<{ name: string }>;
+        const idxCols = db.prepare('SELECT * FROM pragma_index_info(?)').all(String(idx.name)) as Array<{ name: string }>;
         return {
           seq: idx.seq,
           name: idx.name,
@@ -559,7 +564,7 @@ export class DatabaseManager {
       let rowCountEstimate = 0;
       if (!isView && includeRowCounts) {
         try {
-          const countRow = db.prepare(`SELECT COUNT(*) as count FROM "${cleanItemName}"`).get() as { count: number };
+          const countRow = db.prepare(`SELECT COUNT(*) as count FROM ${this.escapeIdentifier(cleanItemName)}`).get() as { count: number };
           rowCountEstimate = countRow.count;
         } catch {
           // Ignore table count error

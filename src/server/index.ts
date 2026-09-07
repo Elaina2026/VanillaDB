@@ -29,12 +29,68 @@ import { systemRoutes } from './api/system.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// ponytail: in-memory token bucket ceiling 50k IPs; add Redis when running multi-node cluster
+export class IpTokenBucketLimiter {
+  private buckets = new Map<string, { tokens: number; lastRefill: number }>();
+  private readonly capacity: number;
+  private readonly refillPerSec: number;
+  private readonly maxIps: number;
+
+  constructor(capacity = 120, refillPerSec = 30, maxIps = 50_000) {
+    this.capacity = capacity;
+    this.refillPerSec = refillPerSec;
+    this.maxIps = maxIps;
+    const timer = setInterval(() => this.prune(), 60_000);
+    if (timer.unref) timer.unref();
+  }
+
+  public consume(ip: string): { allowed: boolean; remaining: number } {
+    const now = Date.now();
+    let bucket = this.buckets.get(ip);
+    if (!bucket) {
+      if (this.buckets.size >= this.maxIps) this.prune();
+      bucket = { tokens: this.capacity - 1, lastRefill: now };
+      this.buckets.set(ip, bucket);
+      return { allowed: true, remaining: this.capacity - 1 };
+    }
+    const elapsedSec = (now - bucket.lastRefill) / 1000;
+    bucket.tokens = Math.min(this.capacity, bucket.tokens + elapsedSec * this.refillPerSec);
+    bucket.lastRefill = now;
+
+    if (bucket.tokens < 1) {
+      return { allowed: false, remaining: 0 };
+    }
+    bucket.tokens -= 1;
+    return { allowed: true, remaining: Math.floor(bucket.tokens) };
+  }
+
+  private prune(): void {
+    const now = Date.now();
+    for (const [ip, b] of this.buckets.entries()) {
+      if (now - b.lastRefill > 120_000 && b.tokens >= this.capacity - 1) {
+        this.buckets.delete(ip);
+      }
+    }
+  }
+
+  public reset(): void {
+    this.buckets.clear();
+  }
+}
+
+export const globalL7Limiter = new IpTokenBucketLimiter(120, 30);
+
 export async function buildApp() {
   const app = Fastify({
     loggerInstance: logger,
     trustProxy: config.trustProxy,
     bodyLimit: config.maxRequestBodyMb * 1024 * 1024,
+    // Native HTTP timeouts block Slowloris socket exhaustion
+    connectionTimeout: 10_000,
+    requestTimeout: 30_000,
+    keepAliveTimeout: 5_000,
   });
+  app.server.headersTimeout = 10_000;
 
   // Parse empty JSON body safely
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body: string, done) => {
@@ -88,6 +144,34 @@ export async function buildApp() {
   app.addHook('onRequest', async (req) => {
     (req.raw as any).__startTime = process.hrtime();
     (req.raw as any).__bytesIn = parseInt(req.headers['content-length'] || '0', 10);
+  });
+
+  // Global L7 flood defense and request timeout hook
+  app.addHook('onRequest', async (req, reply) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const { allowed, remaining } = globalL7Limiter.consume(ip);
+    reply.header('X-RateLimit-Remaining-IP', remaining);
+
+    if (!allowed) {
+      return reply.status(429).send({
+        success: false,
+        error: { code: 'TOO_MANY_REQUESTS', message: 'Too many requests from this IP address.' }
+      });
+    }
+
+    // Request execution timeout safeguard
+    const timer = setTimeout(() => {
+      if (!reply.sent) {
+        reply.status(504).send({
+          success: false,
+          error: { code: 'REQUEST_TIMEOUT', message: 'Request execution exceeded time limit.' }
+        });
+      }
+    }, 25_000);
+    if (timer.unref) timer.unref();
+
+    reply.raw.once('finish', () => clearTimeout(timer));
+    reply.raw.once('close', () => clearTimeout(timer));
   });
 
   app.addHook('onSend', async (req, reply, payload) => {

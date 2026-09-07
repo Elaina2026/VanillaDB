@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { buildApp } from '../src/server/index.js';
+import { buildApp, globalL7Limiter } from '../src/server/index.js';
 import { dbManager } from '../src/server/db/manager.js';
 import { tokenService } from '../src/server/services/tokens.js';
 import { databaseService } from '../src/server/services/database.js';
@@ -1615,6 +1615,24 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
         }
       }
       expect(hitRateLimit).toBe(true);
+    });
+
+    it('Anti-DDoS Defense: IP Token Bucket limiter rejects floods with HTTP 429', async () => {
+      const floodIp = '198.51.100.42';
+      // Drain capacity for floodIp
+      for (let i = 0; i < 130; i++) {
+        globalL7Limiter.consume(floodIp);
+      }
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/health',
+        remoteAddress: floodIp,
+      });
+
+      expect(res.statusCode).toBe(429);
+      expect(res.json().error.code).toBe('TOO_MANY_REQUESTS');
+      expect(res.headers['x-ratelimit-remaining-ip']).toBe('0');
     });
   });
 });

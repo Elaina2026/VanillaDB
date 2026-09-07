@@ -91,11 +91,13 @@ export const SettingsPage: React.FC = () => {
   const { data: settings, isLoading } = useQuery<SystemSettings>({
     queryKey: ['systemSettings'],
     queryFn: () => apiRequest('/api/system/settings'),
+    enabled: isSuperAdminOrAdmin,
   });
 
   const { data: status, refetch: refetchStatus, isFetching: isFetchingStatus } = useQuery<SystemStatus>({
     queryKey: ['systemStatus'],
     queryFn: () => apiRequest('/api/system/status'),
+    enabled: isSuperAdminOrAdmin,
   });
 
   const [form, setForm] = useState<Partial<SystemSettings>>({});

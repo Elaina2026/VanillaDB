@@ -9,15 +9,53 @@ import './index.css';
 
 // Defensive handler to suppress external extension/web-vitals startTime crashes
 if (typeof window !== 'undefined') {
-  window.addEventListener('error', (event) => {
-    if (
-      event.message?.includes("reading 'startTime'") ||
-      (event.error && typeof event.error === 'object' && 'message' in event.error && String(event.error.message).includes("reading 'startTime'"))
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
+  const shouldSuppress = (err: any, msg?: any) => {
+    let str = '';
+    if (typeof err === 'string') str += err + ' ';
+    if (err && typeof err === 'object') {
+      str += (err.message || '') + ' ' + (err.stack || '') + ' ';
     }
-  });
+    if (typeof msg === 'string') str += msg + ' ';
+    return (
+      str.includes("reading 'startTime'") ||
+      str.includes("reading 'processingStart'") ||
+      str.includes('reportAllChanges')
+    );
+  };
+
+  const prevOnError = window.onerror;
+  window.onerror = function (message, source, lineno, colno, error) {
+    if (shouldSuppress(error, message)) {
+      return true;
+    }
+    if (typeof prevOnError === 'function') {
+      return prevOnError.apply(this, arguments as any);
+    }
+    return false;
+  };
+
+  window.addEventListener(
+    'error',
+    (event) => {
+      if (shouldSuppress(event.error, event.message)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return true;
+      }
+    },
+    true
+  );
+
+  window.addEventListener(
+    'unhandledrejection',
+    (event) => {
+      if (shouldSuppress(event.reason, event.reason?.message)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    },
+    true
+  );
 }
 
 const queryClient = new QueryClient({

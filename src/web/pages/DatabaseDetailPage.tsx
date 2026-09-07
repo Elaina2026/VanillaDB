@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Database,
@@ -54,6 +54,7 @@ import { ImportExportModal } from '../components/ImportExportModal.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
 import { DatabaseOperationsTimelineChart } from '../components/MetricsCharts.js';
 import { ErdCanvas } from '../components/ErdCanvas.js';
+import { StorageUploadManager } from '../components/StorageUploadManager.js';
 import { exportQueryResults } from '../lib/exportUtils.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
@@ -219,13 +220,29 @@ export const DatabaseDetailPage: React.FC<{
   const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const timeoutsRef = React.useRef<NodeJS.Timeout[]>([]);
+  const safeTimeout = (fn: () => void, ms: number) => {
+    const id = setTimeout(() => {
+      timeoutsRef.current = timeoutsRef.current.filter((t) => t !== id);
+      fn();
+    }, ms);
+    timeoutsRef.current.push(id);
+    return id;
+  };
+
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach((id) => clearTimeout(id));
+    };
+  }, []);
+
   const showError = (msg: string) => {
     setErrorMessage(msg);
-    setTimeout(() => setErrorMessage(null), 5000);
+    safeTimeout(() => setErrorMessage(null), 5000);
   };
   const showSuccess = (msg: string) => {
     setNotificationMessage(msg);
-    setTimeout(() => setNotificationMessage(null), 4000);
+    safeTimeout(() => setNotificationMessage(null), 4000);
   };
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -394,41 +411,72 @@ export const DatabaseDetailPage: React.FC<{
       showSuccess(t('storage.deletedSuccess', 'File deleted successfully'));
     },
     onError: (err: any) => {
-      showError(err.message || 'Failed to delete file');
+      showError(err.message || t('storage.deleteFailed', 'Failed to delete file'));
     },
   });
 
-  const [isUploading, setIsUploading] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFileForPreview, setSelectedFileForPreview] = useState<FileRecord | null>(null);
+  const [isGlobalDragOver, setIsGlobalDragOver] = useState(false);
+  const dragCounter = useRef(0);
+  const [incomingFiles, setIncomingFiles] = useState<FileList | File[] | null>(null);
 
-  const handleFileUpload = async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
-    setIsUploading(true);
-    try {
-      for (let i = 0; i < fileList.length; i++) {
-        const file = fileList[i];
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const res = await fetch(`/api/admin/databases/${databaseId}/files`, {
-          method: 'POST',
-          body: formData,
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData?.error?.message || `Failed to upload ${file.name}`);
-        }
-      }
-      refetchFiles();
-      refetchStats();
-      queryClient.invalidateQueries({ queryKey: ['dbStats', databaseId] });
-      showSuccess(t('storage.uploadedSuccess', 'File(s) uploaded successfully'));
-    } catch (err: any) {
-      showError(err.message || 'File upload failed');
-    } finally {
-      setIsUploading(false);
+  // Full-page drag-and-drop listener when on storage tab
+  useEffect(() => {
+    if (activeTab !== 'storage') {
+      setIsGlobalDragOver(false);
+      dragCounter.current = 0;
+      return;
     }
+
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter.current++;
+      if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+        setIsGlobalDragOver(true);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter.current--;
+      if (dragCounter.current <= 0) {
+        dragCounter.current = 0;
+        setIsGlobalDragOver(false);
+      }
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter.current = 0;
+      setIsGlobalDragOver(false);
+      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+        setIncomingFiles(e.dataTransfer.files);
+      }
+    };
+
+    window.addEventListener('dragenter', handleDragEnter);
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+
+    return () => {
+      window.removeEventListener('dragenter', handleDragEnter);
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, [activeTab]);
+
+  const handleFileUpload = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    setIncomingFiles(fileList);
   };
 
   // Generic confirmation modal state
@@ -437,6 +485,7 @@ export const DatabaseDetailPage: React.FC<{
     title: string;
     message: string;
     confirmText?: string;
+    cancelText?: string;
     variant?: 'danger' | 'warning' | 'primary';
     onConfirm: () => void;
     isLoading?: boolean;
@@ -2422,52 +2471,32 @@ export const DatabaseDetailPage: React.FC<{
         {/* STORAGE & MEDIA TAB */}
         {activeTab === 'storage' && (
           <div className="max-w-6xl mx-auto space-y-6">
-            {/* Header & Drag and Drop Upload */}
+            {/* Header with Upload Action Button */}
             <div className="flex items-center justify-between pb-2">
               <div>
-                <h3 className="text-sm font-bold text-foreground">Media & File Storage</h3>
-                <p className="text-xs text-muted-foreground">Database-scoped binary media files with range-streaming support.</p>
+                <h3 className="text-sm font-bold text-foreground">{t('storage.title', 'Media & File Storage')}</h3>
+                <p className="text-xs text-muted-foreground">{t('storage.desc', 'Database-scoped binary media files with range-streaming support.')}</p>
               </div>
-            </div>
 
-            {/* Drag & Drop Upload Zone */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragOver(true);
-              }}
-              onDragLeave={() => setIsDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDragOver(false);
-                handleFileUpload(e.dataTransfer.files);
-              }}
-              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
-                isDragOver ? 'border-blue-500 bg-blue-500/10' : 'border-border hover:border-blue-500/50 bg-card'
-              }`}
-            >
-              <input
-                type="file"
-                multiple
-                id="file-upload-input"
-                className="hidden"
-                onChange={(e) => handleFileUpload(e.target.files)}
-              />
-              <label htmlFor="file-upload-input" className="cursor-pointer flex flex-col items-center justify-center gap-2">
-                <div className="p-3 bg-muted rounded-full text-muted-foreground">
-                  <UploadCloud className="w-6 h-6 text-blue-500" />
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-foreground">{t('storage.clickToUpload', 'Click to upload files')}</span>
-                  <span className="text-xs text-muted-foreground">{t('storage.orDragAndDrop', ' or drag and drop')}</span>
-                </div>
-                <p className="text-[10px] text-muted-foreground">{t('storage.fileTypesHint', 'Images, Videos, Audio, Documents (Max 1GB per file)')}</p>
-              </label>
-              {isUploading && (
-                <div className="mt-3 text-xs text-blue-500 font-medium flex items-center justify-center gap-1.5">
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" /> {t('storage.uploading', 'Uploading file(s)...')}
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  multiple
+                  id="storage-file-upload-input"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleFileUpload(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  onClick={() => document.getElementById('storage-file-upload-input')?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                >
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  {t('storage.selectMultipleImages', 'Select multiple images / files')}
+                </button>
+              </div>
             </div>
 
             {/* Files Grid / List */}
@@ -2479,14 +2508,26 @@ export const DatabaseDetailPage: React.FC<{
               {isFilesLoading ? (
                 <div className="p-8 text-center text-xs text-muted-foreground">{t('storage.loadingFiles', 'Loading files...')}</div>
               ) : files.length === 0 ? (
-                <div className="p-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-lg bg-card/50">
-                  {t('storage.noFiles', 'No files uploaded yet. Drag and drop files above to store media.')}
+                <div className="p-12 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl bg-card/40 flex flex-col items-center justify-center gap-3">
+                  <div className="p-3 bg-muted rounded-full text-muted-foreground">
+                    <UploadCloud className="w-8 h-8 text-blue-500 opacity-80" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">{t('storage.noFiles', 'No files uploaded yet. Drag and drop files above to store media.')}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{t('storage.dragOverlay', 'Drop files anywhere to upload')}</p>
+                  </div>
+                  <button
+                    onClick={() => document.getElementById('storage-file-upload-input')?.click()}
+                    className="mt-1 flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {t('storage.selectMultipleImages', 'Select multiple images / files')}
+                  </button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {files.map((file) => {
                     const viewUrl = `${window.location.origin}/v1/files/${file.id}/view`;
-                    const publicStorageUrl = `${window.location.origin}/v1/databases/${databaseId}/storage/${file.filename}`;
                     const isImage = file.mime_type.startsWith('image/');
                     const isVideo = file.mime_type.startsWith('video/');
                     const isAudio = file.mime_type.startsWith('audio/');
@@ -2501,23 +2542,24 @@ export const DatabaseDetailPage: React.FC<{
                               alt={file.original_name}
                               className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
                               onClick={() => setSelectedFileForPreview(file)}
+                              title={t('storage.previewImage', 'Click to preview image')}
                             />
                           ) : isVideo ? (
                             <video
                               src={viewUrl}
                               controls
-                              preload="metadata"
+                              preload="none"
                               className="w-full h-full object-contain bg-black"
                             />
                           ) : isAudio ? (
                             <div className="w-full p-3 flex flex-col items-center justify-center gap-2">
                               <Film className="w-8 h-8 text-purple-500" />
-                              <audio src={viewUrl} controls className="w-full h-8" />
+                              <audio src={viewUrl} controls preload="none" className="w-full h-8" />
                             </div>
                           ) : (
                             <div className="flex flex-col items-center justify-center text-muted-foreground gap-1">
                               <FileText className="w-10 h-10 opacity-50" />
-                              <span className="text-[10px] uppercase font-mono">{file.mime_type.split('/')[1] || 'BINARY'}</span>
+                              <span className="text-[10px] uppercase font-mono">{file.mime_type.split('/')[1] || t('common.binary', 'BINARY')}</span>
                             </div>
                           )}
                         </div>
@@ -2534,21 +2576,22 @@ export const DatabaseDetailPage: React.FC<{
                           </div>
 
                           <div className="text-[10px] text-muted-foreground font-mono truncate">
-                            ID: {file.id}
+                            {t('common.id', 'ID')}: {file.id}
                           </div>
 
                           {/* Action Buttons: Copy URL & Delete */}
                           <div className="pt-2 border-t border-border flex items-center justify-between gap-1 text-xs">
                             <button
                               onClick={() => copyToClipboard(viewUrl, file.id)}
-                              className="flex items-center gap-1 px-2 py-1 bg-muted hover:bg-accent rounded text-[11px] font-mono text-foreground transition-colors"
+                              className="flex items-center gap-1 px-2 py-1 bg-muted hover:bg-accent rounded text-[11px] font-mono text-foreground transition-colors cursor-pointer"
+                              title={t('storage.copyUrlTooltip', 'Copy file URL')}
                             >
                               {copiedKey === file.id ? (
                                 <Check className="w-3 h-3 text-emerald-500" />
                               ) : (
                                 <Copy className="w-3 h-3 text-muted-foreground" />
                               )}
-                              Copy URL
+                              {copiedKey === file.id ? t('common.copied', 'Copied') : t('storage.copyUrl', 'Copy URL')}
                             </button>
 
                             <a
@@ -2556,7 +2599,7 @@ export const DatabaseDetailPage: React.FC<{
                               target="_blank"
                               rel="noreferrer"
                               className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
-                              title="Open file in new tab"
+                              title={t('storage.openInNewTab', 'Open file in new tab')}
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
                             </a>
@@ -2565,9 +2608,10 @@ export const DatabaseDetailPage: React.FC<{
                               onClick={() => {
                                 setConfirmConfig({
                                   isOpen: true,
-                                  title: `Delete File "${file.original_name}"?`,
-                                  message: `Are you sure you want to permanently delete file "${file.original_name}"?`,
-                                  confirmText: 'Delete File',
+                                  title: t('storage.deleteConfirmTitle', 'Delete File'),
+                                  message: t('storage.deleteConfirmMessage', 'Are you sure you want to permanently delete file "{name}"?').replace('{name}', file.original_name),
+                                  confirmText: t('storage.deleteFile', 'Delete File'),
+                                  cancelText: t('common.cancel', 'Cancel'),
                                   variant: 'danger',
                                   isLoading: deleteFileMutation.isPending,
                                   onConfirm: () => {
@@ -2576,8 +2620,8 @@ export const DatabaseDetailPage: React.FC<{
                                   },
                                 });
                               }}
-                              className="p-1 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
-                              title="Delete file"
+                              className="p-1 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
+                              title={t('storage.deleteFileTooltip', 'Delete file')}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -2599,7 +2643,11 @@ export const DatabaseDetailPage: React.FC<{
                 <div className="max-w-4xl max-h-[90vh] bg-card border border-border rounded-xl p-4 overflow-hidden relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-between pb-3 mb-2 border-b border-border">
                     <span className="text-xs font-bold font-mono">{selectedFileForPreview.original_name}</span>
-                    <button onClick={() => setSelectedFileForPreview(null)} className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground">
+                    <button
+                      onClick={() => setSelectedFileForPreview(null)}
+                      className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
+                      title={t('common.close', 'Close')}
+                    >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -2621,15 +2669,15 @@ export const DatabaseDetailPage: React.FC<{
               <div>
                 <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                   <Download className="w-5 h-5 text-blue-500" />
-                  Database Import & Export Center
+                  {t('importExport.centerTitle', 'Database Import & Export Center')}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Export database tables to SQL dump, SQLite binary (.db), CSV, JSON or import dump files from MySQL, PostgreSQL, MongoDB, and SQLite.
+                  {t('importExport.centerDesc', 'Export database tables to SQL dump, SQLite binary (.db), CSV, JSON or import dump files from MySQL, PostgreSQL, MongoDB, and SQLite.')}
                 </p>
               </div>
               <button
                 onClick={() => setIsImportExportOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 {t('importExport.openModal', 'Open Importer / Exporter')}
@@ -2650,7 +2698,7 @@ export const DatabaseDetailPage: React.FC<{
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground pt-2">
-                    Supports <strong>SQL Script (.sql)</strong>, <strong>SQLite Binary (.db)</strong>, <strong>CSV Spreadsheet (.csv)</strong>, and structured <strong>JSON (.json)</strong>.
+                    {t('importExport.supportedFormats', 'Supports SQL Script (.sql), SQLite Binary (.db), CSV Spreadsheet (.csv), and structured JSON (.json).')}
                   </p>
                 </div>
                 <div className="pt-4 border-t border-border flex flex-wrap gap-2">
@@ -2658,13 +2706,13 @@ export const DatabaseDetailPage: React.FC<{
                     href={`/api/admin/databases/${databaseId}/export?format=sqlite`}
                     className="flex-1 text-center py-2 px-3 bg-muted hover:bg-accent border border-border rounded-md text-xs font-semibold text-foreground transition-colors"
                   >
-                    SQLite Binary (.db)
+                    {t('importExport.sqliteBinary', 'SQLite Binary (.db)')}
                   </a>
                   <a
                     href={`/api/admin/databases/${databaseId}/export?format=sql`}
                     className="flex-1 text-center py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold transition-colors"
                   >
-                    SQL Dump (.sql)
+                    {t('importExport.sqlDump', 'SQL Dump (.sql)')}
                   </a>
                 </div>
               </div>
@@ -2682,13 +2730,13 @@ export const DatabaseDetailPage: React.FC<{
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground pt-2">
-                    Automatically converts <strong>MySQL</strong> dumps (backticks, engine), <strong>PostgreSQL</strong> dumps (SERIAL, COPY stdin), <strong>MongoDB</strong> (JSON / NDJSON), and CSV.
+                    {t('importExport.autoConvertDesc', 'Automatically converts MySQL dumps (backticks, engine), PostgreSQL dumps (SERIAL, COPY stdin), MongoDB (JSON / NDJSON), and CSV.')}
                   </p>
                 </div>
                 <div className="pt-4 border-t border-border">
                   <button
                     onClick={() => setIsImportExportOpen(true)}
-                    className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-1.5"
+                    className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <UploadCloud className="w-4 h-4" />
                     {t('importExport.uploadAndIngest', 'Upload & Ingest File')}
@@ -2805,19 +2853,19 @@ export const DatabaseDetailPage: React.FC<{
               <div>
                 <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                   <WebhookIcon className="w-5 h-5 text-purple-500" />
-                  Webhooks
+                  {t('webhooks.title', 'Webhooks')}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Receive HTTP POST notifications with HMAC-SHA256 signatures when data changes.
+                  {t('webhooks.headerDesc', 'Receive HTTP POST notifications with HMAC-SHA256 signatures when data changes.')}
                 </p>
               </div>
 
               <button
                 onClick={() => setIsCreateWebhookOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Add Webhook
+                {t('webhooks.addWebhook', 'Add Webhook')}
               </button>
             </div>
 
@@ -2828,11 +2876,12 @@ export const DatabaseDetailPage: React.FC<{
                   <div className="flex items-center justify-between border-b border-border pb-3">
                     <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                       <WebhookIcon className="w-4 h-4 text-purple-500" />
-                      Configure New Webhook
+                      {t('webhooks.configureTitle', 'Configure New Webhook')}
                     </h3>
                     <button
                       onClick={() => setIsCreateWebhookOpen(false)}
-                      className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
+                      className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground cursor-pointer"
+                      title={t('common.close', 'Close')}
                     >
                       <XCircle className="w-4 h-4" />
                     </button>
@@ -2840,10 +2889,12 @@ export const DatabaseDetailPage: React.FC<{
 
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Webhook Name</label>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        {t('webhooks.nameLabel', 'Webhook Name')}
+                      </label>
                       <input
                         type="text"
-                        placeholder="Discord Bot / Notification Server"
+                        placeholder={t('webhooks.namePlaceholder', 'Discord Bot / Notification Server')}
                         value={webhookName}
                         onChange={(e) => setWebhookName(e.target.value)}
                         className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground"
@@ -2851,7 +2902,9 @@ export const DatabaseDetailPage: React.FC<{
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Payload URL</label>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        {t('webhooks.urlLabel', 'Payload URL')}
+                      </label>
                       <input
                         type="url"
                         placeholder="https://api.example.com/webhooks/vanilla"
@@ -2862,10 +2915,12 @@ export const DatabaseDetailPage: React.FC<{
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Secret (Optional HMAC-SHA256)</label>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        {t('webhooks.secretLabel', 'Secret (Optional HMAC-SHA256)')}
+                      </label>
                       <input
                         type="text"
-                        placeholder="Leave empty or provide secret string"
+                        placeholder={t('webhooks.secretPlaceholder', 'Leave empty or provide secret string')}
                         value={webhookSecret}
                         onChange={(e) => setWebhookSecret(e.target.value)}
                         className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground"
@@ -2873,13 +2928,15 @@ export const DatabaseDetailPage: React.FC<{
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Target Table Filter (Optional)</label>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        {t('webhooks.targetTable', 'Target Table Filter (Optional)')}
+                      </label>
                       <select
                         value={webhookTable}
                         onChange={(e) => setWebhookTable(e.target.value)}
                         className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground"
                       >
-                        <option value="">All Tables</option>
+                        <option value="">{t('webhooks.allTables', 'All Tables')}</option>
                         {schema
                           .filter((s) => s.type === 'table')
                           .map((t) => (
@@ -2891,23 +2948,29 @@ export const DatabaseDetailPage: React.FC<{
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1.5">Events</label>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                        {t('webhooks.eventsLabel', 'Trigger Events')}
+                      </label>
                       <div className="flex gap-4">
-                        {['insert', 'update', 'delete'].map((evt) => (
-                          <label key={evt} className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer">
+                        {[
+                          { id: 'insert', label: t('webhooks.eventInsert', 'Insert') },
+                          { id: 'update', label: t('webhooks.eventUpdate', 'Update') },
+                          { id: 'delete', label: t('webhooks.eventDelete', 'Delete') },
+                        ].map((item) => (
+                          <label key={item.id} className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer">
                             <input
                               type="checkbox"
-                              checked={webhookEvents.includes(evt)}
+                              checked={webhookEvents.includes(item.id)}
                               onChange={(e) => {
                                 if (e.target.checked) {
-                                  setWebhookEvents([...webhookEvents, evt]);
+                                  setWebhookEvents([...webhookEvents, item.id]);
                                 } else {
-                                  setWebhookEvents(webhookEvents.filter((item) => item !== evt));
+                                  setWebhookEvents(webhookEvents.filter((i) => i !== item.id));
                                 }
                               }}
                               className="rounded border-border text-blue-600 focus:ring-0"
                             />
-                            <span className="capitalize">{evt}</span>
+                            <span>{item.label}</span>
                           </label>
                         ))}
                       </div>
@@ -2917,7 +2980,7 @@ export const DatabaseDetailPage: React.FC<{
                   <div className="pt-3 border-t border-border flex justify-end gap-2">
                     <button
                       onClick={() => setIsCreateWebhookOpen(false)}
-                      className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md"
+                      className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md cursor-pointer"
                     >
                       {t('common.cancel', 'Cancel')}
                     </button>
@@ -2932,7 +2995,7 @@ export const DatabaseDetailPage: React.FC<{
                           events: webhookEvents,
                         })
                       }
-                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
+                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
                     >
                       {createWebhookMutation.isPending ? t('common.saving', 'Saving...') : t('webhooks.save', 'Save Webhook')}
                     </button>
@@ -2968,13 +3031,13 @@ export const DatabaseDetailPage: React.FC<{
                       </div>
 
                       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                        <span>Events: <strong>{wh.events.join(', ')}</strong></span>
+                        <span>{t('webhooks.eventsHeader', 'Events:')} <strong>{wh.events.join(', ')}</strong></span>
                         <span>•</span>
-                        <span>Failures: <strong className={wh.failure_count > 0 ? 'text-red-500' : 'text-emerald-500'}>{wh.failure_count}</strong></span>
+                        <span>{t('webhooks.failuresLabel', 'Failures:')} <strong className={wh.failure_count > 0 ? 'text-red-500' : 'text-emerald-500'}>{wh.failure_count}</strong></span>
                         {wh.last_triggered_at && (
                           <>
                             <span>•</span>
-                            <span>Last Trigger: {formatDate(wh.last_triggered_at)}</span>
+                            <span>{t('webhooks.lastTrigger', 'Last Trigger:')} {formatDate(wh.last_triggered_at, language)}</span>
                           </>
                         )}
                       </div>
@@ -2984,13 +3047,13 @@ export const DatabaseDetailPage: React.FC<{
                       <button
                         onClick={() => toggleWebhookMutation.mutate({ webhookId: wh.id, active: !wh.active })}
                         disabled={toggleWebhookMutation.isPending}
-                        className={`px-2 py-1 text-xs border border-border hover:bg-accent rounded font-medium transition-colors flex items-center gap-1 ${
+                        className={`px-2 py-1 text-xs border border-border hover:bg-accent rounded font-medium transition-colors flex items-center gap-1 cursor-pointer ${
                           wh.active ? 'text-emerald-500' : 'text-muted-foreground'
                         }`}
-                        title={wh.active ? 'Disable webhook' : 'Enable webhook'}
+                        title={wh.active ? t('webhooks.disableTooltip', 'Disable webhook') : t('webhooks.enableTooltip', 'Enable webhook')}
                       >
                         {wh.active ? <ToggleRight className="w-4 h-4 text-emerald-500" /> : <ToggleLeft className="w-4 h-4 text-muted-foreground" />}
-                        <span>{wh.active ? 'Active' : 'Paused'}</span>
+                        <span>{wh.active ? t('common.active', 'Active') : t('webhooks.paused', 'Paused')}</span>
                       </button>
 
                       <button
@@ -2998,17 +3061,15 @@ export const DatabaseDetailPage: React.FC<{
                           try {
                             await apiRequest(`/api/admin/webhooks/${wh.id}/test`, { method: 'POST' });
                             refetchWebhooks();
-                            setNotificationMessage('Test webhook sent successfully');
-                            setTimeout(() => setNotificationMessage(null), 3000);
+                            showSuccess(t('webhooks.testSuccess', 'Test webhook sent successfully'));
                           } catch (err: any) {
-                            setNotificationMessage(err.message || 'Failed to send test webhook');
-                            setTimeout(() => setNotificationMessage(null), 4000);
+                            showError(err.message || t('webhooks.testFailed', 'Failed to send test webhook'));
                           }
                         }}
-                        className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-muted-foreground hover:text-foreground font-medium transition-colors"
-                        title="Send test ping to webhook URL"
+                        className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-muted-foreground hover:text-foreground font-medium transition-colors cursor-pointer"
+                        title={t('webhooks.testTooltip', 'Send test ping to webhook URL')}
                       >
-                        Test
+                        {t('webhooks.testBtn', 'Test')}
                       </button>
 
                       {wh.failure_count > 0 && (
@@ -3017,25 +3078,23 @@ export const DatabaseDetailPage: React.FC<{
                             try {
                               await apiRequest(`/api/admin/webhooks/${wh.id}/reset-failures`, { method: 'POST' });
                               refetchWebhooks();
-                              setNotificationMessage('Webhook failure count reset to 0');
-                              setTimeout(() => setNotificationMessage(null), 3000);
+                              showSuccess(t('webhooks.resetSuccess', 'Webhook failure count reset to 0'));
                             } catch (err: any) {
-                              setNotificationMessage(err.message || 'Failed to reset failure count');
-                              setTimeout(() => setNotificationMessage(null), 4000);
+                              showError(err.message || t('webhooks.resetFailed', 'Failed to reset failure count'));
                             }
                           }}
-                          className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-amber-500 hover:text-amber-400 font-medium transition-colors"
-                          title="Reset failure count to 0"
+                          className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-amber-500 hover:text-amber-400 font-medium transition-colors cursor-pointer"
+                          title={t('webhooks.resetTooltip', 'Reset failure count to 0')}
                         >
-                          Reset Failures
+                          {t('webhooks.resetFailures', 'Reset Failures')}
                         </button>
                       )}
 
                       <button
                         onClick={() => deleteWebhookMutation.mutate(wh.id)}
                         disabled={deleteWebhookMutation.isPending}
-                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
-                        title="Delete webhook"
+                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
+                        title={t('webhooks.deleteTooltip', 'Delete webhook')}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -4623,6 +4682,38 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
         <div className="fixed bottom-5 right-5 z-50 bg-card border border-border shadow-xl rounded-lg px-4 py-3 text-xs text-foreground flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
           <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
           <span>{notificationMessage}</span>
+        </div>
+      )}
+
+      {/* Storage Upload Manager & Floating Widget */}
+      {activeTab === 'storage' && (
+        <StorageUploadManager
+          databaseId={databaseId}
+          incomingFiles={incomingFiles}
+          onClearIncomingFiles={() => setIncomingFiles(null)}
+          onUploadSuccess={() => {
+            refetchFiles();
+            refetchStats();
+            queryClient.invalidateQueries({ queryKey: ['dbStats', databaseId] });
+            showSuccess(t('storage.uploadedSuccess', 'File(s) uploaded successfully'));
+          }}
+        />
+      )}
+
+      {/* Global Full-Page Drag Overlay */}
+      {activeTab === 'storage' && isGlobalDragOver && (
+        <div className="fixed inset-0 z-50 bg-blue-600/20 backdrop-blur-sm border-4 border-dashed border-blue-500 pointer-events-none flex flex-col items-center justify-center animate-in fade-in duration-150">
+          <div className="bg-card/95 border border-border shadow-2xl rounded-2xl p-8 flex flex-col items-center gap-3 text-center">
+            <div className="p-4 bg-blue-500/10 text-blue-500 rounded-full animate-bounce">
+              <UploadCloud className="w-10 h-10" />
+            </div>
+            <h3 className="text-base font-bold text-foreground">
+              {t('storage.dragOverlay', 'Drop files anywhere to upload')}
+            </h3>
+            <p className="text-xs text-muted-foreground max-w-xs">
+              {t('storage.dragOverlayHint', 'Release mouse to start uploading files to this database')}
+            </p>
+          </div>
         </div>
       )}
 

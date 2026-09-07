@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import fs from 'fs';
+import path from 'path';
 import { Readable } from 'stream';
 import { config } from '../config/index.js';
 import { dbManager } from '../db/manager.js';
@@ -24,9 +25,18 @@ function isTablePermitted(table: string, apiToken?: any): boolean {
 }
 
 export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, filePath: string, mimeType: string, fileSize: number) {
-  // Defensive isolation for potentially executable active content (SVG/HTML)
-  if (mimeType === 'image/svg+xml' || mimeType === 'text/html') {
+  // Defensive isolation for active/executable formats (SVG, HTML, XML)
+  const baseMime = (mimeType || '').split(';')[0].trim().toLowerCase();
+  const safeInlineMimes = new Set([
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
+    'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'video/mp4', 'video/webm'
+  ]);
+
+  if (!safeInlineMimes.has(baseMime)) {
     reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+    if (baseMime === 'image/svg+xml' || baseMime === 'text/html' || baseMime.includes('xml')) {
+      reply.header('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
+    }
   }
 
   const range = req.headers.range;
@@ -69,8 +79,12 @@ export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, fileP
     }
 
     const stream = fs.createReadStream(filePath, { start, end });
-    req.raw.on('close', () => {
-      stream.destroy();
+    const onClose = () => { stream.destroy(); };
+    req.raw.on('close', onClose);
+    req.raw.on('error', onClose);
+    stream.on('close', () => {
+      req.raw.off('close', onClose);
+      req.raw.off('error', onClose);
     });
 
     return reply.send(stream);
@@ -85,8 +99,12 @@ export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, fileP
     }
 
     const stream = fs.createReadStream(filePath);
-    req.raw.on('close', () => {
-      stream.destroy();
+    const onClose = () => { stream.destroy(); };
+    req.raw.on('close', onClose);
+    req.raw.on('error', onClose);
+    stream.on('close', () => {
+      req.raw.off('close', onClose);
+      req.raw.off('error', onClose);
     });
 
     return reply.send(stream);
@@ -333,9 +351,13 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
     }
 
-    let sql = `SELECT * FROM "${table.replace(/"/g, '""')}"`;
+    const validCols = new Set(tableInfo.columns.map(c => c.name));
+    let sql = `SELECT * FROM ${dbManager.escapeIdentifier(tableInfo.name)}`;
     if (orderBy) {
-      sql += ` ORDER BY "${orderBy}" ${order}`;
+      if (!validCols.has(orderBy)) {
+        return reply.status(400).send({ success: false, error: { code: 'INVALID_ORDER_BY', message: `Column "${orderBy}" does not exist` } });
+      }
+      sql += ` ORDER BY ${dbManager.escapeIdentifier(orderBy)} ${order}`;
     }
     sql += ` LIMIT ? OFFSET ?`;
 
@@ -351,7 +373,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       activityService.recordActivity({
         databaseId,
         tokenId: req.apiToken?.id || `admin:${req.adminUser?.username || 'user'}`,
-        operation: `REST_SELECT:${table}`,
+        operation: `REST_SELECT:${tableInfo.name}`,
         durationMs,
         status: 'success',
         rowCount: (result as any).rowCount || ((result as any).rows || []).length,
@@ -383,16 +405,17 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: { code: 'INVALID_PAYLOAD', message: 'JSON object required' } });
     }
 
+    const validCols = new Set(tableInfo.columns.map(c => c.name));
     const keys = Object.keys(row);
-    if (keys.length === 0) {
-      return reply.status(400).send({ success: false, error: { code: 'EMPTY_ROW', message: 'At least one column required' } });
+    if (keys.length === 0 || !keys.every(k => validCols.has(k))) {
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_COLUMNS', message: 'Unknown column in payload' } });
     }
 
-    const cols = keys.map(k => `"${k.replace(/"/g, '""')}"`).join(', ');
+    const cols = keys.map(k => dbManager.escapeIdentifier(k)).join(', ');
     const placeholders = keys.map(() => '?').join(', ');
     const values = Object.values(row);
 
-    const sql = `INSERT INTO "${table.replace(/"/g, '""')}" (${cols}) VALUES (${placeholders})`;
+    const sql = `INSERT INTO ${dbManager.escapeIdentifier(tableInfo.name)} (${cols}) VALUES (${placeholders})`;
 
     try {
       const startTime = performance.now();
@@ -405,7 +428,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       activityService.recordActivity({
         databaseId,
         tokenId: req.apiToken?.id || `admin:${req.adminUser?.username || 'user'}`,
-        operation: `REST_INSERT:${table}`,
+        operation: `REST_INSERT:${tableInfo.name}`,
         durationMs,
         status: 'success',
         rowCount: 1,
@@ -413,7 +436,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
       realtimeService.emitEvent({
         databaseId,
-        table,
+        table: tableInfo.name,
         type: 'insert',
         data: { row, result },
         timestamp: Date.now(),
@@ -463,9 +486,14 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: { code: 'EMPTY_WHERE', message: 'Target condition required' } });
     }
 
-    const setClauses = updateKeys.map(k => `"${k.replace(/"/g, '""')}" = ?`).join(', ');
-    const whereClauses = whereKeys.map(k => `"${k.replace(/"/g, '""')}" = ?`).join(' AND ');
-    const sql = `UPDATE "${table.replace(/"/g, '""')}" SET ${setClauses} WHERE ${whereClauses}`;
+    const validCols = new Set(tableInfo.columns.map(c => c.name));
+    if (!updateKeys.every(k => validCols.has(k)) || !whereKeys.every(k => validCols.has(k))) {
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_COLUMNS', message: 'Unknown column in where/values payload' } });
+    }
+
+    const setClauses = updateKeys.map(k => `${dbManager.escapeIdentifier(k)} = ?`).join(', ');
+    const whereClauses = whereKeys.map(k => `${dbManager.escapeIdentifier(k)} = ?`).join(' AND ');
+    const sql = `UPDATE ${dbManager.escapeIdentifier(tableInfo.name)} SET ${setClauses} WHERE ${whereClauses}`;
     const params = [...Object.values(values), ...Object.values(where)];
 
     try {
@@ -479,7 +507,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       activityService.recordActivity({
         databaseId,
         tokenId: req.apiToken?.id || `admin:${req.adminUser?.username || 'user'}`,
-        operation: `REST_UPDATE:${table}`,
+        operation: `REST_UPDATE:${tableInfo.name}`,
         durationMs,
         status: 'success',
         rowCount: (result as any).changes || 1,
@@ -487,7 +515,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
       realtimeService.emitEvent({
         databaseId,
-        table,
+        table: tableInfo.name,
         type: 'update',
         data: { where, values, result },
         timestamp: Date.now(),
@@ -515,6 +543,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ success: false, error: { code: 'TABLE_NOT_FOUND', message: `Table "${table}" not found` } });
     }
 
+    const validCols = new Set(tableInfo.columns.map(c => c.name));
     const pkCol = tableInfo.pkCol;
     const pkVal = query[pkCol] || query.id;
 
@@ -522,7 +551,11 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: { code: 'MISSING_KEY', message: `Query parameter "${pkCol}" is required for delete` } });
     }
 
-    const sql = `DELETE FROM "${table.replace(/"/g, '""')}" WHERE "${pkCol.replace(/"/g, '""')}" = ?`;
+    if (!validCols.has(pkCol)) {
+      return reply.status(400).send({ success: false, error: { code: 'INVALID_PK_COLUMN', message: `Column "${pkCol}" not found in table` } });
+    }
+
+    const sql = `DELETE FROM ${dbManager.escapeIdentifier(tableInfo.name)} WHERE ${dbManager.escapeIdentifier(pkCol)} = ?`;
     try {
       const startTime = performance.now();
       const result = dbManager.executeSql(databaseId, sql, [pkVal], {
@@ -534,7 +567,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       activityService.recordActivity({
         databaseId,
         tokenId: req.apiToken?.id || `admin:${req.adminUser?.username || 'user'}`,
-        operation: `REST_DELETE:${table}`,
+        operation: `REST_DELETE:${tableInfo.name}`,
         durationMs,
         status: 'success',
         rowCount: (result as any).changes || 1,
@@ -542,7 +575,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
       realtimeService.emitEvent({
         databaseId,
-        table,
+        table: tableInfo.name,
         type: 'delete',
         data: { pkCol, pkVal },
         timestamp: Date.now(),
@@ -640,6 +673,15 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     const data = await req.file();
     if (!data) {
       return reply.status(400).send({ success: false, error: { code: 'NO_FILE', message: 'Multipart file field required' } });
+    }
+
+    const ext = (data.filename || '').split('.').pop()?.toLowerCase();
+    const dangerousExts = new Set(['html', 'htm', 'xhtml', 'exe', 'sh', 'bat', 'cmd', 'php', 'js', 'mjs', 'vbs']);
+    if (ext && dangerousExts.has(ext)) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'FORBIDDEN_FILE_TYPE', message: 'Direct executable and active script files are forbidden' }
+      });
     }
 
     const metadata = (data.fields?.metadata as any)?.value || null;
