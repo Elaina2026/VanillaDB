@@ -169,6 +169,20 @@ export class ActivityService {
     }
   }
 
+  public purgeOldLogs(retentionDays: number): number {
+    this.flush();
+    if (!retentionDays || retentionDays <= 0) return 0;
+    const metaDb = getMetadataDb();
+    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+    try {
+      const actRes = metaDb.prepare('DELETE FROM activity_logs WHERE timestamp < ?').run(cutoff);
+      const audRes = metaDb.prepare('DELETE FROM audit_logs WHERE timestamp < ?').run(cutoff);
+      return (Number((actRes as any).changes) || 0) + (Number((audRes as any).changes) || 0);
+    } catch {
+      return 0;
+    }
+  }
+
   public destroy(): void {
     if (this.flushInterval) {
       clearInterval(this.flushInterval);

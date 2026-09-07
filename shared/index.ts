@@ -312,6 +312,7 @@ export interface SystemSettings {
   log_level: 'trace' | 'debug' | 'info' | 'warn' | 'error';
   enable_cors_all: boolean;
   enable_stack_traces: boolean;
+  log_retention_days?: number;
   enable_system_alerts?: boolean;
   alert_webhook_url?: string;
   alert_cpu_threshold?: number;

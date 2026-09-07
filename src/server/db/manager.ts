@@ -469,6 +469,7 @@ export class DatabaseManager {
         'synchronous',
         'wal_checkpoint',
         'optimize',
+        'incremental_vacuum',
       ];
       for (const match of pragmaMatches) {
         const pragmaName = match[1].toLowerCase();

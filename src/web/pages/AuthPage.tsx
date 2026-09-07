@@ -269,13 +269,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
           </p>
         </div>
 
-        {/* Tab switch between Sign In, Sign Up, and Reset Password */}
-        {initialized && !require2fa && (
-          <div className="grid grid-cols-3 p-1 bg-muted/60 rounded-lg border border-border text-[11px] font-semibold">
+        {/* Tab switch between Sign In and Sign Up */}
+        {initialized && !require2fa && authMode !== 'reset-password' && (
+          <div className="grid grid-cols-2 p-1 bg-muted/60 rounded-lg border border-border text-[11px] font-semibold">
             <button
               type="button"
               onClick={() => switchMode('login')}
-              className={`py-1.5 rounded-md transition-all ${
+              className={`py-1.5 rounded-md transition-all cursor-pointer ${
                 authMode === 'login' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -284,20 +284,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
             <button
               type="button"
               onClick={() => switchMode('register')}
-              className={`py-1.5 rounded-md transition-all ${
+              className={`py-1.5 rounded-md transition-all cursor-pointer ${
                 authMode === 'register' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {t('auth.tabSignUp', 'Sign Up')}
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMode('reset-password')}
-              className={`py-1.5 rounded-md transition-all ${
-                authMode === 'reset-password' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {t('auth.tabResetPassword', 'Reset')}
             </button>
           </div>
         )}

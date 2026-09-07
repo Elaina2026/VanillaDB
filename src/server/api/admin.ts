@@ -18,6 +18,7 @@ import { databaseMembersService } from '../services/members.js';
 import { requireAdminAuth, requireRole, getRateLimitWarningsForUser } from '../middleware/auth.js';
 import { SqlTranslator } from '../utils/sqlTranslator.js';
 import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
+import { stringify } from 'csv-stringify/sync';
 import { TokenPermissionSchema, type MemberRole } from '../../../shared/index.js';
 
 const IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -1071,6 +1072,72 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       offset: query.offset ? parseInt(query.offset, 10) : 0,
     });
     return reply.send({ success: true, data: { items: res.items, total: res.total } });
+  });
+
+  fastify.get('/activity/export', async (req, reply) => {
+    const query = req.query as any;
+    const user = req.adminUser!;
+    const format = (query.format || 'csv').toLowerCase();
+    const type = (query.type || 'activity').toLowerCase();
+
+    if (type === 'audit' && user.role !== 'super_admin' && user.role !== 'admin') {
+      return reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Admin role required' } });
+    }
+
+    let allowedDatabaseIds: string[] | undefined = undefined;
+    if (user.role !== 'super_admin' && user.role !== 'admin') {
+      const userDatabases = databaseService.listDatabases(user.userId, user.role);
+      allowedDatabaseIds = userDatabases.map(d => d.id);
+    }
+
+    if (type === 'audit') {
+      const logs = activityService.listAuditLogs(10_000, 0).items;
+      if (format === 'json') {
+        reply.header('Content-Type', 'application/json');
+        reply.header('Content-Disposition', `attachment; filename="audit-logs-${Date.now()}.json"`);
+        return reply.send(JSON.stringify(logs, null, 2));
+      }
+      const records = [
+        ['ID', 'User', 'Action', 'Resource', 'Result', 'Request ID', 'Details', 'Timestamp'],
+        ...logs.map(l => [l.id, l.user, l.action, l.resource, l.result, l.request_id || '', l.details || '', new Date(l.timestamp).toISOString()])
+      ];
+      reply.header('Content-Type', 'text/csv');
+      reply.header('Content-Disposition', `attachment; filename="audit-logs-${Date.now()}.csv"`);
+      return reply.send(stringify(records));
+    }
+
+    const logs = activityService.listActivity({
+      databaseId: query.databaseId,
+      allowedDatabaseIds,
+      tokenId: query.tokenId,
+      status: query.status,
+      limit: 10_000,
+      offset: 0,
+    }).items;
+
+    if (format === 'json') {
+      reply.header('Content-Type', 'application/json');
+      reply.header('Content-Disposition', `attachment; filename="activity-logs-${Date.now()}.json"`);
+      return reply.send(JSON.stringify(logs, null, 2));
+    }
+
+    const records = [
+      ['ID', 'Database ID', 'Token ID', 'Operation', 'Duration (ms)', 'Status', 'Error Message', 'Row Count', 'Timestamp'],
+      ...logs.map(l => [
+        l.id,
+        l.database_id || '',
+        l.token_id || '',
+        l.operation,
+        l.duration_ms,
+        l.status,
+        l.error_message || '',
+        l.row_count ?? '',
+        new Date(l.timestamp).toISOString(),
+      ])
+    ];
+    reply.header('Content-Type', 'text/csv');
+    reply.header('Content-Disposition', `attachment; filename="activity-logs-${Date.now()}.csv"`);
+    return reply.send(stringify(records));
   });
 
   fastify.get('/audit', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {

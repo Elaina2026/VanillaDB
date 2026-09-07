@@ -20,6 +20,7 @@ import { systemService } from './services/system.js';
 import { webhookService } from './services/webhook.js';
 import { backupScheduler } from './services/backupScheduler.js';
 import { jobSchedulerService } from './services/jobScheduler.js';
+import { maintenanceWorker } from './services/maintenanceWorker.js';
 
 import { authRoutes } from './api/auth.js';
 import { adminRoutes } from './api/admin.js';
@@ -302,16 +303,18 @@ export async function startServer() {
   // Ensure metadata database is initialized
   getMetadataDb();
 
-  // Initialize Webhook listener and Scheduled Backups
+  // Initialize Webhook listener, Scheduled Backups and Auto-Maintenance
   webhookService.init();
   backupScheduler.start();
   jobSchedulerService.start();
+  maintenanceWorker.start();
 
   const app = await buildApp();
 
   const handleShutdown = async (signal: string) => {
     logger.info({ signal }, 'Graceful shutdown initiated');
     try {
+      maintenanceWorker.stop();
       jobSchedulerService.stop();
       backupScheduler.stop();
       webhookService.destroy();

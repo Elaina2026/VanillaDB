@@ -33,6 +33,7 @@ export const systemRoutes: FastifyPluginAsync = async (fastify) => {
       log_level: z.enum(['trace', 'debug', 'info', 'warn', 'error']).optional(),
       enable_cors_all: z.boolean().optional(),
       enable_stack_traces: z.boolean().optional(),
+      log_retention_days: z.number().int().min(1).max(365).optional(),
     });
 
     const parsed = Schema.safeParse(req.body);

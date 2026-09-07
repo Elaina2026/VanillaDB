@@ -1517,5 +1517,89 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     });
     expect(userMetricsRes.statusCode).toBe(403);
   });
+
+  // 24. Background Auto-Maintenance Worker & Log Pruning
+  it('should run background maintenance cycle without errors and prune expired logs', async () => {
+    const { maintenanceWorker } = await import('../src/server/services/maintenanceWorker.js');
+    const { getMetadataDb } = await import('../src/server/db/metadata.js');
+
+    // Seed an expired log item (60 days old)
+    const oldTimestamp = Date.now() - 60 * 24 * 60 * 60 * 1000;
+    const metaDb = getMetadataDb();
+    metaDb.prepare(`
+      INSERT INTO activity_logs (id, database_id, operation, duration_ms, status, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run('act_old_test', testDbId || 'test_db', 'SELECT_OLD', 1, 'success', oldTimestamp);
+
+    // Run maintenance cycle
+    const result = await maintenanceWorker.runMaintenanceCycle();
+    expect(result.optimizedDatabases).toBeGreaterThanOrEqual(1);
+    expect(result.prunedLogs).toBeGreaterThanOrEqual(1);
+
+    // Verify expired log was pruned
+    const check = metaDb.prepare("SELECT id FROM activity_logs WHERE id = 'act_old_test'").get();
+    expect(check).toBeUndefined();
+  });
+
+  // 25. Activity & Audit Logs Export (CSV and JSON)
+  it('should export activity and audit logs in CSV and JSON formats', async () => {
+    // 1. Export Activity as CSV
+    const csvRes = await app.inject({
+      method: 'GET',
+      url: '/api/admin/activity/export?type=activity&format=csv',
+      headers: { cookie: adminCookie },
+    });
+    expect(csvRes.statusCode).toBe(200);
+    expect(csvRes.headers['content-type']).toContain('text/csv');
+    expect(csvRes.body).toContain('ID,Database ID,Token ID,Operation');
+
+    // 2. Export Activity as JSON
+    const jsonRes = await app.inject({
+      method: 'GET',
+      url: '/api/admin/activity/export?type=activity&format=json',
+      headers: { cookie: adminCookie },
+    });
+    expect(jsonRes.statusCode).toBe(200);
+    expect(jsonRes.headers['content-type']).toContain('application/json');
+    const logs = JSON.parse(jsonRes.body);
+    expect(Array.isArray(logs)).toBe(true);
+
+    // 3. Export Audit as CSV
+    const auditCsv = await app.inject({
+      method: 'GET',
+      url: '/api/admin/activity/export?type=audit&format=csv',
+      headers: { cookie: adminCookie },
+    });
+    expect(auditCsv.statusCode).toBe(200);
+    expect(auditCsv.headers['content-type']).toContain('text/csv');
+    expect(auditCsv.body).toContain('ID,User,Action,Resource,Result');
+  });
+
+  // 26. OpenAPI 3.0 Specification & Swagger UI Playground
+  it('should serve OpenAPI 3.0 specification at /v1/openapi.json and Swagger UI at /v1/docs', async () => {
+    // 1. OpenAPI Spec JSON
+    const specRes = await app.inject({
+      method: 'GET',
+      url: '/v1/openapi.json',
+    });
+    expect(specRes.statusCode).toBe(200);
+    const spec = specRes.json();
+    expect(spec.openapi).toBe('3.0.3');
+    expect(spec.info.title).toContain('VanillaDatabase');
+    expect(spec.paths['/v1/databases/{databaseId}/query']).toBeDefined();
+    expect(spec.paths['/v1/databases/{databaseId}/batch']).toBeDefined();
+    expect(spec.paths['/v1/databases/{databaseId}/tables/{table}/rows']).toBeDefined();
+    expect(spec.paths['/v1/databases/{databaseId}/realtime']).toBeDefined();
+
+    // 2. Swagger UI HTML
+    const docsRes = await app.inject({
+      method: 'GET',
+      url: '/v1/docs',
+    });
+    expect(docsRes.statusCode).toBe(200);
+    expect(docsRes.headers['content-type']).toContain('text/html');
+    expect(docsRes.body).toContain('swagger-ui');
+    expect(docsRes.body).toContain('/v1/openapi.json');
+  });
 });
 

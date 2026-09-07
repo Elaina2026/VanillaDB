@@ -964,6 +964,26 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.logRetentionDays', 'Activity & Audit Log Retention (Days)')}</label>
+              <select
+                disabled={!isSuperAdminOrAdmin}
+                value={current.log_retention_days || 30}
+                onChange={(e) => setForm({ ...form, log_retention_days: parseInt(e.target.value, 10) || 30 })}
+                className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground disabled:opacity-50"
+              >
+                <option value={7}>7 {t('settings.days', 'Days')}</option>
+                <option value={30}>30 {t('settings.daysRecommended', 'Days (Recommended)')}</option>
+                <option value={60}>60 {t('settings.days', 'Days')}</option>
+                <option value={90}>90 {t('settings.days', 'Days')}</option>
+                <option value={180}>180 {t('settings.days', 'Days')}</option>
+                <option value={365}>365 {t('settings.daysYear', 'Days (1 Year)')}</option>
+              </select>
+              <span className="text-[10px] text-muted-foreground mt-1 block">
+                {t('settings.logRetentionDaysDesc', 'Automatically purge activity and audit logs older than N days to prevent disk bloat.')}
+              </span>
+            </div>
+
+            <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.maxUploadSize', 'Max Media Upload Size (MB)')}</label>
               <input
                 type="number"

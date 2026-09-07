@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Shield, Filter, RefreshCw, CheckCircle, XCircle, Terminal, Search, Database, Clock, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Activity, Shield, Filter, RefreshCw, CheckCircle, XCircle, Terminal, Search, Database, Clock, ChevronLeft, ChevronRight, AlertTriangle, Download } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatDate } from '../lib/utils.js';
 import { useI18n } from '../hooks/useI18n.js';
@@ -101,9 +101,29 @@ export const ActivityPage: React.FC = () => {
               {t('activity.tabActivity', 'API & SQL Activity')}
             </span>
           )}
+          <div className="flex items-center gap-1.5">
+            <a
+              href={`/api/admin/activity/export?type=${activeTab}&format=csv`}
+              download
+              className="flex items-center gap-1 px-2.5 py-1 bg-card border border-border hover:bg-accent text-foreground rounded text-xs font-medium transition-colors shadow-sm cursor-pointer"
+              title={t('common.exportCsv', 'Export CSV')}
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-500" />
+              <span>CSV</span>
+            </a>
+            <a
+              href={`/api/admin/activity/export?type=${activeTab}&format=json`}
+              download
+              className="flex items-center gap-1 px-2.5 py-1 bg-card border border-border hover:bg-accent text-foreground rounded text-xs font-medium transition-colors shadow-sm cursor-pointer"
+              title={t('common.exportJson', 'Export JSON')}
+            >
+              <Download className="w-3.5 h-3.5 text-blue-500" />
+              <span>JSON</span>
+            </a>
+          </div>
           <button
             onClick={() => (activeTab === 'activity' ? refetchActivity() : refetchAudit())}
-            className="p-1.5 bg-card border border-border hover:bg-accent rounded text-muted-foreground transition-colors"
+            className="p-1.5 bg-card border border-border hover:bg-accent rounded text-muted-foreground transition-colors cursor-pointer"
             title="Refresh Logs"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isActivityFetching || isAuditFetching ? 'animate-spin text-blue-500' : ''}`} />

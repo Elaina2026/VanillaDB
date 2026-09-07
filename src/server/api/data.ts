@@ -11,6 +11,7 @@ import { storageService } from '../services/storage.js';
 import { realtimeService } from '../services/realtime.js';
 import { requireTokenPermission } from '../middleware/auth.js';
 import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
+import { getOpenApiSpec, getSwaggerHtml } from '../utils/openapi.js';
 
 function isTablePermitted(table: string, apiToken?: any): boolean {
   if (!apiToken) return true;
@@ -112,6 +113,20 @@ export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, fileP
 }
 
 export const dataRoutes: FastifyPluginAsync = async (fastify) => {
+  // OpenAPI 3.0 Specification in JSON
+  fastify.get('/openapi.json', async (req, reply) => {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const host = req.headers['x-forwarded-host'] || req.headers.host || `${config.host}:${config.port}`;
+    const baseUrl = `${protocol}://${host}`;
+    return reply.send(getOpenApiSpec(baseUrl));
+  });
+
+  // Interactive Swagger UI API Playground
+  fastify.get('/docs', async (req, reply) => {
+    reply.header('Content-Type', 'text/html; charset=utf-8');
+    return reply.send(getSwaggerHtml());
+  });
+
   // Raw SQL Query API
   fastify.post('/databases/:databaseId/query', {
     preHandler: [requireTokenPermission('database:read')],
