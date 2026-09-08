@@ -9,6 +9,7 @@ export interface SessionUser {
   userId: string;
   username: string;
   role: UserRole;
+  tokenVersion?: number;
 }
 
 export class AuthService {
@@ -62,8 +63,8 @@ export class AuthService {
     const now = Date.now();
 
     metaDb.prepare(`
-      INSERT INTO users (id, username, email, avatar_url, password_hash, role, max_databases, rate_limit_per_minute, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (id, username, email, avatar_url, password_hash, role, max_databases, rate_limit_per_minute, status, token_version, last_totp_step, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, -1, ?, ?)
     `).run(id, username, email || null, avatarUrl || null, hash, role, maxDatabases, rateLimitPerMinute, status, now, now);
 
     return {
@@ -76,6 +77,8 @@ export class AuthService {
       rate_limit_per_minute: rateLimitPerMinute,
       status,
       totp_enabled: false,
+      token_version: 1,
+      last_totp_step: -1,
       created_at: now,
       updated_at: now,
     };
@@ -104,7 +107,7 @@ export class AuthService {
   public listUsers(): UserRecord[] {
     const metaDb = getMetadataDb();
     const users = metaDb.prepare(`
-      SELECT u.id, u.username, u.email, u.avatar_url, u.role, u.max_databases, u.rate_limit_per_minute, u.status, u.totp_enabled, u.created_at, u.updated_at,
+      SELECT u.id, u.username, u.email, u.avatar_url, u.role, u.max_databases, u.rate_limit_per_minute, u.status, u.totp_enabled, u.token_version, u.last_totp_step, u.created_at, u.updated_at,
              (SELECT COUNT(*) FROM databases d WHERE d.owner_id = u.id) as database_count
       FROM users u
       ORDER BY u.created_at ASC
@@ -120,6 +123,8 @@ export class AuthService {
       rate_limit_per_minute: u.rate_limit_per_minute ?? 60,
       status: u.status || 'active',
       totp_enabled: Boolean(u.totp_enabled),
+      token_version: u.token_version ?? 1,
+      last_totp_step: u.last_totp_step ?? -1,
       database_count: Number(u.database_count || 0),
       created_at: u.created_at,
       updated_at: u.updated_at,
@@ -129,7 +134,7 @@ export class AuthService {
   public getUserById(userId: string): UserRecord | null {
     const metaDb = getMetadataDb();
     const u = metaDb.prepare(`
-      SELECT u.id, u.username, u.email, u.avatar_url, u.role, u.max_databases, u.rate_limit_per_minute, u.status, u.totp_enabled, u.created_at, u.updated_at,
+      SELECT u.id, u.username, u.email, u.avatar_url, u.role, u.max_databases, u.rate_limit_per_minute, u.status, u.totp_enabled, u.token_version, u.last_totp_step, u.created_at, u.updated_at,
              (SELECT COUNT(*) FROM databases d WHERE d.owner_id = u.id) as database_count
       FROM users u
       WHERE u.id = ?
@@ -146,6 +151,8 @@ export class AuthService {
       rate_limit_per_minute: u.rate_limit_per_minute ?? 60,
       status: u.status || 'active',
       totp_enabled: Boolean(u.totp_enabled),
+      token_version: u.token_version ?? 1,
+      last_totp_step: u.last_totp_step ?? -1,
       database_count: Number(u.database_count || 0),
       created_at: u.created_at,
       updated_at: u.updated_at,
@@ -201,9 +208,15 @@ export class AuthService {
     if (hash) {
       metaDb.prepare(`
         UPDATE users
-        SET email = ?, avatar_url = ?, password_hash = ?, role = ?, max_databases = ?, rate_limit_per_minute = ?, status = ?, updated_at = ?
+        SET email = ?, avatar_url = ?, password_hash = ?, role = ?, max_databases = ?, rate_limit_per_minute = ?, status = ?, token_version = token_version + 1, updated_at = ?
         WHERE id = ?
       `).run(email, avatarUrl, hash, role, maxDatabases, rateLimit, status, now, userId);
+    } else if (status === 'disabled' || (updates.role && updates.role !== existing.role)) {
+      metaDb.prepare(`
+        UPDATE users
+        SET email = ?, avatar_url = ?, role = ?, max_databases = ?, rate_limit_per_minute = ?, status = ?, token_version = token_version + 1, updated_at = ?
+        WHERE id = ?
+      `).run(email, avatarUrl, role, maxDatabases, rateLimit, status, now, userId);
     } else {
       metaDb.prepare(`
         UPDATE users
@@ -257,11 +270,11 @@ export class AuthService {
     const cleanIdentifier = usernameOrEmail.trim();
     const cleanLower = cleanIdentifier.toLowerCase();
     const row = metaDb.prepare(`
-      SELECT id, username, email, avatar_url, password_hash, role, max_databases, rate_limit_per_minute, status, totp_enabled, created_at, updated_at
+      SELECT id, username, email, avatar_url, password_hash, role, max_databases, rate_limit_per_minute, status, totp_enabled, token_version, last_totp_step, created_at, updated_at
       FROM users
       WHERE username = ? OR email = ? OR LOWER(email) = ? OR LOWER(username) = ?
     `).get(cleanIdentifier, cleanIdentifier, cleanLower, cleanLower) as
-      | { id: string; username: string; email?: string | null; avatar_url?: string | null; password_hash: string; role?: string; max_databases?: number; rate_limit_per_minute?: number; status?: string; totp_enabled?: number; created_at: number; updated_at: number }
+      | { id: string; username: string; email?: string | null; avatar_url?: string | null; password_hash: string; role?: string; max_databases?: number; rate_limit_per_minute?: number; status?: string; totp_enabled?: number; token_version?: number; last_totp_step?: number; created_at: number; updated_at: number }
       | undefined;
 
     if (!row) return null;
@@ -280,19 +293,48 @@ export class AuthService {
       rate_limit_per_minute: row.rate_limit_per_minute ?? 60,
       status: (row.status as any) || 'active',
       totp_enabled: Boolean(row.totp_enabled),
+      token_version: row.token_version ?? 1,
+      last_totp_step: row.last_totp_step ?? -1,
       created_at: row.created_at,
       updated_at: row.updated_at,
     };
   }
 
-  public createSessionSignature(userId: string, username: string, role: string, expiresAt: number, secret: string): string {
-    const payload = `${userId}:${username}:${role}:${expiresAt}`;
+  public createSessionSignature(userId: string, username: string, role: string, expiresAt: number, secret: string, tokenVersion: number = 1): string {
+    const payload = `${userId}:${username}:${role}:${expiresAt}:${tokenVersion}`;
     return crypto.createHmac('sha256', secret).update(payload).digest('hex');
   }
 
   public verifySessionCookie(cookieValue: string, secret: string): SessionUser | null {
     try {
       const parts = cookieValue.split('.');
+      if (parts.length === 6) {
+        const [userId, username, role, expiresAtStr, versionStr, signature] = parts;
+        const expiresAt = parseInt(expiresAtStr, 10);
+        const tokenVersion = parseInt(versionStr, 10);
+        if (isNaN(expiresAt) || Date.now() > expiresAt || isNaN(tokenVersion)) return null;
+
+        const expectedSignature = this.createSessionSignature(userId, username, role, expiresAt, secret, tokenVersion);
+        if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+          return { userId, username, role: role as UserRole, tokenVersion };
+        }
+        return null;
+      }
+
+      // Legacy 5-part cookie fallback [userId, username, role, expiresAt, signature]
+      if (parts.length === 5) {
+        const [userId, username, role, expiresAtStr, signature] = parts;
+        const expiresAt = parseInt(expiresAtStr, 10);
+        if (isNaN(expiresAt) || Date.now() > expiresAt) return null;
+
+        const legacyPayload = `${userId}:${username}:${role}:${expiresAt}`;
+        const legacySignature = crypto.createHmac('sha256', secret).update(legacyPayload).digest('hex');
+        if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(legacySignature))) {
+          return { userId, username, role: role as UserRole, tokenVersion: 1 };
+        }
+        return null;
+      }
+
       if (parts.length === 4) {
         // Old 4-part cookie fallback [userId, username, expiresAt, signature]
         const [userId, username, expiresAtStr, signature] = parts;
@@ -302,20 +344,11 @@ export class AuthService {
         const expectedSignature = crypto.createHmac('sha256', secret).update(`${userId}:${username}:${expiresAt}`).digest('hex');
         if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
           const user = this.getUserById(userId);
-          return { userId, username, role: user?.role || 'super_admin' };
+          return { userId, username, role: user?.role || 'super_admin', tokenVersion: 1 };
         }
         return null;
       }
 
-      if (parts.length !== 5) return null;
-      const [userId, username, role, expiresAtStr, signature] = parts;
-      const expiresAt = parseInt(expiresAtStr, 10);
-      if (isNaN(expiresAt) || Date.now() > expiresAt) return null;
-
-      const expectedSignature = this.createSessionSignature(userId, username, role, expiresAt, secret);
-      if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
-        return { userId, username, role: role as UserRole };
-      }
       return null;
     } catch {
       return null;
@@ -335,7 +368,7 @@ export class AuthService {
     }
 
     const newHash = await this.hashPassword(newPassword);
-    metaDb.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(newHash, Date.now(), userId);
+    metaDb.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?').run(newHash, Date.now(), userId);
     return true;
   }
 
@@ -343,8 +376,9 @@ export class AuthService {
     const maxAgeMs = 7 * 24 * 60 * 60 * 1000; // 7 days
     const expiresAt = Date.now() + maxAgeMs;
     const role = user.role || 'user';
-    const signature = this.createSessionSignature(user.id, user.username, role, expiresAt, secret);
-    const cookieValue = `${user.id}.${user.username}.${role}.${expiresAt}.${signature}`;
+    const version = user.token_version ?? 1;
+    const signature = this.createSessionSignature(user.id, user.username, role, expiresAt, secret, version);
+    const cookieValue = `${user.id}.${user.username}.${role}.${expiresAt}.${version}.${signature}`;
     return {
       cookieValue,
       expires: new Date(expiresAt),

@@ -21,7 +21,15 @@ import {
   Sparkles,
   ExternalLink,
   ShieldAlert,
-  User as UserIcon
+  Archive,
+  Table as TableIcon,
+  Maximize2,
+  Download,
+  PanelLeftClose,
+  User as UserIcon,
+  Trash2,
+  RefreshCw,
+  Clock
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
@@ -74,15 +82,18 @@ export const ShortcutsPage: React.FC<{
 
   const shortcutGroups: ShortcutGroup[] = [
     {
-      title: isVi ? 'Toàn hệ thống (Global Shortcuts)' : 'Global Shortcuts',
+      title: isVi ? 'Toàn hệ thống & Vim Chords (Global UX)' : 'Global Shortcuts & Vim Chords',
       icon: Command,
       shortcuts: [
         { keys: ['Ctrl', 'K'], label: isVi ? 'Mở thanh tìm kiếm lệnh nhanh (Command Palette)' : 'Open Command Palette', action: onOpenSearch },
         { keys: ['Ctrl', 'B'], label: isVi ? 'Mở cửa sổ tạo cơ sở dữ liệu mới' : 'Open Create Database modal', action: onOpenCreateDb },
+        { keys: ['Ctrl', '\\'], label: isVi ? 'Thu gọn / Mở rộng Sidebar điều hướng' : 'Toggle Sidebar collapse/expand' },
+        { keys: ['G', 'D'], label: isVi ? 'Nhảy nhanh về danh sách Database (Vim style)' : 'Jump to Databases (Vim chord)', action: () => onNavigate('databases') },
+        { keys: ['G', 'I'], label: isVi ? 'Nhảy nhanh về Hộp thư thông báo (Vim style)' : 'Jump to Inbox (Vim chord)', action: () => onNavigate('inbox') },
         { keys: ['Ctrl', 'Shift', 'L'], label: isVi ? 'Chuyển đổi nhanh ngôn ngữ (English / Tiếng Việt)' : 'Toggle language (English / Vietnamese)', action: toggleLanguage },
         { keys: ['Alt', 'T'], label: isVi ? 'Chuyển đổi giao diện Sáng / Tối' : 'Toggle theme (Light / Dark)', action: toggleTheme },
         { keys: ['Shift', '?'], label: isVi ? 'Mở trang tra cứu phím tắt này' : 'Navigate to Shortcuts page', action: () => onNavigate('shortcuts') },
-        { keys: ['Esc'], label: isVi ? 'Đóng các modal / Command Palette đang mở' : 'Close active modals / palette' },
+        { keys: ['Esc'], label: isVi ? 'Đóng các modal / Command Palette / Thoát Zen mode' : 'Close active modals / palette / exit Zen' },
       ],
     },
     {
@@ -122,10 +133,37 @@ export const ShortcutsPage: React.FC<{
       ],
     },
     {
-      title: isVi ? 'Thao tác SQL Console' : 'SQL Console Operations',
+      title: isVi ? 'Tác vụ Database & Sao lưu (Database Actions)' : 'Database Actions & Backup Operations',
+      icon: Archive,
+      shortcuts: [
+        { keys: ['Ctrl', 'Shift', 'B'], label: isVi ? 'Tạo nhanh bản sao lưu tức thì (Instant Snapshot)' : 'Create instant database backup snapshot', contextual: true },
+        { keys: ['Ctrl', 'Shift', 'D'], label: isVi ? 'Mở cửa sổ nhân bản Database (Clone/Branch Database)' : 'Open Clone / Branch Database modal', contextual: true },
+        { keys: ['Alt', 'M'], label: isVi ? 'Chạy kiểm tra toàn vẹn & dọn dẹp (PRAGMA integrity_check)' : 'Run maintenance integrity check & vacuum', contextual: true },
+      ],
+    },
+    {
+      title: isVi ? 'Quản lý Bảng & Dòng (Table Browser Operations)' : 'Table Browser Operations',
+      icon: TableIcon,
+      shortcuts: [
+        { keys: ['Alt', 'I'], label: isVi ? 'Mở cửa sổ chèn dòng mới (Insert Row)' : 'Open Insert Row modal', contextual: true },
+        { keys: ['Alt', 'R'], label: isVi ? 'Tải lại dữ liệu bảng hiện tại (Refresh Table Rows)' : 'Refresh table rows and schema', contextual: true },
+        { keys: ['['], label: isVi ? 'Lùi trang dữ liệu trước (Previous Page)' : 'Previous table page', contextual: true },
+        { keys: [']'], label: isVi ? 'Tiến trang dữ liệu kế tiếp (Next Page)' : 'Next table page', contextual: true },
+        { keys: ['/'], label: isVi ? 'Nhảy nhanh con trỏ vào ô tìm kiếm bảng' : 'Quick focus table search / filter', contextual: true },
+        { keys: ['Del'], label: isVi ? 'Xóa các dòng dữ liệu đang chọn (Bulk Delete)' : 'Delete selected rows', contextual: true },
+      ],
+    },
+    {
+      title: isVi ? 'Trình soạn thảo SQL (SQL Console Operations)' : 'SQL Console Operations',
       icon: Terminal,
       shortcuts: [
         { keys: ['Ctrl', 'Enter'], label: isVi ? 'Thực thi câu lệnh SQL đang soạn thảo' : 'Execute active SQL statement', contextual: true },
+        { keys: ['Ctrl', 'E'], label: isVi ? 'Phân tích kế hoạch truy vấn (EXPLAIN Query Plan)' : 'Analyze EXPLAIN query plan', contextual: true },
+        { keys: ['Ctrl', 'S'], label: isVi ? 'Tải kết quả truy vấn ra file CSV' : 'Export query results to CSV', contextual: true },
+        { keys: ['Alt', '↑'], label: isVi ? 'Duyệt câu lệnh SQL trước đó trong lịch sử' : 'Navigate backward in query history', contextual: true },
+        { keys: ['Alt', '↓'], label: isVi ? 'Duyệt câu lệnh SQL kế tiếp trong lịch sử' : 'Navigate forward in query history', contextual: true },
+        { keys: ['Ctrl', '/'], label: isVi ? 'Bật/tắt comment dòng lệnh SQL (--)' : 'Toggle SQL line comment (--)', contextual: true },
+        { keys: ['F11'], label: isVi ? 'Bật/tắt chế độ toàn màn hình Editor (Zen Mode)' : 'Toggle Fullscreen Zen Mode for SQL Editor', contextual: true },
         { keys: ['Ctrl', 'L'], label: isVi ? 'Xóa trắng trình soạn thảo SQL' : 'Clear SQL editor', contextual: true },
         { keys: ['Ctrl', 'Shift', 'F'], label: isVi ? 'Định dạng mã SQL (Format Query)' : 'Format SQL statement', contextual: true },
       ],
@@ -200,45 +238,43 @@ export const ShortcutsPage: React.FC<{
                   return (
                     <div
                       key={idx}
+                      onClick={sc.action}
                       role={isClickable ? 'button' : undefined}
                       tabIndex={isClickable ? 0 : undefined}
-                      onClick={() => sc.action?.()}
                       onKeyDown={(e) => {
                         if (isClickable && (e.key === 'Enter' || e.key === ' ')) {
                           e.preventDefault();
-                          sc.action?.();
+                          sc.action!();
                         }
                       }}
-                      className={`group flex items-center justify-between py-2 px-2.5 rounded-lg border border-transparent transition-all ${
+                      className={`flex items-center justify-between py-2 px-2.5 rounded-lg text-xs group transition-all ${
                         isClickable
-                          ? 'hover:bg-accent/70 hover:border-border cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500'
-                          : 'opacity-90'
+                          ? 'hover:bg-accent cursor-pointer text-foreground'
+                          : 'text-muted-foreground'
                       }`}
                     >
-                      <div className="flex items-center gap-2 min-w-0 pr-2">
-                        <span className="text-xs text-foreground/85 group-hover:text-foreground transition-colors truncate">
+                      <div className="flex items-center gap-2 min-w-0 pr-3">
+                        <span className={`truncate font-medium ${isClickable ? 'group-hover:text-blue-500' : ''}`}>
                           {sc.label}
                         </span>
                         {sc.contextual && (
-                          <span className="text-[9px] px-1.5 py-0.2 bg-muted border border-border text-muted-foreground rounded font-mono shrink-0">
+                          <span className="text-[9px] px-1.5 py-0.2 bg-muted border border-border rounded text-muted-foreground shrink-0">
                             {isVi ? 'Trong DB' : 'In DB'}
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="flex items-center gap-1">
-                          {sc.keys.map((k, kIdx) => (
-                            <kbd
-                              key={kIdx}
-                              className="px-2 py-0.5 text-[11px] font-mono font-bold bg-muted border border-border rounded shadow-xs text-foreground group-hover:border-blue-500/40 transition-colors"
-                            >
-                              {k}
-                            </kbd>
-                          ))}
-                        </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {sc.keys.map((k, kIdx) => (
+                          <kbd
+                            key={kIdx}
+                            className="px-2 py-0.5 bg-background border border-border rounded font-mono text-[11px] font-semibold text-foreground shadow-2xs group-hover:border-blue-500/40 transition-colors"
+                          >
+                            {k}
+                          </kbd>
+                        ))}
                         {isClickable && (
-                          <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" />
+                          <ArrowRight className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all ml-1" />
                         )}
                       </div>
                     </div>

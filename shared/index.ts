@@ -23,6 +23,8 @@ export interface UserRecord {
   rate_limit_per_minute: number;
   status: 'active' | 'disabled';
   totp_enabled?: boolean;
+  token_version?: number;
+  last_totp_step?: number;
   database_count?: number;
   created_at: number;
   updated_at?: number;

@@ -88,19 +88,29 @@ export function generateTotpCode(secret: string, timeStepMs = 30000, timestamp =
 }
 
 /**
- * Verify a user-supplied 6-digit code with +/- 1 time step tolerance (30 seconds drift)
+ * Verify a user-supplied 6-digit code with +/- 1 time step tolerance (30 seconds drift).
+ * Enforces RFC 6238 Section 5.2 replay protection by verifying that candidateStep > lastUsedStep.
  */
-export function verifyTotpCode(secret: string, code: string, timeStepMs = 30000, timestamp = Date.now()): boolean {
-  if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) return false;
+export function verifyTotpCode(
+  secret: string,
+  code: string,
+  timeStepMs = 30000,
+  timestamp = Date.now(),
+  lastUsedStep = -1
+): { valid: boolean; step?: number } {
+  if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) return { valid: false };
 
+  const currentStep = Math.floor(timestamp / timeStepMs);
   for (let step = -1; step <= 1; step++) {
-    const candidate = generateTotpCode(secret, timeStepMs, timestamp + step * timeStepMs);
+    const candidateStep = currentStep + step;
+    if (candidateStep <= lastUsedStep) continue;
+    const candidate = generateTotpCode(secret, timeStepMs, candidateStep * timeStepMs);
     if (crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(code))) {
-      return true;
+      return { valid: true, step: candidateStep };
     }
   }
 
-  return false;
+  return { valid: false };
 }
 
 /**

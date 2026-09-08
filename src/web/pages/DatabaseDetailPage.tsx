@@ -44,7 +44,10 @@ import {
   TrendingUp,
   X,
   Users,
-  UserPlus
+  UserPlus,
+  Search,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatTimeAgo, formatDate } from '../lib/utils.js';
@@ -101,46 +104,6 @@ export const DatabaseDetailPage: React.FC<{
       onTabChange(tab);
     }
   };
-
-  // Keyboard navigation for Database Detail Tabs (Alt + Shift + 1..9 or direct digit when not typing in input)
-  useEffect(() => {
-    const detailTabsList: Array<typeof activeTab> = [
-      'overview',      // 1
-      'analytics',     // 2
-      'tables',        // 3
-      'editor',        // 4
-      'schema',        // 5
-      'storage',       // 6
-      'import-export', // 7
-      'realtime',      // 8
-      'webhooks',      // 9
-    ];
-
-    const handleDetailKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const isInput = Boolean(
-        target && (
-          ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) ||
-          target.isContentEditable ||
-          Boolean(target.closest?.('.monaco-editor, [role="textbox"], [role="dialog"]'))
-        )
-      );
-      const isModalActive = Boolean(document.querySelector('[role="dialog"], [aria-modal="true"]'));
-      if (isInput || isModalActive) return;
-
-      // Allow 1..9 (without Ctrl/Meta/Alt) to switch tabs quickly when focused on Database Detail
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
-        const num = parseInt(e.key, 10);
-        if (num >= 1 && num <= detailTabsList.length) {
-          e.preventDefault();
-          handleTabChange(detailTabsList[num - 1]);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleDetailKeyDown);
-    return () => window.removeEventListener('keydown', handleDetailKeyDown);
-  }, [databaseId, onTabChange]);
 
   // Queries
   const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useQuery<DatabaseOverviewStats>({
@@ -502,6 +465,9 @@ export const DatabaseDetailPage: React.FC<{
   const [tableOffset, setTableOffset] = useState<number>(0);
   const [selectedRowIds, setSelectedRowIds] = useState<any[]>([]);
   const [mobileDetailRow, setMobileDetailRow] = useState<Record<string, any> | null>(null);
+  const [tableSearchQuery, setTableSearchQuery] = useState<string>('');
+  const tableSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [isZenMode, setIsZenMode] = useState<boolean>(false);
 
   // Desktop Split View & Visual Query Builder
   const [isSplitView, setIsSplitView] = useState(true);
@@ -718,12 +684,32 @@ export const DatabaseDetailPage: React.FC<{
   } | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [sqlHistory, setSqlHistory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(`vdb_sql_history_${databaseId}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const sqlEditorRef = useRef<HTMLTextAreaElement | null>(null);
 
   const handleExecuteSql = async () => {
     if (!sqlText.trim()) return;
     setIsExecuting(true);
     setQueryError(null);
     setExplainResult(null);
+    setSqlHistory((prev) => {
+      const trimmed = sqlText.trim();
+      if (!trimmed || prev[prev.length - 1] === trimmed) return prev;
+      const updated = [...prev, trimmed].slice(-50);
+      try {
+        localStorage.setItem(`vdb_sql_history_${databaseId}`, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    setHistoryIndex(-1);
     try {
       const isMultiStatement = sqlText.includes(';') && sqlText.trim().split(';').filter(s => s.trim()).length > 1;
       const endpoint = isMultiStatement
@@ -861,6 +847,168 @@ export const DatabaseDetailPage: React.FC<{
       showError(err.message || 'Failed to clone database');
     },
   });
+
+  // Comprehensive Keyboard Shortcuts Listener for Database Detail Page
+  useEffect(() => {
+    const detailTabsList: Array<typeof activeTab> = [
+      'overview',      // 1
+      'analytics',     // 2
+      'tables',        // 3
+      'editor',        // 4
+      'schema',        // 5
+      'storage',       // 6
+      'import-export', // 7
+      'realtime',      // 8
+      'webhooks',      // 9
+    ];
+
+    const handleDetailKeyDown = (e: KeyboardEvent) => {
+      // 1. Check if user is typing in form controls or editor
+      const target = e.target as HTMLElement | null;
+      const isInput = Boolean(
+        target && (
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) ||
+          target.isContentEditable ||
+          Boolean(target.closest?.('.monaco-editor, [role="textbox"]'))
+        )
+      );
+      const isModalActive = Boolean(document.querySelector('[role="dialog"], [aria-modal="true"]'));
+
+      // 2. Zen Mode Shortcuts: F11 and Escape (Always active even in editor)
+      if (e.key === 'F11' && activeTab === 'editor') {
+        e.preventDefault();
+        setIsZenMode((prev) => !prev);
+        return;
+      }
+      if (isZenMode && e.key === 'Escape') {
+        e.preventDefault();
+        setIsZenMode(false);
+        return;
+      }
+
+      // 3. Database Action Shortcuts (Active across Database Detail when modal is NOT open)
+      if (!isModalActive) {
+        // Ctrl + Shift + B: Instant backup snapshot
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'B' || e.key === 'b' || e.code === 'KeyB')) {
+          e.preventDefault();
+          if (canManageMembers || canAdmin) {
+            createBackupMutation.mutate();
+            showSuccess(language === 'vi' ? 'Đang tạo bản sao lưu tức thì...' : 'Creating backup snapshot...');
+          }
+          return;
+        }
+
+        // Ctrl + Shift + D: Clone / Branch Database modal
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd' || e.code === 'KeyD')) {
+          e.preventDefault();
+          const dbName = stats?.database?.name || 'database';
+          setCloneNewName(`${dbName} (Dev Branch)`);
+          setIsCloneModalOpen(true);
+          return;
+        }
+
+        // Alt + M: Run integrity check & maintenance
+        if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === 'm' || e.key === 'M' || e.code === 'KeyM')) {
+          e.preventDefault();
+          if (canAdmin) {
+            maintenanceMutation.mutate('integrity_check');
+            showSuccess(language === 'vi' ? 'Đang chạy kiểm tra toàn vẹn PRAGMA integrity_check...' : 'Running PRAGMA integrity_check...');
+          }
+          return;
+        }
+      }
+
+      // If typing in input or modal open, do not trigger single-key or navigation shortcuts
+      if (isInput || isModalActive) return;
+
+      // 4. Table Browser specific shortcuts (active when in tables tab)
+      if (activeTab === 'tables') {
+        // Alt + I: Open Insert Row modal
+        if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === 'i' || e.key === 'I' || e.code === 'KeyI')) {
+          e.preventDefault();
+          if (canEdit && selectedTable) {
+            setIsInsertModalOpen(true);
+          }
+          return;
+        }
+
+        // Alt + R: Refresh table data and schema
+        if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === 'r' || e.key === 'R' || e.code === 'KeyR')) {
+          e.preventDefault();
+          refetchRows();
+          refetchSchema();
+          showSuccess(language === 'vi' ? 'Đã làm mới dữ liệu bảng' : 'Table data refreshed');
+          return;
+        }
+
+        // [ : Previous page
+        if (e.key === '[') {
+          e.preventDefault();
+          setTableOffset((prev) => Math.max(0, prev - tableLimit));
+          setSelectedRowIds([]);
+          return;
+        }
+
+        // ] : Next page
+        if (e.key === ']') {
+          e.preventDefault();
+          setTableOffset((prev) => prev + tableLimit);
+          setSelectedRowIds([]);
+          return;
+        }
+
+        // / : Focus table search / filter input
+        if (e.key === '/') {
+          e.preventDefault();
+          tableSearchInputRef.current?.focus();
+          return;
+        }
+
+        // Del : Bulk delete selected rows
+        if ((e.key === 'Delete' || e.code === 'Delete') && selectedRowIds.length > 0 && canEdit) {
+          e.preventDefault();
+          setConfirmConfig({
+            isOpen: true,
+            title: t('tables.deleteSelectedTitle', 'Delete Selected Rows?'),
+            message: t('tables.confirmDeleteSelected', 'Are you sure you want to delete selected row(s)? This action cannot be undone.'),
+            confirmText: `${t('common.delete', 'Delete')} (${selectedRowIds.length})`,
+            variant: 'danger',
+            isLoading: deleteBulkMutation.isPending,
+            onConfirm: () => {
+              deleteBulkMutation.mutate(selectedRowIds);
+              setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+            },
+          });
+          return;
+        }
+      }
+
+      // 5. Number keys 1..9: switch Database Detail tabs quickly
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        const num = parseInt(e.key, 10);
+        if (num >= 1 && num <= detailTabsList.length) {
+          e.preventDefault();
+          handleTabChange(detailTabsList[num - 1]);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleDetailKeyDown);
+    return () => window.removeEventListener('keydown', handleDetailKeyDown);
+  }, [
+    databaseId,
+    activeTab,
+    isZenMode,
+    canManageMembers,
+    canAdmin,
+    canEdit,
+    selectedTable,
+    tableLimit,
+    selectedRowIds,
+    stats?.database?.name,
+    language,
+    onTabChange,
+  ]);
 
   // Update Database Info (Name, Description & Max Size Quota)
   const [editDbName, setEditDbName] = useState('');
@@ -1537,9 +1685,32 @@ export const DatabaseDetailPage: React.FC<{
                   </button>
                 </div>
               </div>
+              {/* Quick filter input (Hotkey: /) */}
+              <div className="px-2 py-1.5 border-b border-border bg-muted/20">
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-background border border-border rounded text-xs">
+                  <Search className="w-3 h-3 text-muted-foreground shrink-0" />
+                  <input
+                    ref={tableSearchInputRef}
+                    type="text"
+                    placeholder={`${t('common.search', 'Search')} (/)`}
+                    value={tableSearchQuery}
+                    onChange={(e) => setTableSearchQuery(e.target.value)}
+                    className="w-full bg-transparent border-none outline-none text-xs text-foreground placeholder:text-muted-foreground/60"
+                  />
+                  {tableSearchQuery && (
+                    <button
+                      onClick={() => setTableSearchQuery('')}
+                      className="p-0.5 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
               <div className="flex-1 overflow-y-auto p-2 flex flex-row md:flex-col gap-1 overflow-x-auto">
                 {schema
                   .filter((s) => s.type === 'table')
+                  .filter((s) => !tableSearchQuery || s.name.toLowerCase().includes(tableSearchQuery.toLowerCase()))
                   .map((t) => (
                     <button
                       key={t.name}
@@ -1938,7 +2109,13 @@ export const DatabaseDetailPage: React.FC<{
 
         {/* HIGH-CONTRAST PURE DARK SQL EDITOR TAB */}
         {activeTab === 'editor' && (
-          <div className="h-full flex flex-col space-y-3 -m-6 p-4 md:p-6 overflow-hidden">
+          <div
+            className={
+              isZenMode
+                ? 'fixed inset-0 z-50 bg-background p-4 md:p-6 flex flex-col space-y-3 overflow-hidden animate-in fade-in duration-150'
+                : 'h-full flex flex-col space-y-3 -m-6 p-4 md:p-6 overflow-hidden'
+            }
+          >
             {/* Editor Console Header */}
             <div className="flex flex-wrap items-center justify-between pb-2 border-b border-border gap-2 shrink-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -2058,6 +2235,18 @@ export const DatabaseDetailPage: React.FC<{
                 >
                   <Layers className="w-3.5 h-3.5" />
                   <span>{t('editor.splitView', 'Split View')}</span>
+                </button>
+
+                {/* Fullscreen Zen Mode Toggle (F11 / Esc) */}
+                <button
+                  onClick={() => setIsZenMode(!isZenMode)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-md text-xs font-medium transition-colors ${
+                    isZenMode ? 'bg-blue-600/10 border-blue-500/30 text-blue-500' : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                  title={`${language === 'vi' ? 'Toàn màn hình / Zen Mode' : 'Fullscreen Zen Mode'} (F11 / Esc)`}
+                >
+                  {isZenMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  <span>{isZenMode ? (language === 'vi' ? 'Thoát Zen' : 'Exit Zen') : 'Zen Mode'}</span>
                 </button>
               </div>
 
@@ -2268,15 +2457,115 @@ export const DatabaseDetailPage: React.FC<{
                 {/* SQL Editor Area: High-Contrast & Theme-Adaptive */}
                 <div className="h-36 md:h-44 border border-border rounded-lg overflow-hidden shrink-0 relative bg-card shadow-inner">
                   <textarea
+                    ref={sqlEditorRef}
                     value={sqlText}
-                    onChange={(e) => setSqlText(e.target.value)}
+                    onChange={(e) => {
+                      setSqlText(e.target.value);
+                      setHistoryIndex(-1);
+                    }}
                     onKeyDown={(e) => {
+                      // Ctrl + Enter: Run SQL
                       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                         e.preventDefault();
                         handleExecuteSql();
+                        return;
+                      }
+                      // Ctrl + E: Explain query plan
+                      if ((e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'E' || e.code === 'KeyE')) {
+                        e.preventDefault();
+                        handleExplainQuery();
+                        return;
+                      }
+                      // Ctrl + S: Export query result to CSV (prevent browser save page)
+                      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 's' || e.key === 'S' || e.code === 'KeyS')) {
+                        e.preventDefault();
+                        if (queryResult && 'rows' in queryResult && queryResult.rows.length > 0) {
+                          exportQueryResults(queryResult.rows, queryResult.columns, 'csv');
+                          showSuccess(language === 'vi' ? 'Đã xuất kết quả truy vấn ra CSV' : 'Exported query results to CSV');
+                        } else {
+                          showError(language === 'vi' ? 'Không có kết quả dữ liệu để xuất CSV' : 'No query results available to export');
+                        }
+                        return;
+                      }
+                      // Alt + Up: Navigate backward in query history
+                      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowUp' || e.key === 'Up')) {
+                        if (sqlHistory.length > 0) {
+                          e.preventDefault();
+                          const nextIdx = historyIndex === -1 ? sqlHistory.length - 1 : Math.max(0, historyIndex - 1);
+                          setHistoryIndex(nextIdx);
+                          setSqlText(sqlHistory[nextIdx]);
+                        }
+                        return;
+                      }
+                      // Alt + Down: Navigate forward in query history
+                      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowDown' || e.key === 'Down')) {
+                        if (sqlHistory.length > 0 && historyIndex !== -1) {
+                          e.preventDefault();
+                          const nextIdx = historyIndex + 1;
+                          if (nextIdx < sqlHistory.length) {
+                            setHistoryIndex(nextIdx);
+                            setSqlText(sqlHistory[nextIdx]);
+                          } else {
+                            setHistoryIndex(-1);
+                            setSqlText('');
+                          }
+                        }
+                        return;
+                      }
+                      // Ctrl + /: Toggle SQL line comment
+                      if ((e.ctrlKey || e.metaKey) && (e.key === '/' || e.code === 'Slash')) {
+                        e.preventDefault();
+                        const ta = e.currentTarget;
+                        const start = ta.selectionStart;
+                        const end = ta.selectionEnd;
+                        const text = ta.value;
+                        const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+                        const lineEnd = text.indexOf('\n', end);
+                        const endIdx = lineEnd === -1 ? text.length : lineEnd;
+                        const selectedBlock = text.substring(lineStart, endIdx);
+                        const lines = selectedBlock.split('\n');
+                        const allCommented = lines.every((l) => l.trim().length === 0 || l.trimStart().startsWith('--'));
+                        const newLines = allCommented
+                          ? lines.map((l) => l.replace(/^(\s*)--\s?/, '$1'))
+                          : lines.map((l) => (l.trim().length > 0 ? `-- ${l}` : l));
+                        const replaced = newLines.join('\n');
+                        const newText = text.substring(0, lineStart) + replaced + text.substring(endIdx);
+                        setSqlText(newText);
+                        setTimeout(() => {
+                          if (ta) {
+                            ta.selectionStart = lineStart;
+                            ta.selectionEnd = lineStart + replaced.length;
+                          }
+                        }, 0);
+                        return;
+                      }
+                      // Ctrl + L: Clear editor
+                      if ((e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L' || e.code === 'KeyL')) {
+                        e.preventDefault();
+                        setSqlText('');
+                        setHistoryIndex(-1);
+                        return;
+                      }
+                      // Ctrl + Shift + F: Format SQL
+                      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f' || e.code === 'KeyF')) {
+                        e.preventDefault();
+                        const keywords = ['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'OFFSET', 'VALUES', 'SET', 'INSERT INTO', 'UPDATE', 'DELETE FROM', 'CREATE TABLE IF NOT EXISTS', 'CREATE TABLE', 'DROP TABLE', 'PRAGMA'];
+                        let formatted = sqlText;
+                        keywords.forEach((kw) => {
+                          const reg = new RegExp(`\\b${kw.replace(/\s+/g, '\\s+')}\\b`, 'gi');
+                          formatted = formatted.replace(reg, kw);
+                        });
+                        setSqlText(formatted);
+                        return;
+                      }
+                      // F11: Toggle Zen Mode
+                      if (e.key === 'F11') {
+                        e.preventDefault();
+                        setIsZenMode((prev) => !prev);
+                        return;
                       }
                     }}
-                    placeholder="-- Write SQLite queries here (e.g. SELECT * FROM users;)&#10;-- Press Ctrl+Enter to execute"
+                    placeholder="-- Write SQLite queries here (e.g. SELECT * FROM users;)&#10;-- Press Ctrl+Enter to execute, Ctrl+E to Explain, Ctrl+S to Export CSV, Ctrl+/ to comment"
                     className="w-full h-full p-3 font-mono text-xs text-foreground bg-transparent resize-none focus:outline-none leading-relaxed selection:bg-blue-600/30 placeholder:text-muted-foreground/60"
                     spellCheck={false}
                   />

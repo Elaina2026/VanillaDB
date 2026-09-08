@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from './hooks/useAuth.js';
 import { AuthPage } from './pages/AuthPage.js';
 import { ErrorPage } from './pages/ErrorPage.js';
@@ -97,10 +97,18 @@ export const App: React.FC = () => {
   const [createTokenDbId, setCreateTokenDbId] = useState<string | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
-  // Global Keyboard Shortcuts listener (Ctrl + K, Ctrl + B, Ctrl + Shift + L, Shift + ?, Esc, etc.)
+  // Desktop Sidebar Collapse state (persisted)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('vdb_sidebar_collapsed') === 'true';
+  });
+
+  // Vim-style chord reference (e.g. G then D, G then I)
+  const chordRef = useRef<{ key: string; time: number } | null>(null);
+
+  // Global Keyboard Shortcuts listener (Ctrl + K, Ctrl + B, Ctrl + \, Shift + ?, Vim chords, Alt + 1..8, etc.)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // 1. Modals & Command Palette toggle
+      // 1. Modals & Command Palette & Sidebar toggle (Always active)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsCommandPaletteOpen((prev) => !prev);
@@ -113,6 +121,17 @@ export const App: React.FC = () => {
         return;
       }
 
+      // Sidebar Collapse toggle: Ctrl + \
+      if ((e.ctrlKey || e.metaKey) && (e.key === '\\' || e.code === 'Backslash')) {
+        e.preventDefault();
+        setIsSidebarCollapsed((prev) => {
+          const next = !prev;
+          localStorage.setItem('vdb_sidebar_collapsed', String(next));
+          return next;
+        });
+        return;
+      }
+
       // 2. Input / Editable element and modal dialog detection
       const target = e.target as HTMLElement | null;
       const isInput = Boolean(
@@ -122,10 +141,41 @@ export const App: React.FC = () => {
           Boolean(target.closest?.('.monaco-editor, [role="textbox"]'))
         )
       );
-      const isModalOpen = isCreateDbOpen || isCommandPaletteOpen || Boolean(createTokenDbId);
+      const isModalOpen =
+        isCreateDbOpen ||
+        isCommandPaletteOpen ||
+        Boolean(createTokenDbId) ||
+        Boolean(document.querySelector('[role="dialog"], [aria-modal="true"]'));
 
-      // Do not trigger general shortcuts when actively typing or when a modal is open
-      if (isInput || isModalOpen) return;
+      // Do not trigger general navigation or vim chords when actively typing or modal is open
+      if (isInput || isModalOpen) {
+        chordRef.current = null;
+        return;
+      }
+
+      // 3. Vim Chords handling: G then D (Databases), G then I (Inbox)
+      const now = Date.now();
+      if (chordRef.current && chordRef.current.key === 'g' && now - chordRef.current.time < 1200) {
+        const secondKey = e.key.toLowerCase();
+        chordRef.current = null;
+        if (secondKey === 'd') {
+          e.preventDefault();
+          navigateTo('databases');
+          return;
+        }
+        if (secondKey === 'i') {
+          e.preventDefault();
+          navigateTo('inbox');
+          return;
+        }
+      }
+
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'g') {
+        chordRef.current = { key: 'g', time: now };
+        return;
+      } else {
+        chordRef.current = null;
+      }
 
       // Toggle Language: Ctrl + Shift + L
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'L' || e.key === 'l' || e.code === 'KeyL')) {
@@ -227,6 +277,14 @@ export const App: React.FC = () => {
       setSelectedDatabaseId={(id, tab = 'overview') => (id ? navigateTo('databases', id, tab) : navigateTo('databases'))}
       onOpenCreateDb={() => setIsCreateDbOpen(true)}
       onOpenSearch={() => setIsCommandPaletteOpen(true)}
+      isSidebarCollapsed={isSidebarCollapsed}
+      onToggleSidebar={() =>
+        setIsSidebarCollapsed((prev) => {
+          const next = !prev;
+          localStorage.setItem('vdb_sidebar_collapsed', String(next));
+          return next;
+        })
+      }
     >
       {route.databaseId ? (
         <DatabaseDetailPage

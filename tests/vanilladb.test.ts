@@ -1574,5 +1574,116 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     expect(auditCsv.headers['content-type']).toContain('text/csv');
     expect(auditCsv.body).toContain('ID,User,Action,Resource,Result');
   });
+
+  // 26. Security Hardening: Session Revocation on Password Change (VDB-SEC-01)
+  it('should revoke active session cookies upon password change (VDB-SEC-01)', async () => {
+    const unique = Date.now();
+    const testUser = `sec_user_${unique}`;
+    const testEmail = `sec_${unique}@vanilladb.test`;
+    const oldPassword = 'OldPassword123!';
+    const newPassword = 'NewPassword456!';
+
+    // 1. Register a new user
+    const regRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        username: testUser,
+        email: testEmail,
+        password: oldPassword,
+      },
+    });
+    expect(regRes.statusCode).toBe(201);
+    const oldCookie = `vdb_session=${regRes.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+
+    // 2. Verify old session cookie works
+    const statusBefore = await app.inject({
+      method: 'GET',
+      url: '/api/auth/status',
+      headers: { cookie: oldCookie },
+    });
+    expect(statusBefore.statusCode).toBe(200);
+    expect(statusBefore.json().data.authenticated).toBe(true);
+
+    // 3. Change password via API
+    const changeRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/change-password',
+      headers: { cookie: oldCookie },
+      payload: {
+        currentPassword: oldPassword,
+        newPassword: newPassword,
+      },
+    });
+    expect(changeRes.statusCode).toBe(200);
+    expect(changeRes.json().success).toBe(true);
+
+    // 4. Old session cookie MUST now show unauthenticated on /api/auth/status
+    const statusAfter = await app.inject({
+      method: 'GET',
+      url: '/api/auth/status',
+      headers: { cookie: oldCookie },
+    });
+    expect(statusAfter.statusCode).toBe(200);
+    expect(statusAfter.json().data.authenticated).toBe(false);
+
+    // 5. Old session cookie MUST be rejected on protected routes (401 Unauthorized with revocation notice)
+    const protectedAttempt = await app.inject({
+      method: 'POST',
+      url: '/api/auth/change-password',
+      headers: { cookie: oldCookie },
+      payload: {
+        currentPassword: newPassword,
+        newPassword: 'AnotherPassword789!',
+      },
+    });
+    expect(protectedAttempt.statusCode).toBe(401);
+    expect(protectedAttempt.json().error.code).toBe('UNAUTHORIZED');
+    expect(protectedAttempt.json().error.message).toContain('Session revoked');
+
+    // 6. Login with new password -> obtains new valid session cookie with updated token_version
+    const loginNew = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: {
+        username: testUser,
+        password: newPassword,
+      },
+    });
+    expect(loginNew.statusCode).toBe(200);
+    const newCookie = `vdb_session=${loginNew.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+
+    const statusNew = await app.inject({
+      method: 'GET',
+      url: '/api/auth/status',
+      headers: { cookie: newCookie },
+    });
+    expect(statusNew.statusCode).toBe(200);
+    expect(statusNew.json().data.authenticated).toBe(true);
+  });
+
+  // 27. Security Hardening: TOTP One-Time Code Replay Prevention (VDB-SEC-02 - RFC 6238)
+  it('should prevent TOTP code replay within drift window and enforce monotonic time steps (VDB-SEC-02)', async () => {
+    const { generateTotpSecret, generateTotpCode, verifyTotpCode } = await import('../src/server/utils/totp.js');
+    const secret = generateTotpSecret();
+    const now = Date.now();
+    const code = generateTotpCode(secret, 30000, now);
+
+    // 1. Initial verification -> Succeeds and returns valid step
+    const firstVerify = verifyTotpCode(secret, code, 30000, now, -1);
+    expect(firstVerify.valid).toBe(true);
+    expect(firstVerify.step).toBeDefined();
+
+    // 2. Replay with the same code in the same time step -> MUST be rejected
+    const replayVerify = verifyTotpCode(secret, code, 30000, now, firstVerify.step);
+    expect(replayVerify.valid).toBe(false);
+
+    // 3. Verification with step strictly greater -> Succeeds
+    const futureTimestamp = now + 30000;
+    const futureCode = generateTotpCode(secret, 30000, futureTimestamp);
+    const futureVerify = verifyTotpCode(secret, futureCode, 30000, futureTimestamp, firstVerify.step);
+    expect(futureVerify.valid).toBe(true);
+    expect(futureVerify.step).toBeGreaterThan(firstVerify.step!);
+  });
 });
 

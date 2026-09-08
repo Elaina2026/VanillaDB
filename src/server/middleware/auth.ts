@@ -60,6 +60,13 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
     });
     return;
   }
+  if (user.tokenVersion !== undefined && fullUser.token_version !== undefined && fullUser.token_version !== user.tokenVersion) {
+    reply.status(401).send({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Session revoked due to password or credential change' },
+    });
+    return;
+  }
 
   if (fullUser && fullUser.role !== 'super_admin') {
     const targetDbId = (request.params as any)?.id || (request.params as any)?.databaseId || request.databaseId;
@@ -220,6 +227,13 @@ export function requireTokenPermission(permission: TokenPermission) {
           reply.status(403).send({
             success: false,
             error: { code: 'USER_DISABLED', message: 'User account has been disabled by administrator' },
+          });
+          return;
+        }
+        if (user.tokenVersion !== undefined && fullUser.token_version !== undefined && fullUser.token_version !== user.tokenVersion) {
+          reply.status(401).send({
+            success: false,
+            error: { code: 'UNAUTHORIZED', message: 'Session revoked due to password or credential change' },
           });
           return;
         }

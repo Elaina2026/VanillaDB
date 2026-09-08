@@ -53,15 +53,17 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       if (sess) {
         const full = authService.getUserById(sess.userId);
         if (full && full.status !== 'disabled') {
-          currentUser = {
-            userId: full.id,
-            username: full.username,
-            role: full.role,
-            email: full.email || null,
-            avatar_url: full.avatar_url || null,
-            totp_enabled: full.totp_enabled ?? false,
-            rate_limit_per_minute: full.rate_limit_per_minute ?? 180,
-          };
+          if (sess.tokenVersion === undefined || full.token_version === undefined || full.token_version === sess.tokenVersion) {
+            currentUser = {
+              userId: full.id,
+              username: full.username,
+              role: full.role,
+              email: full.email || null,
+              avatar_url: full.avatar_url || null,
+              totp_enabled: full.totp_enabled ?? false,
+              rate_limit_per_minute: full.rate_limit_per_minute ?? 180,
+            };
+          }
         }
       }
     }
@@ -335,10 +337,14 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     // 1. Try TOTP code first if 6 digits and not explicitly set as backup code
     const isSixDigit = /^\d{6}$/.test(cleanCode);
     const totpInfo = authService.getTotpSecretInternal(userId);
+    let matchedTotpStep: number | undefined;
     if (isSixDigit && !parsed.data.isBackupCode && totpInfo?.totp_secret) {
-      if (verifyTotpCode(totpInfo.totp_secret, cleanCode)) {
+      const lastStep = userWithSecret.last_totp_step ?? -1;
+      const totpRes = verifyTotpCode(totpInfo.totp_secret, cleanCode, 30000, Date.now(), lastStep);
+      if (totpRes.valid) {
         isSuccess = true;
         loginMethod = 'totp';
+        matchedTotpStep = totpRes.step;
       }
     }
 
@@ -406,6 +412,15 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         success: false,
         error: { code: 'INVALID_2FA_CODE', message: 'Mã xác thực 2FA hoặc mã dự phòng không chính xác' },
       });
+    }
+
+    if (matchedTotpStep !== undefined) {
+      const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+      metaDb.prepare('UPDATE users SET last_totp_step = ?, updated_at = ? WHERE id = ?').run(
+        matchedTotpStep,
+        Date.now(),
+        userId
+      );
     }
 
     const { cookieValue, expires } = authService.generateSessionCookie(userWithSecret, config.sessionSecret);
@@ -663,8 +678,8 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     // Verify TOTP 6-digit code
-    const isCodeValid = verifyTotpCode(totpInfo.totp_temp_secret, parsed.data.code);
-    if (!isCodeValid) {
+    const totpRes = verifyTotpCode(totpInfo.totp_temp_secret, parsed.data.code);
+    if (!totpRes.valid) {
       return reply.status(400).send({
         success: false,
         error: { code: 'INVALID_TOTP_CODE', message: 'Mã xác thực 2FA không chính xác hoặc đã hết hạn' },
@@ -679,7 +694,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     // Commit 2FA activation with backup codes
     metaDb.prepare(`
       UPDATE users
-      SET totp_secret = totp_temp_secret, totp_enabled = 1, totp_temp_secret = NULL, totp_backup_codes = ?, updated_at = ?
+      SET totp_secret = totp_temp_secret, totp_enabled = 1, totp_temp_secret = NULL, totp_backup_codes = ?, last_totp_step = -1, updated_at = ?
       WHERE id = ?
     `).run(backupCodesJson, Date.now(), user.id);
 
@@ -738,8 +753,8 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const isCodeValid = verifyTotpCode(totpInfo.totp_secret, parsed.data.code);
-    if (!isCodeValid) {
+    const totpRes = verifyTotpCode(totpInfo.totp_secret, parsed.data.code, 30000, Date.now(), user.last_totp_step ?? -1);
+    if (!totpRes.valid) {
       return reply.status(400).send({
         success: false,
         error: { code: 'INVALID_TOTP_CODE', message: 'Mã xác thực 2FA không chính xác hoặc đã hết hạn' },
@@ -748,7 +763,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     metaDb.prepare(`
       UPDATE users
-      SET totp_secret = NULL, totp_enabled = 0, totp_temp_secret = NULL, totp_backup_codes = NULL, updated_at = ?
+      SET totp_secret = NULL, totp_enabled = 0, totp_temp_secret = NULL, totp_backup_codes = NULL, last_totp_step = -1, updated_at = ?
       WHERE id = ?
     `).run(Date.now(), user.id);
 
@@ -925,11 +940,11 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     const cleanLower = cleanId.toLowerCase();
 
     const userRow = metaDb.prepare(`
-      SELECT id, username, email, totp_enabled, totp_secret, totp_backup_codes
+      SELECT id, username, email, totp_enabled, totp_secret, totp_backup_codes, last_totp_step
       FROM users
       WHERE username = ? OR email = ? OR LOWER(email) = ? OR LOWER(username) = ?
     `).get(cleanId, cleanId, cleanLower, cleanLower) as
-      | { id: string; username: string; email: string | null; totp_enabled: number; totp_secret: string | null; totp_backup_codes: string | null }
+      | { id: string; username: string; email: string | null; totp_enabled: number; totp_secret: string | null; totp_backup_codes: string | null; last_totp_step?: number | null }
       | undefined;
 
     if (!userRow) {
@@ -952,6 +967,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     let recoveryMethod: 'totp' | 'backup_code' = 'totp';
     let updatedCodesJson: string | null = userRow.totp_backup_codes;
     let remainingBackupCount = 0;
+    let matchedTotpStep: number | undefined;
 
     if (cleanTotp && cleanTotp.length === 6) {
       // Recovery via 6-digit TOTP code
@@ -962,8 +978,9 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const isOtpValid = verifyTotpCode(userRow.totp_secret, cleanTotp);
-      if (!isOtpValid) {
+      const lastStep = userRow.last_totp_step ?? -1;
+      const totpRes = verifyTotpCode(userRow.totp_secret, cleanTotp, 30000, Date.now(), lastStep);
+      if (!totpRes.valid) {
         return reply.status(400).send({
           success: false,
           error: { code: 'INVALID_TOTP_CODE', message: 'Mã xác thực 2FA 6 chữ số không chính xác hoặc đã hết hạn' },
@@ -971,6 +988,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       recoveryMethod = 'totp';
+      matchedTotpStep = totpRes.step;
       // Calculate remaining backup codes count if any
       try {
         const parsed = JSON.parse(userRow.totp_backup_codes || '[]');
@@ -1035,9 +1053,9 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     metaDb.prepare(`
       UPDATE users
-      SET password_hash = ?, totp_backup_codes = ?, updated_at = ?
+      SET password_hash = ?, totp_backup_codes = ?, last_totp_step = COALESCE(?, last_totp_step), updated_at = ?
       WHERE id = ?
-    `).run(newPasswordHash, updatedCodesJson, Date.now(), userRow.id);
+    `).run(newPasswordHash, updatedCodesJson, matchedTotpStep ?? null, Date.now(), userRow.id);
 
     activityService.recordAudit({
       user: userRow.username,

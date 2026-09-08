@@ -62,6 +62,8 @@ function runMigrations(db: DatabaseSync): void {
           max_databases INTEGER NOT NULL DEFAULT 1000,
           rate_limit_per_minute INTEGER NOT NULL DEFAULT 0,
           status TEXT NOT NULL DEFAULT 'active',
+          token_version INTEGER NOT NULL DEFAULT 1,
+          last_totp_step INTEGER NOT NULL DEFAULT -1,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         );
@@ -344,6 +346,14 @@ function runMigrations(db: DatabaseSync): void {
           FOREIGN KEY (announcement_id) REFERENCES system_announcements(id) ON DELETE CASCADE,
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
+      `
+    },
+    {
+      version: 14,
+      name: 'add_token_version_and_totp_step_to_users',
+      sql: `
+        ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE users ADD COLUMN last_totp_step INTEGER NOT NULL DEFAULT -1;
       `
     }
   ];

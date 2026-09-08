@@ -34,7 +34,9 @@ import {
   User as UserIcon,
   LayoutDashboard,
   Mail,
-  Bell
+  Bell,
+  PanelLeftClose,
+  PanelLeft
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../api/client.js';
@@ -54,6 +56,8 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
   onOpenCreateDb: () => void;
   onOpenSearch?: () => void;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
@@ -65,10 +69,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   children,
   onOpenCreateDb,
   onOpenSearch,
+  isSidebarCollapsed = false,
+  onToggleSidebar,
 }) => {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
 
@@ -137,16 +143,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           >
             <Mail className="w-4 h-4" />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 ring-2 ring-background" />
             )}
           </button>
-          <button
-            onClick={onOpenSearch}
-            className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
-            title="Search (Ctrl+K)"
-          >
-            <Search className="w-4 h-4" />
-          </button>
+          {onOpenSearch && (
+            <button
+              onClick={onOpenSearch}
+              className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
+              title="Search (Ctrl+K)"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
@@ -175,32 +183,55 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       {/* Sidebar (Responsive Drawer on Mobile, Fixed Sidebar on Desktop) */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-72 bg-card border-r border-border flex flex-col justify-between select-none transition-transform duration-200 ease-in-out md:static md:w-64 md:translate-x-0 shrink-0',
-          isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+          'fixed inset-y-0 left-0 z-50 bg-card border-r border-border flex flex-col justify-between select-none transition-all duration-200 ease-in-out md:static md:translate-x-0 shrink-0',
+          isMobileMenuOpen ? 'translate-x-0 shadow-2xl w-72' : '-translate-x-full',
+          isSidebarCollapsed ? 'md:w-16' : 'md:w-64'
         )}
       >
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
           {/* Brand Header */}
-          <div className="h-14 border-b border-border flex items-center justify-between px-4 shrink-0">
+          <div className={cn(
+            'h-14 border-b border-border flex items-center shrink-0 px-3',
+            isSidebarCollapsed ? 'justify-center' : 'justify-between'
+          )}>
             <div
-              className="flex items-center gap-2.5 cursor-pointer"
+              className={cn(
+                'flex items-center gap-2.5 cursor-pointer min-w-0',
+                isSidebarCollapsed ? 'justify-center' : ''
+              )}
               onClick={() => {
                 setSelectedDatabaseId(null);
                 setCurrentTab('databases');
                 closeMobileMenu();
               }}
+              title="VanillaDatabase"
             >
               <div className="w-8 h-8 flex items-center justify-center shrink-0">
                 <LogoIcon className="w-8 h-8" />
               </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-sm tracking-tight block">VanillaDatabase</span>
-                  <span className="text-[9px] px-1 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-mono font-bold">v1.3.2</span>
+              {!isSidebarCollapsed && (
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-sm tracking-tight block truncate">VanillaDatabase</span>
+                    <span className="text-[9px] px-1 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-mono font-bold">v1.3.2</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground block -mt-0.5">SQLite Platform</span>
                 </div>
-                <span className="text-[10px] text-muted-foreground block -mt-0.5">SQLite Platform</span>
-              </div>
+              )}
             </div>
+
+            {/* Desktop Collapse Toggle Button */}
+            {onToggleSidebar && !isSidebarCollapsed && (
+              <button
+                onClick={onToggleSidebar}
+                className="hidden md:flex p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors"
+                title={`${language === 'vi' ? 'Thu gọn thanh bên' : 'Collapse Sidebar'} (Ctrl+\\)`}
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Mobile close button */}
             <button
               onClick={closeMobileMenu}
               className="p-1 hover:bg-accent rounded text-muted-foreground md:hidden"
@@ -209,38 +240,65 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </button>
           </div>
 
+          {/* Collapsed Expand Toggle Button */}
+          {onToggleSidebar && isSidebarCollapsed && (
+            <div className="hidden md:flex justify-center p-2 border-b border-border/50">
+              <button
+                onClick={onToggleSidebar}
+                className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors"
+                title={`${language === 'vi' ? 'Mở rộng thanh bên' : 'Expand Sidebar'} (Ctrl+\\)`}
+              >
+                <PanelLeft className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* If a Database is selected -> Show Database-scoped Sidebar Menu */}
           {selectedDatabaseId ? (
-            <div className="p-3 space-y-4">
+            <div className="p-2 space-y-3">
               {/* Back to all databases button */}
               <button
                 onClick={() => {
                   setSelectedDatabaseId(null);
                   closeMobileMenu();
                 }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors font-medium"
+                className={cn(
+                  'w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors font-medium',
+                  isSidebarCollapsed ? 'justify-center px-0' : ''
+                )}
+                title={t('nav.allDatabases', 'All Databases')}
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>{t('nav.allDatabases', 'All Databases')}</span>
+                <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
+                {!isSidebarCollapsed && <span>{t('nav.allDatabases', 'All Databases')}</span>}
               </button>
 
               {/* Active Database Badge */}
-              <div className="px-2.5 py-2 bg-muted/60 border border-border rounded-lg">
+              <div
+                className={cn(
+                  'bg-muted/60 border border-border rounded-lg',
+                  isSidebarCollapsed ? 'p-2 flex justify-center' : 'px-2.5 py-2'
+                )}
+                title={`Active DB: ${selectedDatabaseId}`}
+              >
                 <div className="flex items-center gap-2">
                   <Database className="w-4 h-4 text-blue-500 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <span className="text-xs font-bold truncate block text-foreground">
-                      {selectedDatabaseId}
-                    </span>
-                  </div>
+                  {!isSidebarCollapsed && (
+                    <div className="min-w-0 flex-1">
+                      <span className="text-xs font-bold truncate block text-foreground">
+                        {selectedDatabaseId}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Database Context Navigation Tabs */}
               <div className="space-y-1">
-                <span className="px-2.5 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-                  {t('nav.menu', 'Database Menu')}
-                </span>
+                {!isSidebarCollapsed && (
+                  <span className="px-2.5 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase block mb-1">
+                    {t('nav.menu', 'Database Menu')}
+                  </span>
+                )}
                 {[
                   { id: 'overview', label: t('db.overview', 'Overview & Stats'), icon: BarChart3 },
                   { id: 'analytics', label: t('db.analytics', 'Requests & Disk B-Tree'), icon: TrendingUp },
@@ -257,25 +315,27 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   { id: 'backups', label: t('db.backups', 'Backups'), icon: Archive },
                   { id: 'members', label: t('db.members', 'Members & Collaboration'), icon: Users },
                   { id: 'settings', label: t('db.settings', 'Danger Settings'), icon: Sliders },
-                ].map((t) => {
-                  const Icon = t.icon;
-                  const active = selectedDatabaseTab === t.id;
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const active = selectedDatabaseTab === item.id;
                   return (
                     <button
-                      key={t.id}
+                      key={item.id}
                       onClick={() => {
-                        setSelectedDatabaseId(selectedDatabaseId, t.id);
+                        setSelectedDatabaseId(selectedDatabaseId, item.id);
                         closeMobileMenu();
                       }}
                       className={cn(
                         'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
                         active
                           ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                        isSidebarCollapsed ? 'justify-center px-0' : ''
                       )}
+                      title={item.label}
                     >
                       <Icon className="w-4 h-4 shrink-0" />
-                      <span className="truncate">{t.label}</span>
+                      {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
                     </button>
                   );
                 })}
@@ -283,7 +343,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </div>
           ) : (
             /* Global Main Navigation Links */
-            <div className="p-3 space-y-1">
+            <div className="p-2 space-y-1">
               <button
                 onClick={() => {
                   setSelectedDatabaseId(null);
@@ -294,15 +354,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
                   currentTab === 'overview'
                     ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  isSidebarCollapsed ? 'justify-center px-0' : ''
                 )}
+                title={user?.role === 'user' ? t('nav.userDashboard', 'User Dashboard') : t('nav.overview', 'Overview')}
               >
                 {user?.role === 'user' ? (
-                  <LayoutDashboard className="w-4 h-4" />
+                  <LayoutDashboard className="w-4 h-4 shrink-0" />
                 ) : (
-                  <Server className="w-4 h-4" />
+                  <Server className="w-4 h-4 shrink-0" />
                 )}
-                {user?.role === 'user' ? t('nav.userDashboard', 'User Dashboard') : t('nav.overview', 'Overview')}
+                {!isSidebarCollapsed && (
+                  <span>{user?.role === 'user' ? t('nav.userDashboard', 'User Dashboard') : t('nav.overview', 'Overview')}</span>
+                )}
               </button>
 
               {(user?.role === 'super_admin' || user?.role === 'admin') && (
@@ -316,11 +380,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
                     currentTab === 'telemetry'
                       ? 'bg-blue-600 text-white font-semibold'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    isSidebarCollapsed ? 'justify-center px-0' : ''
                   )}
+                  title={t('nav.telemetry', 'Live Telemetry')}
                 >
-                  <TrendingUp className="w-4 h-4" />
-                  {t('nav.telemetry', 'Live Telemetry')}
+                  <TrendingUp className="w-4 h-4 shrink-0" />
+                  {!isSidebarCollapsed && <span>{t('nav.telemetry', 'Live Telemetry')}</span>}
                 </button>
               )}
 
@@ -334,16 +400,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   'w-full flex items-center justify-between px-3 py-2 text-xs rounded-md font-medium transition-colors',
                   currentTab === 'inbox'
                     ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  isSidebarCollapsed ? 'justify-center px-0' : ''
                 )}
+                title={t('nav.inbox', 'Inbox')}
               >
                 <div className="flex items-center gap-2.5">
-                  <Mail className="w-4 h-4" />
-                  <span>{t('nav.inbox', 'Inbox')}</span>
+                  <Mail className="w-4 h-4 shrink-0" />
+                  {!isSidebarCollapsed && <span>{t('nav.inbox', 'Inbox')}</span>}
                 </div>
                 {unreadCount > 0 && (
-                  <span className="px-1.5 py-0.2 text-[10px] font-bold bg-red-500 text-white rounded-full">
-                    {unreadCount}
+                  <span className={cn(
+                    'font-bold bg-red-500 text-white rounded-full flex items-center justify-center',
+                    isSidebarCollapsed ? 'w-2 h-2 absolute top-1 right-1' : 'px-1.5 py-0.2 text-[10px]'
+                  )}>
+                    {!isSidebarCollapsed && unreadCount}
                   </span>
                 )}
               </button>
@@ -358,21 +429,25 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   'w-full flex items-center justify-between px-3 py-2 text-xs rounded-md font-medium transition-colors',
                   currentTab === 'databases'
                     ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  isSidebarCollapsed ? 'justify-center px-0' : ''
                 )}
+                title={t('nav.databases', 'Databases')}
               >
                 <div className="flex items-center gap-2.5">
-                  <Layers className="w-4 h-4" />
-                  {t('nav.databases', 'Databases')}
+                  <Layers className="w-4 h-4 shrink-0" />
+                  {!isSidebarCollapsed && <span>{t('nav.databases', 'Databases')}</span>}
                 </div>
-                <Plus
-                  className="w-3.5 h-3.5 hover:text-white cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenCreateDb();
-                    closeMobileMenu();
-                  }}
-                />
+                {!isSidebarCollapsed && (
+                  <Plus
+                    className="w-3.5 h-3.5 hover:text-white cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenCreateDb();
+                      closeMobileMenu();
+                    }}
+                  />
+                )}
               </button>
 
               <button
@@ -385,11 +460,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
                   currentTab === 'activity'
                     ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  isSidebarCollapsed ? 'justify-center px-0' : ''
                 )}
+                title={t('nav.activity', 'Activity Logs')}
               >
-                <Activity className="w-4 h-4" />
-                {t('nav.activity', 'Activity Logs')}
+                <Activity className="w-4 h-4 shrink-0" />
+                {!isSidebarCollapsed && <span>{t('nav.activity', 'Activity Logs')}</span>}
               </button>
 
               {(user?.role === 'super_admin' || user?.role === 'admin') && (
@@ -403,11 +480,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
                     currentTab === 'users'
                       ? 'bg-blue-600 text-white font-semibold'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    isSidebarCollapsed ? 'justify-center px-0' : ''
                   )}
+                  title={t('nav.users', 'User Management')}
                 >
-                  <Users className="w-4 h-4" />
-                  {t('nav.users', 'User Management')}
+                  <Users className="w-4 h-4 shrink-0" />
+                  {!isSidebarCollapsed && <span>{t('nav.users', 'User Management')}</span>}
                 </button>
               )}
 
@@ -421,11 +500,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
                   currentTab === 'settings'
                     ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  isSidebarCollapsed ? 'justify-center px-0' : ''
                 )}
+                title={t('nav.settings', 'Settings')}
               >
-                <Settings className="w-4 h-4" />
-                {t('nav.settings', 'Settings')}
+                <Settings className="w-4 h-4 shrink-0" />
+                {!isSidebarCollapsed && <span>{t('nav.settings', 'Settings')}</span>}
               </button>
 
               <button
@@ -438,32 +519,42 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   'w-full flex items-center justify-between px-3 py-2 text-xs rounded-md font-medium transition-colors',
                   currentTab === 'shortcuts'
                     ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  isSidebarCollapsed ? 'justify-center px-0' : ''
                 )}
+                title={`${t('nav.shortcuts', 'Shortcuts')} (Shift+?)`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Terminal className="w-4 h-4" />
-                  {t('nav.shortcuts', 'Shortcuts')}
+                  <Terminal className="w-4 h-4 shrink-0" />
+                  {!isSidebarCollapsed && <span>{t('nav.shortcuts', 'Shortcuts')}</span>}
                 </div>
-                <kbd className="px-1.5 py-0.2 text-[9px] font-mono bg-muted/80 border border-border/80 rounded text-muted-foreground font-bold">
-                  Shift+?
-                </kbd>
+                {!isSidebarCollapsed && (
+                  <kbd className="px-1.5 py-0.2 text-[9px] font-mono bg-muted/80 border border-border/80 rounded text-muted-foreground font-bold">
+                    Shift+?
+                  </kbd>
+                )}
               </button>
             </div>
           )}
         </div>
 
         {/* User and Theme Footer */}
-        <div className="p-3 border-t border-border space-y-2 shrink-0 bg-card">
-          <div className="flex items-center justify-between px-2 py-1 text-xs text-muted-foreground">
+        <div className="p-2 border-t border-border space-y-2 shrink-0 bg-card">
+          <div className={cn(
+            'flex items-center justify-between text-xs text-muted-foreground',
+            isSidebarCollapsed ? 'flex-col gap-2 py-1' : 'px-2 py-1'
+          )}>
             <button
               onClick={() => {
                 setSelectedDatabaseId(null);
                 setCurrentTab('settings');
                 closeMobileMenu();
               }}
-              className="flex items-center gap-2 min-w-0 hover:text-foreground text-left cursor-pointer transition-colors group flex-1"
-              title={t('settings.tabAccount', 'My Account & Security')}
+              className={cn(
+                'flex items-center gap-2 min-w-0 hover:text-foreground text-left cursor-pointer transition-colors group',
+                isSidebarCollapsed ? 'justify-center' : 'flex-1'
+              )}
+              title={`${user?.username || 'Account'} (${user?.role || 'user'})`}
             >
               <div className="w-7 h-7 rounded-full overflow-hidden border border-border group-hover:border-blue-500 bg-muted/50 flex items-center justify-center shrink-0 transition-colors">
                 {user?.avatar_url ? (
@@ -472,12 +563,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   <UserIcon className="w-4 h-4 text-muted-foreground group-hover:text-foreground" />
                 )}
               </div>
-              <div className="truncate">
-                <span className="truncate font-medium text-foreground block group-hover:text-blue-500 transition-colors">{user?.username}</span>
-                <span className="text-[10px] text-muted-foreground block capitalize">{user?.role || 'user'}</span>
-              </div>
+              {!isSidebarCollapsed && (
+                <div className="truncate">
+                  <span className="truncate font-medium text-foreground block group-hover:text-blue-500 transition-colors">{user?.username}</span>
+                  <span className="text-[10px] text-muted-foreground block capitalize">{user?.role || 'user'}</span>
+                </div>
+              )}
             </button>
-            <div className="flex items-center gap-1 shrink-0 ml-1">
+
+            <div className={cn('flex items-center gap-1 shrink-0', isSidebarCollapsed ? 'flex-col' : 'ml-1')}>
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
