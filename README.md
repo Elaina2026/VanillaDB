@@ -32,7 +32,7 @@
 
 ---
 
-## <img src="https://api.iconify.design/lucide:info.svg?color=%230969da" width="22" height="22" align="center" /> Overview
+## <img src="https://api.iconify.design/lucide:info.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Overview
 
 VanillaDatabase (VanillaDB) is a self-hosted, lightweight multi-tenant SQLite cloud platform engineered with Node.js 22+ and Fastify.
 
@@ -43,7 +43,7 @@ Rather than running monolithic database clusters for every client, project, or m
 
 ---
 
-## <img src="https://api.iconify.design/lucide:cpu.svg?color=%230969da" width="22" height="22" align="center" /> Architecture
+## <img src="https://api.iconify.design/lucide:cpu.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Architecture
 
 ```
                        +-----------------------------------+
@@ -80,49 +80,49 @@ Rather than running monolithic database clusters for every client, project, or m
 
 ---
 
-## <img src="https://api.iconify.design/lucide:zap.svg?color=%230969da" width="22" height="22" align="center" /> Key Capabilities
+## <img src="https://api.iconify.design/lucide:zap.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Key Capabilities
 
-### <img src="https://api.iconify.design/lucide:database.svg?color=%23003b57" width="20" height="20" align="center" /> Multi-Tenant SQLite Orchestration
+### <img src="https://api.iconify.design/lucide:database.svg?color=%23003b57" width="20" height="20" align="absmiddle" /> Multi-Tenant SQLite Orchestration
 - Dynamic creation of dedicated SQLite databases identified by nanoid (`db_<nanoid>`).
 - Native Write-Ahead Logging (WAL mode), busy-timeout retry handling, foreign key enforcement, and memory-cached connection pooling.
 - AI vector distance and similarity functions (`vec_cosine_similarity()`, `vec_cosine_distance()`) registered natively.
 - Cryptographic SQL functions: `encrypt_aes()`, `decrypt_aes()`, `hash_sha256()`, `hash_hmac()`.
 
-### <img src="https://api.iconify.design/lucide:shield-check.svg?color=%2310b981" width="20" height="20" align="center" /> OWASP Hardened & Cryptographic Defense
+### <img src="https://api.iconify.design/lucide:shield-check.svg?color=%2310b981" width="20" height="20" align="absmiddle" /> OWASP Hardened & Cryptographic Defense
 - **Session Revocation (VDB-SEC-01):** HMAC cookie signatures bind user `token_version`. Password changes and account disabling revoke active sessions immediately across all clients.
 - **TOTP Replay Protection (VDB-SEC-02):** Monotonic time-step tracking enforcing RFC 6238 Section 5.2. OTP codes cannot be reused within the 90-second drift tolerance window.
 - **SSRF Network Blocker:** Outbound webhooks block loopback (`127.0.0.0/8`), private subnets (RFC 1918), link-local addresses, and cloud metadata endpoints (`169.254.169.254`).
 - **Data-at-Rest Encryption:** AES-256-GCM envelope encryption with authenticated headers (`VENC` signature, PBKDF2 salt, 128-bit authentication tag).
 - **Engine Sandboxing:** `ATTACH DATABASE`, `DETACH DATABASE`, and binary extension loading (`load_extension`) are permanently disabled.
 
-### <img src="https://api.iconify.design/lucide:users.svg?color=%236366f1" width="20" height="20" align="center" /> Multi-User Access Control & Quotas
+### <img src="https://api.iconify.design/lucide:users.svg?color=%236366f1" width="20" height="20" align="absmiddle" /> Multi-User Access Control & Quotas
 - Three system roles: `super_admin`, `admin`, `user`.
 - Database membership roles: `owner`, `admin`, `editor`, `viewer`.
 - Granular database quantity quotas (`max_databases`) and per-user request throttling (`rate_limit_per_minute`).
 - Self-service registration with automatic quota assignment.
 
-### <img src="https://api.iconify.design/lucide:key.svg?color=%23000000" width="20" height="20" align="center" /> Scoped Token System
+### <img src="https://api.iconify.design/lucide:key.svg?color=%23000000" width="20" height="20" align="absmiddle" /> Scoped Token System
 - Generate tokens prefixed with `vdb_live_*` or `vdb_test_*`.
 - Granular scopes: `database:read`, `database:write`, `database:ddl`, `database:admin`.
 - Table-level allowlists and denylists.
 - Raw tokens are never stored; only SHA-256 hashes are persisted in system metadata.
 
-### <img src="https://api.iconify.design/lucide:radio.svg?color=%233b82f6" width="20" height="20" align="center" /> Server-Sent Events & Webhooks
+### <img src="https://api.iconify.design/lucide:radio.svg?color=%233b82f6" width="20" height="20" align="absmiddle" /> Server-Sent Events & Webhooks
 - SSE streaming endpoint at `/v1/databases/:id/realtime` dispatching database mutations (`insert`, `update`, `delete`, `schema`).
 - Webhook dispatcher with HMAC-SHA256 request signing (`X-Vanilla-Signature`), payload retries, and Discord/Slack formatting.
 
-### <img src="https://api.iconify.design/lucide:hard-drive.svg?color=%238b5cf6" width="20" height="20" align="center" /> Media Assets & HTTP 206 Streaming
+### <img src="https://api.iconify.design/lucide:hard-drive.svg?color=%238b5cf6" width="20" height="20" align="absmiddle" /> Media Assets & HTTP 206 Streaming
 - Database-scoped file storage with transparent chunked encryption.
 - HTTP 206 Partial Content range requests for audio and video scrubbing.
 
-### <img src="https://api.iconify.design/lucide:layout.svg?color=%233178c6" width="20" height="20" align="center" /> Enterprise Dashboard & Bilingual Matrix
+### <img src="https://api.iconify.design/lucide:layout.svg?color=%233178c6" width="20" height="20" align="absmiddle" /> Enterprise Dashboard & Bilingual Matrix
 - Modern single-page management console built with React 19, Tailwind CSS v4, Lucide icons, and Monaco SQL Editor.
 - Complete bilingual support (English & Tiếng Việt) across all pages and notifications.
 - Integrated keyboard shortcuts: Vim chords (`G+D`, `G+I`), collapsible sidebar (`Ctrl+\`), SQL console operations (`Ctrl+Enter`, `Ctrl+E`, `Ctrl+S`, `Alt+Up/Down`, `F11`), and table browser hotkeys (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).
 
 ---
 
-## <img src="https://api.iconify.design/lucide:rocket.svg?color=%230969da" width="22" height="22" align="center" /> Quickstart
+## <img src="https://api.iconify.design/lucide:rocket.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Quickstart
 
 ### Prerequisites
 - Node.js 22.0.0 or higher
@@ -168,7 +168,7 @@ The web dashboard is accessible at `http://localhost:3000`.
 
 ---
 
-## <img src="https://api.iconify.design/lucide:sliders.svg?color=%230969da" width="22" height="22" align="center" /> Configuration Reference
+## <img src="https://api.iconify.design/lucide:sliders.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Configuration Reference
 
 | Variable | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
@@ -187,7 +187,7 @@ The web dashboard is accessible at `http://localhost:3000`.
 
 ---
 
-## <img src="https://api.iconify.design/lucide:shield-check.svg?color=%2310b981" width="22" height="22" align="center" /> Security Policy & Model
+## <img src="https://api.iconify.design/lucide:shield-check.svg?color=%2310b981" width="22" height="22" align="absmiddle" /> Security Policy & Model
 
 VanillaDatabase follows a rigorous zero-trust defense-in-depth security model. For full vulnerability disclosure procedures, supported releases, SLA commitments, and architectural isolation guarantees, read our dedicated security documents:
 
@@ -196,7 +196,7 @@ VanillaDatabase follows a rigorous zero-trust defense-in-depth security model. F
 
 ---
 
-## <img src="https://api.iconify.design/lucide:terminal.svg?color=%230969da" width="22" height="22" align="center" /> API Reference
+## <img src="https://api.iconify.design/lucide:terminal.svg?color=%230969da" width="22" height="22" align="absmiddle" /> API Reference
 
 ### Data Plane (Tenant Database Operations)
 
@@ -267,7 +267,7 @@ Range: bytes=0-1048575
 
 ---
 
-## <img src="https://api.iconify.design/lucide:keyboard.svg?color=%230969da" width="22" height="22" align="center" /> Keyboard Shortcuts
+## <img src="https://api.iconify.design/lucide:keyboard.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Keyboard Shortcuts
 
 VanillaDatabase features a comprehensive shortcut matrix accessible from anywhere in the platform:
 
@@ -299,7 +299,7 @@ VanillaDatabase features a comprehensive shortcut matrix accessible from anywher
 
 ---
 
-## <img src="https://api.iconify.design/lucide:check-circle.svg?color=%2310b981" width="22" height="22" align="center" /> Testing & Quality Assurance
+## <img src="https://api.iconify.design/lucide:check-circle.svg?color=%2310b981" width="22" height="22" align="absmiddle" /> Testing & Quality Assurance
 
 The test suite runs with Vitest and executes end-to-end assertions against the server instance:
 
@@ -326,7 +326,7 @@ All 94 tests cover:
 
 ---
 
-## <img src="https://api.iconify.design/lucide:book-open.svg?color=%230969da" width="22" height="22" align="center" /> Documentation Suite
+## <img src="https://api.iconify.design/lucide:book-open.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Documentation Suite
 
 For detailed technical guides, visit the documentation directories:
 
@@ -360,6 +360,6 @@ For detailed technical guides, visit the documentation directories:
 
 ---
 
-## <img src="https://api.iconify.design/lucide:file-text.svg?color=%230969da" width="22" height="22" align="center" /> License
+## <img src="https://api.iconify.design/lucide:file-text.svg?color=%230969da" width="22" height="22" align="absmiddle" /> License
 
 VanillaDatabase is open-source software licensed under the [MIT License](LICENSE).

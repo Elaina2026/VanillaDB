@@ -91,7 +91,7 @@ To help triage and address reports promptly, please provide:
 +-----------------+              +-----------------+              +-----------------+
 ```
 
-### <img src="https://api.iconify.design/lucide:key.svg?color=%230969da" width="20" height="20" /> 1. Identity & Session Security
+### <img src="https://api.iconify.design/lucide:key.svg?color=%230969da" width="20" height="20" align="absmiddle" /> 1. Identity & Session Security
 
 - **Argon2id Password Hashing:** User passwords are encrypted with high memory and iteration cost parameters, rendering offline brute-force attacks infeasible.
 - **Instant Session Revocation (VDB-SEC-01):**
@@ -103,7 +103,7 @@ To help triage and address reports promptly, please provide:
   - A 6-digit one-time password cannot be replayed or reused within the 90-second drift tolerance window.
 - **Token Secret Storage:** API tokens (`vdb_live_*`, `vdb_test_*`) are hashed via SHA-256. Raw secrets are never stored in plaintext within system metadata.
 
-### <img src="https://api.iconify.design/lucide:database.svg?color=%23003b57" width="20" height="20" /> 2. SQLite Engine Sandboxing & Isolation
+### <img src="https://api.iconify.design/lucide:database.svg?color=%23003b57" width="20" height="20" align="absmiddle" /> 2. SQLite Engine Sandboxing & Isolation
 
 - **Filesystem Partitioning:** Each tenant database operates as an isolated physical SQLite file under `data/databases/:id.sqlite`. System metadata is kept strictly separated under `data/system/vanilladb.sqlite`.
 - **Prepared Statements Mandatory:** SQL statement execution requires parameterized bindings (`?`), eliminating SQL injection vulnerabilities.
@@ -112,7 +112,7 @@ To help triage and address reports promptly, please provide:
   - Extension loading (`sqlite3_load_extension`) is permanently disabled at the native C++ level.
   - Administrative PRAGMAs (such as `journal_mode = OFF` or `schema_version`) are blocked.
 
-### <img src="https://api.iconify.design/lucide:server.svg?color=%236366f1" width="20" height="20" /> 3. Network & Perimeter Defenses
+### <img src="https://api.iconify.design/lucide:server.svg?color=%236366f1" width="20" height="20" align="absmiddle" /> 3. Network & Perimeter Defenses
 
 - **SSRF Network Blocker:** Outbound webhooks inspect destination IP addresses before dispatching HTTP requests:
   - Private networks (RFC 1918: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) are blocked.
@@ -121,13 +121,13 @@ To help triage and address reports promptly, please provide:
 - **Helmet Security Headers & Strict CSP:** Modern HTTP headers (`Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and fine-grained `Content-Security-Policy`) mitigate XSS and clickjacking attacks.
 - **Rate Limiting:** IP-based and token-based rate limiters protect the API and authentication endpoints from brute-force credential stuffing and DoS attacks.
 
-### <img src="https://api.iconify.design/lucide:lock.svg?color=%238b5cf6" width="20" height="20" /> 4. Cryptographic Storage & Media Security
+### <img src="https://api.iconify.design/lucide:lock.svg?color=%238b5cf6" width="20" height="20" align="absmiddle" /> 4. Cryptographic Storage & Media Security
 
 - **AES-256-GCM Envelope Encryption:** Backup archives and sensitive files are encrypted using PBKDF2-derived keys and AES-256-GCM authenticated cipher blocks.
 - **Authenticated Headers:** Encrypted blobs use the `VENC` magic byte header, a 16-byte random salt, a 12-byte IV, and a 128-bit authentication tag.
 - **HTTP 206 Partial Content Streaming:** Media files are streamed over byte-range requests without buffering decrypted files in public directories, preventing path-traversal leaks.
 
-### <img src="https://api.iconify.design/lucide:terminal.svg?color=%23ea580c" width="20" height="20" /> 5. Granular RBAC & Token Scoping
+### <img src="https://api.iconify.design/lucide:terminal.svg?color=%23ea580c" width="20" height="20" align="absmiddle" /> 5. Granular RBAC & Token Scoping
 
 - **System Roles:** `super_admin` (system configuration), `admin` (management), `user` (tenant owner).
 - **Database Roles:** `owner`, `admin`, `editor`, `viewer`.

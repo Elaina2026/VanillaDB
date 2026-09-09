@@ -91,7 +91,7 @@ Nếu bạn phát hiện lỗ hổng bảo mật (chẳng hạn như vượt quy
 +-----------------+                  +-----------------+                  +-----------------+
 ```
 
-### <img src="https://api.iconify.design/lucide:key.svg?color=%230969da" width="20" height="20" /> 1. Bảo mật Danh tính & Phiên làm việc
+### <img src="https://api.iconify.design/lucide:key.svg?color=%230969da" width="20" height="20" align="absmiddle" /> 1. Bảo mật Danh tính & Phiên làm việc
 
 - **Băm mật khẩu Argon2id:** Mật khẩu người dùng được mã hóa với chi phí bộ nhớ và vòng lặp tính toán cao, vô hiệu hóa nguy cơ tấn công vét cạn (brute-force) ngoại tuyến.
 - **Thu hồi Phiên làm việc Tức thì (VDB-SEC-01):**
@@ -103,7 +103,7 @@ Nếu bạn phát hiện lỗ hổng bảo mật (chẳng hạn như vượt quy
   - Một mã xác thực 6 chữ số không thể bị gửi lại hoặc tái sử dụng lần thứ hai trong cùng cửa sổ trôi dạt 90 giây.
 - **Lưu trữ Khóa API:** Các token (`vdb_live_*`, `vdb_test_*`) được băm bằng SHA-256 trước khi lưu vào siêu dữ liệu hệ thống. Token thô không bao giờ tồn tại trong cơ sở dữ liệu.
 
-### <img src="https://api.iconify.design/lucide:database.svg?color=%23003b57" width="20" height="20" /> 2. Cách ly Hộp cát Động cơ SQLite
+### <img src="https://api.iconify.design/lucide:database.svg?color=%23003b57" width="20" height="20" align="absmiddle" /> 2. Cách ly Hộp cát Động cơ SQLite
 
 - **Phân vùng Tệp tin Cực kỳ Nghiêm ngặt:** Mỗi tenant database vận hành dưới dạng một tệp SQLite độc lập tại `data/databases/:id.sqlite`. Siêu dữ liệu hệ thống được đặt riêng biệt tại `data/system/vanilladb.sqlite`.
 - **Bắt buộc Dùng Prepared Statements:** Mọi truy vấn đều sử dụng tham số hóa (`?`), triệt tiêu hoàn toàn nguy cơ SQL Injection.
@@ -112,7 +112,7 @@ Nếu bạn phát hiện lỗ hổng bảo mật (chẳng hạn như vượt quy
   - Tính năng nạp tiện ích mở rộng nhị phân (`sqlite3_load_extension`) bị khóa vĩnh viễn ở tầng biên dịch native C++.
   - Các lệnh PRAGMA quản trị có khả năng can thiệp hệ thống tệp bị loại bỏ.
 
-### <img src="https://api.iconify.design/lucide:server.svg?color=%236366f1" width="20" height="20" /> 3. Phòng thủ Mạng & Tường lửa Chu vi
+### <img src="https://api.iconify.design/lucide:server.svg?color=%236366f1" width="20" height="20" align="absmiddle" /> 3. Phòng thủ Mạng & Tường lửa Chu vi
 
 - **Tường lửa Chặn SSRF (Server-Side Request Forgery):** Webhook kiểm tra địa chỉ IP đích trước khi thực hiện kết nối HTTP:
   - Chặn toàn bộ dải mạng riêng tư (RFC 1918: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`).
@@ -121,13 +121,13 @@ Nếu bạn phát hiện lỗ hổng bảo mật (chẳng hạn như vượt quy
 - **Lá chắn Helmet & CSP Nghiêm ngặt:** Các tiêu đề HTTP bảo mật (`Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` và `Content-Security-Policy` khắt khe) ngăn ngừa triệt để XSS và Clickjacking.
 - **Giới hạn Tốc độ (Rate Limiting):** Kiểm soát lưu lượng theo IP và người dùng, bảo vệ hệ thống trước tấn công từ chối dịch vụ (DoS) và vét cạn thông tin đăng nhập.
 
-### <img src="https://api.iconify.design/lucide:lock.svg?color=%238b5cf6" width="20" height="20" /> 4. Mã hóa Dữ liệu Tĩnh & Lưu trữ Media
+### <img src="https://api.iconify.design/lucide:lock.svg?color=%238b5cf6" width="20" height="20" align="absmiddle" /> 4. Mã hóa Dữ liệu Tĩnh & Lưu trữ Media
 
 - **Mã hóa Phong bì AES-256-GCM:** Các bản sao lưu và tệp tin đa phương tiện được mã hóa an toàn bằng khóa dẫn xuất PBKDF2 và thuật toán AES-256-GCM xác thực.
 - **Tiêu đề Xác thực Toàn vẹn:** Mỗi khối dữ liệu mã hóa bao gồm chữ ký `VENC`, muối 16-byte ngẫu nhiên, vector khởi tạo IV 12-byte và thẻ xác thực (Auth Tag) 128-bit.
 - **Phát luồng HTTP 206 Partial Content:** Tệp đa phương tiện được truyền tải theo từng dải byte mà không cần giải mã ra thư mục công khai, ngăn chặn nguy cơ rò rỉ duyệt thư mục.
 
-### <img src="https://api.iconify.design/lucide:terminal.svg?color=%23ea580c" width="20" height="20" /> 5. Phân quyền Truy cập (RBAC) & Phạm vi Token
+### <img src="https://api.iconify.design/lucide:terminal.svg?color=%23ea580c" width="20" height="20" align="absmiddle" /> 5. Phân quyền Truy cập (RBAC) & Phạm vi Token
 
 - **Vai trò Hệ thống:** `super_admin` (cấu hình hệ thống), `admin` (quản trị người dùng & DB), `user` (người dùng thông thường).
 - **Vai trò trong Database:** `owner` (chủ sở hữu), `admin` (quản trị DB), `editor` (đọc ghi dữ liệu), `viewer` (chỉ đọc).
