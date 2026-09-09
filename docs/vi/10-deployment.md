@@ -1,39 +1,54 @@
-# Triển khai & Vận hành Môi trường Production
+# Triển khai Thực tế Production & Vận hành Cloudflare
 
-Tài liệu này hướng dẫn cách triển khai **VanillaDatabase** trên môi trường sản xuất (production) sử dụng Systemd, Docker hoặc Nginx Reverse Proxy.
-
----
-
-## 1. Danh mục Kiểm tra Bảo mật Trước khi Triển khai
-
-- [ ] Thiết lập `NODE_ENV=production`.
-- [ ] Cấu hình biến `VDB_SESSION_SECRET` an toàn (chuỗi ngẫu nhiên tối thiểu 32 ký tự).
-- [ ] Chỉ định thư mục `VDB_DATA_DIR` cố định trên ổ đĩa SSD/NVMe tốc độ cao.
-- [ ] Kích hoạt `VDB_TRUST_PROXY=true` khi chạy phía sau Nginx hoặc Cloudflare.
-- [ ] Cấu hình tường lửa để cổng 3000 chỉ có thể truy cập nội bộ hoặc qua Reverse Proxy.
+Cẩm nang gia cố môi trường production, thiết lập dịch vụ Systemd, cấu hình reverse proxy (Nginx / Caddy), Docker Compose và định tuyến Origin Rules Cloudflare trong **VanillaDatabase**.
 
 ---
 
-## 2. Cấu hình Nginx Reverse Proxy
+## 1. Danh mục Kiểm tra An toàn Production
 
-VanillaDatabase yêu cầu tắt cơ chế đệm proxy (buffering) để hỗ trợ luồng thời gian thực **Server-Sent Events (SSE)** và phát luồng media **HTTP 206 Partial Content Range Streaming**:
+- [ ] Thiết lập `NODE_ENV=production` trong tệp `.env`.
+- [ ] Sinh chuỗi khóa ngẫu nhiên 64 ký tự hex cho `VDB_MASTER_KEY` và `VDB_SESSION_SECRET`.
+- [ ] Gắn kết thư mục `VDB_DATA_DIR` trên ổ đĩa SSD hoặc NVMe để đạt hiệu năng WAL cao nhất.
+- [ ] Bật `VDB_TRUST_PROXY=true` khi chạy phía sau reverse proxy hoặc mạng Cloudflare.
+- [ ] Cấu hình tường lửa máy chủ (`ufw`) để chặn truy cập trực tiếp cổng dịch vụ từ bên ngoài.
+
+---
+
+## 2. Cấu hình Định tuyến Cổng qua Cloudflare Origin Rules
+
+Khi triển khai VanillaDatabase phía sau Cloudflare với các cổng dịch vụ tùy chỉnh:
+
+### Khuyến nghị Kiến trúc
+Tránh sử dụng thêm tiến trình gateway trung gian trên máy chủ. Hãy tận dụng bộ định tuyến tại biên của Cloudflare:
+1. **Chế độ SSL/TLS**: Chọn **Flexible** hoặc **Full (Strict)**.
+2. **Thiết lập Origin Rule**:
+   - Vào Cloudflare Dashboard -> **Rules** -> **Origin Rules**.
+   - Bấm **Create rule**, đặt tên rule: `vdb-origin-port`.
+   - Trường (Field): `Hostname` | Phép toán (Operator): `equals` | Giá trị (Value): `vanilladatabase.tenmien.com`.
+   - Mục Destination Port: Chọn **Rewrite to...** -> Điền cổng máy chủ backend thực tế (ví dụ: `25589` hoặc `3000`).
+   - Bấm **Deploy**. Cloudflare sẽ nhận kết nối HTTPS cổng 443 và tự động chuyển hướng vào cổng backend.
+
+---
+
+## 3. Cấu hình Nginx Reverse Proxy
+
+VanillaDatabase yêu cầu tắt bộ đệm proxy (buffering) để hỗ trợ luồng **Server-Sent Events (SSE)** và **HTTP 206 Partial Content**:
 
 ```nginx
 server {
     listen 80;
-    server_name db.yourdomain.com;
+    server_name db.tenmien.com;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name db.yourdomain.com;
+    server_name db.tenmien.com;
 
-    ssl_certificate /etc/letsencrypt/live/db.yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/db.yourdomain.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/db.tenmien.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/db.tenmien.com/privkey.pem;
 
-    # Kích thước tệp tải lên tối đa cho các bản sao lưu database và file media
-    client_max_body_size 1024M;
+    client_max_body_size 100M;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -46,7 +61,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Tắt bộ đệm proxy cho SSE Realtime và Range 206 Media Streaming
+        # Tắt bộ đệm proxy cho Realtime SSE & HTTP 206 Media Streaming
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 86400s;
@@ -54,40 +69,26 @@ server {
 }
 ```
 
-### Cấu hình Caddy (Tự động cấp chứng chỉ HTTPS / Let's Encrypt)
-
-```caddy
-db.yourdomain.com {
-    # Tự động cấp và làm mới SSL/TLS
-    reverse_proxy 127.0.0.1:3000 {
-        header_up X-Forwarded-Proto https
-        header_up Host {host}
-        # Hỗ trợ SSE realtime streaming
-        flush_interval -1
-    }
-}
-```
-
 ---
 
-## 3. Cấu hình Dịch vụ Systemd (Linux)
+## 4. Cấu hình Dịch vụ Linux Systemd
 
-Tạo tệp cấu hình `/etc/systemd/system/vanilladb.service`:
+Vận hành VanillaDatabase dưới dạng dịch vụ chạy ngầm trên Linux (`/etc/systemd/system/vanilladb.service`):
 
 ```ini
 [Unit]
-Description=VanillaDatabase Engine
+Description=VanillaDatabase Server
 After=network.target
 
 [Service]
 Type=simple
-User=www-data
-WorkingDirectory=/var/www/vanilladb
-ExecStart=/usr/bin/node dist/src/server/index.js
+User=vanilladb
+WorkingDirectory=/opt/vanilladb
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node dist/server/index.js
 Restart=always
 RestartSec=5
-Environment=NODE_ENV=production
-Environment=VDB_DATA_DIR=/var/data/vanilladb
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
@@ -96,5 +97,31 @@ WantedBy=multi-user.target
 Kích hoạt và khởi chạy dịch vụ:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now vanilladb
+sudo systemctl enable vanilladb
+sudo systemctl start vanilladb
+```
+
+---
+
+## 5. Triển khai với Docker Compose
+
+```yaml
+version: '3.8'
+
+services:
+  vanilladb:
+    build: .
+    container_name: vanilladb-engine
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - VDB_MASTER_KEY=nhap_khoa_hex_64_ky_tu_tai_day
+      - VDB_SESSION_SECRET=nhap_khoa_hex_64_ky_tu_tai_day
+      - VDB_CORS_ORIGINS=https://db.tenmien.com
+    volumes:
+      - ./data:/app/data
 ```

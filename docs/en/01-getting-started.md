@@ -1,27 +1,25 @@
-# Getting Started & Production Setup
+# Getting Started & Setup Guide
 
-This guide provides step-by-step instructions for installing, configuring, and running **VanillaDatabase** in both local development and production environments.
+Step-by-step instructions for installing, configuring, and operating **VanillaDatabase** across development and production environments.
 
 ---
 
 ## 1. System Requirements
 
-- **Node.js**: `v22.0.0` or higher (mandatory for native `node:sqlite` module support).
+- **Node.js**: `v22.0.0` or higher.
 - **NPM**: `v10.0.0` or higher.
-- **RAM**: Minimum 512MB RAM recommended (VanillaDB baseline footprint is ~35MB–50MB).
-- **Disk**: SSD or NVMe storage recommended for optimal SQLite WAL performance.
-- **Operating System**: Linux (Ubuntu, Debian, Alpine, RHEL, CentOS), macOS, or Windows (x64 / arm64).
+- **Memory**: Minimum 512MB RAM recommended (server baseline footprint is ~35MB to 50MB).
+- **Storage**: SSD or NVMe storage recommended for optimal SQLite Write-Ahead Logging (WAL) throughput.
+- **Operating System**: Linux (Ubuntu, Debian, Alpine, RHEL), macOS, or Windows (x64 / arm64).
 
 ---
 
-## 2. Installation Steps
-
-### Option A: Local & VPS Installation
+## 2. Installation & Quickstart
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/Elaina2026/VanillaDB.git
-cd VanillaDatabase
+cd VanillaDB
 
 # 2. Install dependencies
 npm install
@@ -29,14 +27,14 @@ npm install
 # 3. Create configuration file
 cp .env.example .env
 
-# 4. Build frontend client & backend server
+# 4. Build frontend client & server bundles
 npm run build
 
 # 5. Start the production server
 npm start
 ```
 
-By default, the server binds to `0.0.0.0:3000`.
+The server binds to `http://0.0.0.0:3000` by default.
 
 ---
 
@@ -44,35 +42,42 @@ By default, the server binds to `0.0.0.0:3000`.
 
 When accessing `http://localhost:3000` for the first time:
 1. The welcome wizard prompts you to create the initial **Super Administrator** account.
-2. Enter your desired **Username** (minimum 3 characters) and **Password** (minimum 6 characters).
-3. Click **"Initialize Super Admin"** to generate the Argon2id hash and persist credentials in `data/system/vanilladb.sqlite`.
+2. Enter your chosen **Username** (minimum 3 characters) and **Password** (minimum 6 characters).
+3. Confirm creation to generate the Argon2id hash and persist credentials in `data/system/vanilladb.sqlite`.
 
-### Automatic Environment Bootstrap (Headless Mode)
-For automated CI/CD pipelines and Docker deployments, specify admin credentials directly via environment variables:
+### Automated Bootstrap (Headless / Docker)
+For automated CI/CD pipelines and container deployments, configure admin credentials in `.env`:
 ```env
 VDB_ADMIN_USERNAME=VanillaDatabase
 VDB_ADMIN_PASSWORD=SuperSecretPassword123!
 ```
-On boot, if no administrator account exists, VanillaDatabase automatically provisions the account with `super_admin` privileges.
+If no administrator exists, the server provisions this account with `super_admin` role on initial startup.
 
 ### Emergency CLI Password Reset
-If administrator credentials are lost:
+If credentials are lost or locked out:
 ```bash
-# Reset password via CLI directly against the metadata SQLite database
-node dist/src/server/cli.js <username> <new_password>
+npm run admin:reset <username> <new_password>
 ```
 
 ---
 
-## 4. Key Configuration Variables
+## 4. Verification & Health Check
 
-| Variable | Default | Purpose |
-| :--- | :--- | :--- |
-| `NODE_ENV` | `development` | Set to `production` for strict security, error sanitization, and production caching |
-| `VDB_PORT` | `3000` | Port listening for HTTP traffic |
-| `VDB_HOST` | `0.0.0.0` | Network binding interface |
-| `VDB_DATA_DIR` | `./data` | Master storage directory for databases, backups, and media files |
-| `VDB_SESSION_SECRET` | *Auto-generated* | 64-char hex string used to sign session cookies |
-| `VDB_MASTER_KEY` | *Auto-generated* | Master key for AES-256-GCM data-at-rest encryption |
-| `VDB_TRUST_PROXY` | `false` | Enable when running behind reverse proxies (Nginx, Cloudflare) |
-| `VDB_SQL_BUSY_TIMEOUT_MS` | `5000` | Max milliseconds to wait on SQLite file locks before returning `SQLITE_BUSY` |
+Execute an unauthenticated probe against the health check endpoint:
+```bash
+curl -i http://localhost:3000/health
+```
+
+Expected HTTP response:
+```json
+{
+  "status": "ok",
+  "version": "1.3.2",
+  "uptime": 12.45
+}
+```
+
+Check system status and configuration:
+```bash
+curl -i http://localhost:3000/api/auth/status
+```

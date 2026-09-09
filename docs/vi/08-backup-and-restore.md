@@ -1,42 +1,44 @@
-# Sao lưu, Phục hồi & Tác vụ Lập lịch Tự động
+# Sao lưu, Phục hồi & Hẹn giờ Tự động
 
-VanillaDatabase cung cấp cơ chế sao lưu ảnh chụp (snapshot) thời điểm có mã hóa an toàn, kiểm tra tính toàn vẹn bằng checksum và dịch vụ chạy nền định kỳ tự động.
-
----
-
-## 1. Quy trình Sao lưu & Cơ chế Mã hóa
-
-### Khởi tạo Snapshot
-Khi tác vụ sao lưu được kích hoạt (thủ công hoặc qua bộ lập lịch tự động):
-1. **Đồng bộ Nhật ký WAL**: Thực thi `PRAGMA wal_checkpoint(FULL)` trên database chỉ định để đảm bảo toàn bộ trang dữ liệu chưa commit hoặc nằm trong file nhật ký đều được ghi hoàn tất vào tệp database chính.
-2. **Mã hóa AES-256-GCM**: Toàn bộ tệp database được đọc và mã hóa thành một tệp snapshot an toàn lưu tại `data/backups/:databaseId/backup_<timestamp>_<nanoid>.sqlite`.
-3. **Mã kiểm tra Toàn vẹn Checksum**: Tính toán mã băm SHA-256 bất biến của tệp snapshot và lưu trữ vào bảng `database_backups`.
+Cẩm nang kỹ thuật về tạo bản sao lưu ảnh chụp mã hóa theo thời điểm, xác thực mã băm kiểm tra, quy trình khôi phục an toàn và worker bảo trì định kỳ trong **VanillaDatabase**.
 
 ---
 
-## 2. Quy trình Phục hồi Dữ liệu (Restore)
+## 1. Quy trình Tạo Bản Sao lưu Mã hóa
 
-Khi phục hồi một bản sao lưu (`POST /api/admin/databases/:id/backups/:backupId/restore`):
-1. **Kiểm tra Checksum**: Xác minh tệp snapshot trên ổ đĩa khớp hoàn toàn với mã SHA-256 đã lưu. Nếu có dấu hiệu bị can thiệp trái phép, tiến trình phục hồi lập tức bị hủy bỏ.
-2. **Tạo Bản sao An toàn (Safety Snapshot)**: Tự động tạo một bản sao lưu dự phòng hệ thống (`system`) của trạng thái hiện tại trước khi ghi đè dữ liệu.
-3. **Giải phóng Kết nối**: Đóng và giải phóng toàn bộ handle kết nối SQLite đang hoạt động (`.sqlite`, `-wal`, `-shm`).
-4. **Giải mã & Thay thế Nguyên tử**: Giải mã tệp sao lưu và ghi đè vào đường dẫn database chính.
-5. **Kiểm tra Tình trạng Sau Phục hồi**: Mở lại kết nối database và chạy lệnh `PRAGMA quick_check;`. Nếu phát hiện bất kỳ lỗi hỏng cấu trúc nào, hệ thống sẽ cảnh báo lỗi ngay lập tức.
+### Các bước Tạo Snapshot
+Khi kích hoạt sao lưu (thủ công qua Dashboard, Control Plane API hoặc lịch trình tự động):
+1. **Đồng bộ nhật ký WAL**: Chạy lệnh `PRAGMA wal_checkpoint(FULL)` trên database chỉ định, đảm bảo toàn bộ giao dịch và trang bộ nhớ được ghi sạch vào tệp chính.
+2. **Mã hóa AES-256-GCM**: Dữ liệu database được nạp và ghi ra tệp snapshot mã hóa tại `data/backups/:databaseId/backup_<timestamp>_<nanoid>.sqlite`.
+3. **Mã băm Toàn vẹn SHA-256**: Hệ thống tính toán mã băm SHA-256 bất biến của tệp sao lưu và lưu vào bảng siêu dữ liệu `database_backups`.
 
 ---
 
-## 3. Bộ Lập lịch Sao lưu Tự động (Backup Scheduler)
+## 2. Quy trình Khôi phục Cơ sở Dữ liệu
 
-VanillaDatabase tích hợp sẵn một tiến trình chạy ngầm theo chu kỳ cron (`src/server/services/backupScheduler.ts`):
+Khi thực hiện lệnh khôi phục qua `POST /api/admin/databases/:id/backups/:backupId/restore`:
+1. **Xác minh Tính toàn vẹn**: So sánh tệp trên đĩa với mã băm SHA-256 đã lưu. Nếu phát hiện tệp bị can thiệp trái phép, quy trình hủy ngay lập tức.
+2. **Tạo Bản sao lưu An toàn (Pre-restore Snapshot)**: Tự động chụp lại trạng thái hiện tại trước khi ghi đè để có thể quay lui nếu cần.
+3. **Đóng Kết nối Cũ**: Ngắt toàn bộ handle kết nối SQLite (`.sqlite`, `-wal`, `-shm`) khỏi bộ nhớ đệm connection pool.
+4. **Giải mã & Ghi đè Nguyên tử**: Giải mã bản sao lưu trực tiếp vào đường dẫn database chính của tenant.
+5. **Kiểm tra Toàn vẹn Hậu khôi phục**: Mở lại kết nối và thực thi `PRAGMA quick_check;` để khẳng định database hoạt động trơn tru.
 
-### Các Chu kỳ Cấu hình Linh hoạt
-- `disabled`: Tắt tính năng sao lưu tự động.
-- `hourly`: Chạy sao lưu mỗi giờ một lần.
-- `6hours`: Chạy định kỳ mỗi 6 giờ.
-- `12hours`: Chạy định kỳ mỗi 12 giờ.
-- `daily`: Chạy mỗi ngày một lần (mỗi 24 giờ).
-- `weekly`: Chạy mỗi tuần một lần (mỗi 7 ngày).
+---
 
-### Chính sách Tự động Thu dọn Bản sao Cũ (Retention Policy)
-- Có thể thiết lập giới hạn lưu giữ (`backup_retention` trong mục Cài đặt, ví dụ: giữ lại 7 bản sao lưu gần nhất).
-- Tự động xóa các tệp sao lưu cũ khỏi ổ đĩa và cơ sở dữ liệu metadata để tiết kiệm dung lượng lưu trữ.
+## 3. Worker Chạy ngầm Tự động hóa
+
+### 3.1. Trình Lập lịch Sao lưu (`backupScheduler.ts`)
+Hỗ trợ cấu hình chu kỳ sao lưu linh hoạt theo từng database hoặc toàn hệ thống:
+- `disabled`: Tắt sao lưu tự động.
+- `hourly`: Chạy mỗi giờ một lần.
+- `6hours`: Chạy mỗi 6 giờ.
+- `12hours`: Chạy mỗi 12 giờ.
+- `daily`: Chạy mỗi ngày một lần (24 giờ).
+- `weekly`: Chạy mỗi tuần một lần (7 ngày).
+
+### Chính sách Dọn dẹp Hạn mức Lưu trữ
+- Tự động xóa các bản sao lưu cũ vượt quá số lượng lưu trữ cho phép (ví dụ: giữ lại 7 bản sao lưu gần nhất) để bảo vệ dung lượng ổ đĩa.
+
+### 3.2. Worker Tự động Bảo trì Định kỳ (`maintenanceWorker.ts`)
+- Định kỳ chạy `PRAGMA optimize` trên các database đang hoạt động để cập nhật số liệu lập kế hoạch truy vấn SQLite.
+- Tự động dọn dẹp các bản ghi nhật ký hoạt động và kiểm toán hết hạn.

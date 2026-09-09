@@ -1,297 +1,343 @@
 <p align="center">
-  <img src="src/web/assets/logo.svg" alt="Logo VanillaDatabase" width="130" height="130" />
+  <img src="public/logo.svg" alt="VanillaDatabase Logo" width="120" height="120" />
 </p>
 
-<h1 align="center">VanillaDatabase (VanillaDB) - Tiếng Việt</h1>
+<h1 align="center">VanillaDatabase (VanillaDB) — Tiếng Việt</h1>
 
 <p align="center">
-  <strong>Động cơ đám mây SQLite đa khách thuê (Multi-tenant) hiệu năng cao với REST & SQL APIs, luồng sự kiện Server-Sent Events (SSE), phát luồng media phân đoạn (HTTP 206), mã hóa dữ liệu tại chỗ AES-256-GCM, sao lưu tự động, webhooks và hàm toán học AI vector tích hợp.</strong>
-</p>
-
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/Gi%E1%BA%A5y%20ph%C3%A9p-MIT-blue.svg" alt="Giấy phép: MIT" /></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-22%2B-green.svg?logo=node.js" alt="Node.js 22+" /></a>
-  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.8-blue.svg?logo=typescript" alt="TypeScript" /></a>
-  <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-black.svg?logo=fastify" alt="Fastify" /></a>
-  <a href="https://www.sqlite.org/"><img src="https://img.shields.io/badge/SQLite-node:sqlite%20(WAL)-003B57.svg?logo=sqlite" alt="SQLite" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/Phi%C3%AAn%20b%E1%BA%A3n-1.3.2-orange.svg" alt="Phiên bản 1.3.2" /></a>
+  <strong>Nền tảng SQLite Cloud đa người dùng cấp doanh nghiệp: API REST & SQL hiệu năng cao, Server-Sent Events (SSE) realtime, phát luồng Media theo phân đoạn (HTTP 206), mã hóa dữ liệu tĩnh AES-256-GCM, sao lưu tự động và tích hợp hàm toán học AI Vector bản địa.</strong>
 </p>
 
 <p align="center">
-  <a href="#tong-quan">Tổng quan</a> •
-  <a href="README.md">English (EN)</a> •
-  <a href="#tinh-nang-chinh">Tính năng chính</a> •
-  <a href="#kien-truc-he-thong">Kiến trúc</a> •
-  <a href="#cai-dat--khoi-chay-nhanh">Cài đặt nhanh</a> •
-  <a href="#cau-hinh-bien-moi-truong">Cấu hình</a> •
-  <a href="#tham-chieu-api">Tham chiếu API</a> •
-  <a href="#client-sdks">SDKs</a> •
-  <a href="#so-sanh">So sánh</a> •
-  <a href="#phim-tat-he-thong">Phím tắt</a> •
-  <a href="docs/vi/Home.md">Wiki Tiếng Việt</a> •
-  <a href="docs/en/Home.md">Full Wiki (EN)</a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/Gi%E1%BA%A5y%20ph%C3%A9p-MIT-0969da.svg?style=flat-square" alt="Giấy phép: MIT" /></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-22%2B-22c55e.svg?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 22+" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.8-3178c6.svg?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
+  <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Phi%C3%AAn%20b%E1%BA%A3n-1.3.2-ea580c.svg?style=flat-square" alt="Phiên bản 1.3.2" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-94%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="94 bài kiểm thử vượt qua" /></a>
+</p>
+
+<p align="center">
+  <strong>[ <a href="#tổng-quan">Tổng quan</a> ]</strong> &bull;
+  <strong>[ <a href="README.md">English Version</a> ]</strong> &bull;
+  <strong>[ <a href="#kiến-trúc-hệ-thống">Kiến trúc</a> ]</strong> &bull;
+  <strong>[ <a href="#tính-năng-cốt-lõi">Tính năng cốt lõi</a> ]</strong> &bull;
+  <strong>[ <a href="#khởi-động-nhanh">Khởi động nhanh</a> ]</strong> &bull;
+  <strong>[ <a href="#mô-hình-an-ninh--bảo-mật">Bảo mật</a> ]</strong> &bull;
+  <strong>[ <a href="#tham-chiếu-api">Tham chiếu API</a> ]</strong> &bull;
+  <strong>[ <a href="#hệ-thống-phím-tắt">Phím tắt</a> ]</strong> &bull;
+  <strong>[ <a href="docs/README.md">Bộ tài liệu kỹ thuật</a> ]</strong>
 </p>
 
 ---
 
 ## Tổng quan
 
-**VanillaDatabase (VanillaDB)** là máy chủ cơ sở dữ liệu đa khách thuê gọn nhẹ, tự lưu trữ (self-hosted) được xây dựng trực tiếp trên nền tảng native Node.js 22+ (`node:sqlite`) và Fastify.
+**VanillaDatabase (VanillaDB)** là nền tảng quản trị cơ sở dữ liệu SQLite đám mây đa người dùng (Multi-tenant), tự lưu trữ (self-hosted), nhẹ và tối ưu hóa cao được xây dựng trên nền Node.js 22+ và Fastify.
 
-Thay vì phải duy trì các máy chủ cơ sở dữ liệu nặng nề cho từng ứng dụng hoặc công cụ nội bộ, VanillaDatabase quản lý **nhiều cơ sở dữ liệu SQLite độc lập** ngay trên ổ đĩa. Mỗi database hoạt động như một cụm khách thuê riêng với nhật ký WAL độc lập, mã truy cập API tokens, kho lưu trữ media, sao lưu tự động, webhooks và luồng realtime SSE.
+Thay vì phải duy trì các cụm cơ sở dữ liệu cồng kềnh cho từng khách hàng, dự án nhỏ hoặc microservices, VanillaDatabase tự động khởi tạo và điều phối các **cơ sở dữ liệu SQLite độc lập** trực tiếp trên ổ đĩa. Mỗi cơ sở dữ liệu tenant vận hành như một thực thể lưu trữ riêng biệt với tệp nhật ký WAL, khóa API token phân quyền, bản sao lưu mã hóa, kho lưu trữ media, webhook bất đồng bộ và luồng dữ liệu thời gian thực.
 
-### Đối tượng sử dụng chính
-- **Nhà phát triển Full-Stack & Backend**: Thiết lập ngay backend đa khách thuê mà không cần cấu hình cụm PostgreSQL/MySQL phức tạp.
-- **Lập trình viên Discord & Telegram Bot**: Lưu trữ dữ liệu bền vững với mức chiếm dụng RAM cực thấp (~35MB–50MB RAM toàn hệ thống).
-- **Công cụ nội bộ & SaaS Startups**: Phân tách dữ liệu từng khách hàng thành các file `.sqlite` độc lập với kiểm soát quyền hạn và hạn mức ổ đĩa.
-- **Edge / Homelab / Máy chủ VPS cấu hình thấp**: Cơ sở dữ liệu quan hệ chuẩn ACID với 0ms cold-start và không cần cài đặt thêm phần mềm phụ trợ.
-
----
-
-## Tính năng chính
-
-- 🚀 **Động cơ SQLite Đa Khách Thuê**: Tạo không giới hạn database độc lập theo ID (`db_<nanoid>`). Tự động bật chế độ WAL, cơ chế thử lại busy timeout, ràng buộc khóa ngoại Foreign Keys và cache kết nối 60 giây.
-- 🔐 **Mã hóa dữ liệu tại chỗ (AES-256-GCM)**: Mã hóa phong bì xác thực (chữ ký `VENC`, khóa dẫn xuất PBKDF2) bảo vệ file sao lưu và các tệp nhị phân media.
-- 👥 **Phân quyền RBAC & Hạn ngạch tài nguyên**: 3 cấp bậc người dùng (`super_admin`, `admin`, `user`) với giới hạn số lượng database tạo được (`max_databases`) và giới hạn tần suất gọi API (`rate_limit_per_minute`).
-- 🛡️ **Mã API Token có phạm vi & Giới hạn tốc độ**: Tạo token (`vdb_live_*`, `vdb_test_*`) với quyền hạn chi tiết (`database:read`, `database:write`, `database:ddl`, `database:admin`), lọc danh sách bảng cho phép/chặn, thời gian hết hạn và thuật toán sliding-window rate limit.
-- ⚡ **Luồng sự kiện thời gian thực (SSE)**: Tích hợp Server-Sent Events (`/v1/databases/:id/realtime`) truyền trực tiếp các thay đổi dữ liệu (`insert`, `update`, `delete`, `schema`) về frontend và SDK.
-- 📁 **Kho lưu trữ Media theo Database**: Tải lên hình ảnh, âm thanh, video với giải mã trong suốt và **phát luồng HTTP 206 Partial Content Range Streaming** cho trình phát đa phương tiện.
-- 🔄 **Bộ chuyển đổi & Nạp dữ liệu đa hệ quản trị**: Tự động chuyển đổi các bản xuất từ **MySQL**, **PostgreSQL**, **MongoDB / NDJSON**, **CSV** và tệp nhị phân **SQLite** (`.db`/`.sqlite`).
-- 🧠 **Hàm tính toán AI Vector & Mật mã học**: Tích hợp sẵn trong câu lệnh SQL: `vec_cosine_similarity()`, `vec_cosine_distance()`, `encrypt_aes()`, `decrypt_aes()`, `hash_sha256()` và `hash_hmac()`.
-- 📊 **Phân tích truy vấn trực quan & Telemetry**: Phân tích `EXPLAIN QUERY PLAN` phát hiện quét toàn bảng (Full Table Scan), biểu đồ giám sát tài nguyên (CPU, RAM, QPS, độ trễ, lưu lượng mạng) cập nhật thời gian thực 1 giây.
-- 🔔 **Hệ thống Webhooks**: Tự động phát sự kiện POST bất đồng bộ kèm chữ ký xác thực HMAC-SHA256 (`X-Vanilla-Signature`), tùy biến lọc bảng và định dạng thông báo riêng cho Discord/Telegram/Slack.
-- ⏰ **Tác vụ định kỳ (Cron Jobs)**: Lên lịch hẹn giờ chạy câu lệnh SQL định kỳ dọn dẹp, bảo trì hoặc sao lưu dữ liệu tự động ngay trong SQLite.
-- 🔐 **Bảo mật 2FA & Khôi phục 2 lớp (Dual-Factor Recovery)**: Tích hợp mã OTP ứng dụng xác thực RFC 6238, cơ chế thử thách đăng nhập 6 số, 6 mã dự phòng (backup codes) theo dõi trạng thái active/used và trang khôi phục mật khẩu riêng biệt `#/reset-password`.
-- 💻 **Giao diện Web Hiện đại**: Xây dựng trên React 19, Tailwind CSS, Monaco SQL Editor và TanStack Table v8.
+> [!NOTE]
+> Tất cả cơ sở dữ liệu tenant được cô lập hoàn toàn tại đường dẫn `data/databases/:id.sqlite`. Siêu dữ liệu hệ thống (metadata) được phân vùng độc lập tại `data/system/vanilladb.sqlite`.
 
 ---
 
 ## Kiến trúc hệ thống
 
 ```
-                      ┌─────────────────────────────────┐
-                      │     Clients HTTP / Luồng SSE    │
-                      │  (Giao diện Web, SDKs, Scripts) │
-                      └────────────────┬────────────────┘
-                                       │
-                     ┌─────────────────┴─────────────────┐
-                     │ Máy chủ HTTP Fastify (Cổng: 3000) │
-                     │  - Bảo mật Helmet & Bộ lọc CORS   │
-                     │  - Xác thực Cookie & Bearer Token │
-                     │  - Tải tệp Multipart & Range 206  │
-                     │  - Thu thập chỉ số & Telemetry    │
-                     └─────────────────┬─────────────────┘
-                                       │
-        ┌──────────────────────────────┴──────────────────────────────┐
-        ▼                                                             ▼
-┌──────────────────────────────┐              ┌──────────────────────────────┐
-│ Control Plane (/api/*)       │              │ Data Plane (/v1/*)           │
-│ • Xác thực Admin & Phiên     │              │ • Kiểm soát API Bearer Token │
-│ • Phân quyền RBAC & Hạn mức  │              │ • Giới hạn tần suất (429)    │
-│ • Dịch chuyển đa hệ CSDL SQL │              │ • Động cơ SQL tham số hóa    │
-│ • Lập lịch sao lưu tự động   │              │ • Giao dịch Batch nguyên tử  │
-│ • Bộ phát sự kiện Webhook    │              │ • Kênh SSE thời gian thực    │
-│ • Nhật ký kiểm toán hệ thống │              │ • Lưu trữ & phát luồng Range │
-└──────────────┬───────────────┘              └──────────────┬───────────────┘
-               │                                             │
-               ▼                                             ▼
-┌──────────────────────────────┐              ┌──────────────────────────────┐
-│ Kho Metadata Hệ thống        │              │ Bộ đệm Quản lý Kết nối CSDL  │
-│ • data/system/vanilladb.sqlite              │ • Bộ nhớ đệm Handle kết nối  │
-│ • Lịch sử di chuyển schema   │              │ • Hộp cát bảo mật cú pháp    │
-│ • Người dùng, Token, Cấu hình│              │ • Hàm Vector AI & Mật mã SQL │
-└──────────────────────────────┘              └──────────────┬───────────────┘
-                                                             │
-                                                             ▼
-                                              ┌──────────────────────────────┐
-                                              │ Tệp CSDL SQLite Khách thuê   │
-                                              │ • data/databases/:id.sqlite  │
-                                              │ • Chế độ WAL & Busy Timeout  │
-                                              │ • data/storage/:id/*         │
-                                              │ • data/backups/:id/*.sqlite  │
-                                              └──────────────────────────────┘
+                       +-----------------------------------+
+                       |      Tầng Khách HTTP / SSE        |
+                       |  (Bảng điều khiển, SDKs, Scripts) |
+                       +-----------------+-----------------+
+                                         |
+                                         v
+                       +-----------------------------------+
+                       |    Máy chủ Fastify (Cổng: 3000)   |
+                       |   - Lá chắn Helmet & CSP nghiêm   |
+                       |   - Xác thực Chữ ký HMAC & Token  |
+                       |   - Giới hạn tốc độ & Chặn SSRF   |
+                       +-----------------+-----------------+
+                                         |
+         +-------------------------------+-------------------------------+
+         |                               |                               |
+         v                               v                               v
++-----------------+             +-----------------+             +-----------------+
+|   Control Plane |             |   Data Plane    |             |   Media Storage |
+|  /api/admin/*   |             |   /v1/databases |             |  /v1/databases/ |
+|  /api/auth/*    |             |   /:id/query    |             |  :id/storage    |
++--------+--------+             +--------+--------+             +--------+--------+
+         |                               |                               |
+         v                               v                               v
++-----------------+             +-----------------+             +-----------------+
+| System Metadata |             |  Tenant Engine  |             |  Kho Media Mã hóa|
+| (better-sqlite3)|             | (Pooled Handles)|             |  (AES-256-GCM)  |
+| - Users & Roles |             | - Chế độ WAL    |             | - HTTP 206      |
+| - Thành viên DB |             | - AI Vector Math|             | - Tua phát mượt |
+| - Tokens & Logs |             | - Khóa ngoại FK |             | - Chặn rò rỉ    |
++-----------------+             +-----------------+             +-----------------+
 ```
 
 ---
 
-## Cài đặt & Khởi chạy nhanh
+## Tính năng cốt lõi
 
-### Yêu cầu hệ thống
-- **Node.js**: `v22.0.0` trở lên (bắt buộc để sử dụng `node:sqlite`).
-- **NPM**: `v10.0.0` trở lên.
-- **Hệ điều hành**: Linux, macOS, hoặc Windows.
+### [ENGINE] Điều phối Động cơ SQLite Đa người thuê
+- Tự động sinh cơ sở dữ liệu SQLite biệt lập theo định danh nanoid (`db_<nanoid>`).
+- Kích hoạt chế độ Write-Ahead Logging (WAL), cơ chế thử lại khi bận (busy-timeout retry), ràng buộc khóa ngoại (foreign keys) và lưu bộ nhớ đệm kết nối.
+- Đăng ký sẵn các hàm toán học khoảng cách và tương đồng AI vector: `vec_cosine_similarity()`, `vec_cosine_distance()`.
+- Tích hợp hàm mật mã trực tiếp trong câu lệnh SQL: `encrypt_aes()`, `decrypt_aes()`, `hash_sha256()`, `hash_hmac()`.
 
-### Các bước cài đặt
+### [SECURITY] Phòng thủ Chiều sâu & Chuẩn Mật mã OWASP
+- **Thu hồi phiên làm việc tức thì (VDB-SEC-01):** Chữ ký HMAC của session cookie ràng buộc chặt chẽ với `token_version` của người dùng. Mọi hành vi đổi mật khẩu hoặc vô hiệu hóa tài khoản từ admin sẽ hủy hiệu lực của phiên cũ ngay lập tức trên toàn bộ thiết bị.
+- **Chống phát lại mã TOTP 2FA (VDB-SEC-02):** Lưu vết bước thời gian đơn điệu (`last_totp_step`) tuân thủ nghiêm ngặt chuẩn RFC 6238 Mục 5.2. Mã xác thực 6 số không thể bị sử dụng lại lần thứ hai trong cùng cửa sổ trôi dạt 90 giây.
+- **Tường lửa Chặn SSRF:** Webhook gửi ra ngoài chặn hoàn toàn dải mạng riêng tư (RFC 1918), địa chỉ loopback (`127.0.0.0/8`), link-local và điểm cuối siêu dữ liệu đám mây (`169.254.169.254`).
+- **Mã hóa Dữ liệu Tĩnh (Data-at-Rest):** Mã hóa phong bì AES-256-GCM kèm tiêu đề xác thực (`VENC` signature, PBKDF2 salt, 128-bit authentication tag).
+- **Cách ly Hộp cát Engine:** Các lệnh nguy hiểm như `ATTACH DATABASE`, `DETACH DATABASE` và nạp module nhị phân `load_extension` bị vô hiệu hóa vĩnh viễn ở tầng lõi.
 
+### [RBAC] Phân quyền Đa cấp độ & Hạn ngạch Quota
+- Ba vai trò hệ thống: `super_admin`, `admin`, `user`.
+- Bốn vai trò trong từng cơ sở dữ liệu: `owner`, `admin`, `editor`, `viewer`.
+- Kiểm soát hạn mức số lượng cơ sở dữ liệu (`max_databases`) và giới hạn tốc độ truy vấn theo người dùng (`rate_limit_per_minute`).
+- Tự đăng ký tài khoản với chính sách cấp phát hạn mức tự động.
+
+### [API] Khóa Token Phân quyền Tinh gọn
+- Sinh khóa API token với tiền tố `vdb_live_*` hoặc `vdb_test_*`.
+- Phạm vi quyền hạn chi tiết: `database:read`, `database:write`, `database:ddl`, `database:admin`.
+- Danh sách bảng cho phép (allowlist) và chặn truy cập (denylist).
+- Không bao giờ lưu token thô; cơ sở dữ liệu chỉ lưu bản băm SHA-256.
+
+### [REALTIME] Phát Sự kiện SSE & Webhooks Bất đồng bộ
+- Luồng Server-Sent Events tại `/v1/databases/:id/realtime` phát đi các thay đổi dữ liệu bảng (`insert`, `update`, `delete`, `schema`).
+- Hệ thống webhook gửi sự kiện bất đồng bộ kèm chữ ký bảo mật HMAC-SHA256 (`X-Vanilla-Signature`), tự động thử lại khi lỗi và định dạng sẵn thông báo Discord/Slack.
+
+### [STORAGE] Kho Lưu trữ Media & Phát luồng HTTP 206
+- Lưu trữ tệp tin theo phạm vi cơ sở dữ liệu với cơ chế mã hóa khối trong suốt.
+- Hỗ trợ tiêu đề `Range` của HTTP 206 Partial Content cho phép nghe nhạc, xem video mượt mà, hỗ trợ tua đến từng vị trí bất kỳ.
+
+### [UX] Bảng điều khiển Quản trị & Ma trận Phím tắt Song ngữ
+- Giao diện quản trị hiện đại, mượt mà được xây dựng bằng React 19, Tailwind CSS v4, Lucide icons và trình soạn thảo Monaco SQL Editor.
+- Hỗ trợ song ngữ toàn diện (Tiếng Việt & English) trên tất cả các trang, thông báo và modal.
+- Hệ thống phím tắt tích hợp: Vim chords (`G+D`, `G+I`), thu gọn sidebar (`Ctrl+\`), thao tác soạn thảo SQL (`Ctrl+Enter`, `Ctrl+E`, `Ctrl+S`, `Alt+Up/Down`, `F11`) và duyệt bảng dữ liệu (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).
+
+---
+
+## Khởi động nhanh
+
+### Yêu cầu môi trường
+- Node.js phiên bản 22.0.0 trở lên
+- Trình quản lý gói npm 10.0.0 trở lên
+
+### 1. Sao chép mã nguồn & Cài đặt
 ```bash
-# 1. Tải mã nguồn về máy
 git clone https://github.com/Elaina2026/VanillaDB.git
-cd VanillaDatabase
-
-# 2. Cài đặt các thư viện phụ thuộc
+cd VanillaDB
 npm install
+```
 
-# 3. Tạo file cấu hình môi trường
+### 2. Thiết lập biến môi trường
+```bash
 cp .env.example .env
+```
 
-# 4. Đóng gói mã nguồn (Build)
+Kiểm tra cấu hình các biến cơ bản trong file `.env`:
+```env
+PORT=3000
+HOST=0.0.0.0
+NODE_ENV=production
+VDB_MASTER_KEY=nhap_chuoi_hex_ngau_nhien_dai_64_ky_tu
+VDB_SESSION_SECRET=nhap_chuoi_hex_ngau_nhien_dai_64_ky_tu
+VDB_CORS_ORIGINS=http://localhost:3000
+```
+
+### 3. Biên dịch & Vận hành
+```bash
+# Biên dịch giao diện frontend và mã nguồn máy chủ
 npm run build
 
-# 5. Khởi chạy máy chủ
+# Khởi động máy chủ môi trường production
 npm start
 ```
 
-Mở trình duyệt tại địa chỉ **`http://localhost:3000`** để tạo tài khoản Super Administrator ban đầu.
+Dành cho nhà phát triển (hỗ trợ hot-reload):
+```bash
+npm run dev
+```
+
+Truy cập bảng điều khiển quản trị web tại địa chỉ: `http://localhost:3000`.
 
 ---
 
-## Cấu hình biến môi trường
+## Bảng tham chiếu cấu hình
 
-Quản lý thông qua file `.env`:
-
-| Biến môi trường | Bắt buộc | Mặc định | Ý nghĩa & Mô tả |
-| :--- | :---: | :---: | :--- |
-| `NODE_ENV` | Không | `development` | Môi trường chạy (`production` / `development`) |
-| `VDB_HOST` | Không | `0.0.0.0` | Địa chỉ IP máy chủ lắng nghe |
-| `VDB_PORT` | Không | `3000` | Cổng HTTP kết nối |
-| `VDB_DATA_DIR` | Không | `./data` | Thư mục lưu trữ toàn bộ database và file sao lưu |
-| `VDB_SESSION_SECRET` | Không | *Tự sinh* | Khóa bí mật ký cookie phiên làm việc (tối thiểu 32 ký tự) |
-| `VDB_MASTER_KEY` | Không | *Tự sinh* | Khóa chủ mã hóa dữ liệu tại chỗ AES-256-GCM |
-| `VDB_ADMIN_USERNAME` | Không | `null` | Tên đăng nhập admin tự tạo lần đầu chạy |
-| `VDB_ADMIN_PASSWORD` | Không | `null` | Mật khẩu admin tự tạo lần đầu chạy |
-| `VDB_TRUST_PROXY` | Không | `false` | Bật nhận diện IP qua header sau Reverse Proxy |
-| `VDB_CORS_ORIGINS` | Không | `*` | Danh sách domain cho phép CORS (ngăn cách dấu phẩy) |
-| `VDB_SQL_BUSY_TIMEOUT_MS`| Không | `5000`| Thời gian chờ thử lại khóa SQLite (milliseconds) |
-| `VDB_MAX_REQUEST_BODY_MB`| Không | `10` | Kích thước tối đa của body JSON request (MB) |
-| `VDB_MAX_IMPORT_MB` | Không | `1024` | Giới hạn dung lượng tải lên file database import (MB) |
-| `VDB_MAX_QUERY_ROWS` | Không | `100000`| Giới hạn số dòng tối đa trả về trong một truy vấn |
-| `VDB_QUERY_TIMEOUT_MS`| Không | `0` | Giới hạn thời gian truy vấn SQL (0 = không giới hạn) |
-| `VDB_LOG_LEVEL` | Không | `info` | Mức độ chi tiết log (`debug`, `info`, `warn`, `error`) |
+| Biến môi trường | Kiểu dữ liệu | Mặc định | Mô tả chi tiết |
+| :--- | :--- | :--- | :--- |
+| `PORT` | số | `3000` | Cổng lắng nghe kết nối HTTP |
+| `HOST` | chuỗi | `0.0.0.0` | Địa chỉ mạng ràng buộc |
+| `NODE_ENV` | chuỗi | `development` | Môi trường thực thi (`development`, `production`, `test`) |
+| `VDB_MASTER_KEY` | chuỗi | Tự sinh | Khóa 256-bit dùng cho mã hóa cơ sở dữ liệu và tệp lưu trữ |
+| `VDB_SESSION_SECRET` | chuỗi | Tự sinh | Khóa HMAC ký phiên đăng nhập và mã token tạm thời |
+| `VDB_CORS_ORIGINS` | chuỗi | `*` | Tên miền cho phép kết nối CORS (ngăn cách bằng dấu phẩy) |
+| `VDB_DATA_DIR` | chuỗi | `./data` | Thư mục lưu trữ tệp cơ sở dữ liệu SQLite, backup và media |
+| `VDB_MAX_REQUEST_SIZE_MB` | số | `10` | Kích thước gói tin HTTP tối đa cho truy vấn SQL và nhập dữ liệu |
+| `VDB_STORAGE_MAX_FILE_SIZE_MB` | số | `100` | Kích thước tệp tin tối đa khi tải media lên hệ thống |
+| `VDB_STORAGE_ENCRYPTION` | boolean | `true` | Kích hoạt mã hóa AES-256-GCM cho tệp media lưu trữ |
+| `VDB_DEFAULT_USER_MAX_DATABASES` | số | `2` | Số lượng cơ sở dữ liệu tối đa cấp cho tài khoản mới đăng ký |
+| `VDB_DEFAULT_USER_RATE_LIMIT` | số | `180` | Hạn mức yêu cầu tối đa mỗi phút cho người dùng thông thường |
 
 ---
 
 ## Tham chiếu API
 
-Mọi yêu cầu đến Data Plane (`/v1/...`) yêu cầu mã xác thực API Bearer token trong header: `Authorization: Bearer vdb_live_...` hoặc query parameter `?token=vdb_live_...`.
+### Tầng Dữ liệu Data Plane (Thao tác trên Database Tenant)
 
-### 1. Truy vấn SQL có tham số hóa (Parameterized Query)
-- **Endpoint**: `POST /v1/databases/:databaseId/query`
-- **Quyền yêu cầu**: `database:read` hoặc `database:write`
-- **Body**:
-```json
+Tất cả các điểm cuối Data Plane yêu cầu xác thực qua Bearer Token (`Authorization: Bearer vdb_live_...`) hoặc cookie phiên hợp lệ.
+
+```bash
+# Thực thi truy vấn đọc dữ liệu (SELECT)
+POST /v1/databases/:databaseId/query
+Content-Type: application/json
+
 {
-  "sql": "SELECT id, username, score FROM users WHERE score >= ? ORDER BY score DESC LIMIT ?",
-  "params": [100, 10]
-}
-```
-- **Kết quả trả về**:
-```json
-{
-  "success": true,
-  "data": {
-    "columns": ["id", "username", "score"],
-    "rows": [
-      { "id": 1, "username": "alice", "score": 250 }
-    ],
-    "rowCount": 1,
-    "durationMs": 0.42
-  }
+  "sql": "SELECT id, username, email FROM users WHERE status = ? LIMIT 10;",
+  "params": ["active"]
 }
 ```
 
-### 2. Giao dịch Batch nguyên tử (Atomic Batch Transaction)
-- **Endpoint**: `POST /v1/databases/:databaseId/batch`
-- **Quyền yêu cầu**: `database:write`
-- **Body**:
-```json
+```bash
+# Thực thi truy vấn thay đổi dữ liệu (INSERT, UPDATE, DELETE)
+POST /v1/databases/:databaseId/exec
+Content-Type: application/json
+
+{
+  "sql": "UPDATE users SET status = ? WHERE id = ?;",
+  "params": ["verified", "usr_123"]
+}
+```
+
+```bash
+# Thực thi lô giao dịch nguyên tử (Batch Transaction)
+POST /v1/databases/:databaseId/batch
+Content-Type: application/json
+
 {
   "transaction": true,
   "statements": [
-    { "sql": "UPDATE accounts SET balance = balance - ? WHERE id = ?", "params": [50, "acc_1"] },
-    { "sql": "UPDATE accounts SET balance = balance + ? WHERE id = ?", "params": [50, "acc_2"] }
+    { "sql": "UPDATE accounts SET balance = balance - 100 WHERE id = ?;", "params": ["acc_a"] },
+    { "sql": "UPDATE accounts SET balance = balance + 100 WHERE id = ?;", "params": ["acc_b"] }
   ]
 }
 ```
 
-### 3. Luồng sự kiện Realtime SSE
-- **Endpoint**: `GET /v1/databases/:databaseId/realtime?table=users`
-- **Quyền yêu cầu**: `database:read`
-- **Mô tả**: Luồng `text/event-stream` truyền trực tiếp các sự kiện biến đổi dữ liệu (`insert`, `update`, `delete`, `schema`).
-
-### 4. Kho lưu trữ Media & Phát luồng HTTP 206
-- **Tải lên tệp**: `POST /v1/databases/:databaseId/files` (Multipart form-data)
-- **Danh sách tệp**: `GET /v1/databases/:databaseId/files`
-- **Phát luồng Video/Audio**: `GET /v1/files/:fileId/view` (Hỗ trợ header `Range: bytes=...`)
-- **Xóa tệp**: `DELETE /v1/databases/:databaseId/files/:fileId`
-
----
-
-## Client SDKs
-
-### TypeScript / Node.js
 ```bash
-npm install @nullex/vanilladb
+# Kết nối luồng sự kiện Realtime SSE
+GET /v1/databases/:databaseId/realtime
+Accept: text/event-stream
 ```
 
-```typescript
-import { VanillaDatabase } from '@nullex/vanilladb';
-
-const db = new VanillaDatabase({
-  url: 'http://localhost:3000/v1/databases/db_your_database_id',
-  token: 'vdb_live_your_token_here'
-});
-
-// Chạy truy vấn SQL với tham số
-const { rows } = await db.query('SELECT * FROM users WHERE score > ?', [50]);
-
-// Nhận sự kiện thời gian thực
-const unsubscribe = db.subscribe((event) => {
-  console.log('Sự kiện Realtime:', event);
-}, 'users');
+```bash
+# Phát luồng tệp tin Media có phân đoạn
+GET /v1/databases/:databaseId/storage/:fileId
+Range: bytes=0-1048575
 ```
 
----
+### Tầng Điều khiển Control Plane (Quản trị & Bảo mật)
 
-## Phím tắt hệ thống
-
-| Phím tắt | Mô tả chức năng |
-| :--- | :--- |
-| **`Ctrl + K`** | Mở thanh tìm kiếm lệnh và database nhanh (Command Palette) |
-| **`Ctrl + B`** | Mở nhanh cửa sổ tạo cơ sở dữ liệu mới |
-| **`Ctrl + Shift + L`** | Chuyển đổi nhanh ngôn ngữ hiển thị (English ↔ Tiếng Việt) |
-| **`Alt + T`** *(hoặc `Ctrl + Shift + T`)* | Chuyển đổi nhanh giao diện Sáng / Tối (Light / Dark) |
-| **`Alt + 1` .. `Alt + 6`** | Chuyển nhanh qua lại giữa Overview, Telemetry, Databases, Activity, Users, Settings |
-| **`1 .. 9`** | Chuyển nhanh giữa 9 tab chi tiết của database |
-| **`Shift + ?`** | Mở bảng tra cứu phím tắt toàn năng |
-| **`Ctrl + Enter`** | Thực thi câu lệnh SQL đang soạn thảo trong SQL Console |
-| **`Esc`** | Đóng các modal popup hoặc thanh tìm kiếm lệnh |
-
----
-
-## So sánh với các giải pháp khác
-
-| Tiêu chí | VanillaDatabase | SQLite (Thuần) | PocketBase | Supabase (Cloud) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Kiến trúc** | Máy chủ SQLite Đa Khách Thuê | Thư viện nhúng C | Database nhúng đơn lẻ (Go) | Cụm PostgreSQL quản lý |
-| **Đa khách thuê** | Vô hạn database động | 1 file DB duy nhất | 1 file DB duy nhất | Đa instance / Tổ chức |
-| **Cold Starts** | **0ms (Local WAL)** | 0ms | 0ms | 5s – 30s (Free tier tạm nghỉ) |
-| **Mức tiêu thụ RAM**| **~35MB – 50MB** | Bộ nhớ tiến trình | ~30MB – 60MB | ~500MB – 1GB+ |
-| **Mã hóa dữ liệu** | Tích hợp sẵn AES-256-GCM | Cần extension ngoài | Mức hệ điều hành | Mã hóa đám mây |
-| **Kho Media** | Phát luồng HTTP 206 tích hợp | Không có | Lưu trữ đĩa tích hợp | Kho S3 tương thích |
-| **Realtime** | Bus SSE tích hợp sẵn | Không có | SSE tích hợp sẵn | PostgreSQL Realtime (WAL) |
+| Giao thức | Điểm cuối | Quyền truy cập | Mục đích |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/register` | Công khai | Đăng ký tài khoản người dùng mới |
+| `POST` | `/api/auth/login` | Công khai | Đăng nhập và sinh cookie phiên |
+| `POST` | `/api/auth/login/2fa` | Công khai | Xác thực bước 2FA bằng TOTP hoặc mã dự phòng |
+| `POST` | `/api/auth/change-password` | Đã xác thực | Đổi mật khẩu kèm tự động hủy phiên cũ |
+| `GET` | `/api/admin/databases` | Đã xác thực | Liệt kê các database được phép truy cập |
+| `POST` | `/api/admin/databases` | Đã xác thực | Tạo cơ sở dữ liệu tenant mới |
+| `POST` | `/api/admin/databases/:id/clone` | Admin / Owner | Nhân bản database phục vụ thử nghiệm/staging |
+| `POST` | `/api/admin/databases/:id/backups` | Admin / Owner | Kích hoạt tạo bản sao lưu mã hóa tức thì |
+| `POST` | `/api/admin/databases/:id/maintenance` | Admin / Owner | Thực thi `integrity_check`, `vacuum`, `optimize` |
+| `GET` | `/api/system/status` | Super Admin | Giám sát CPU, RAM và dung lượng ổ đĩa máy chủ |
 
 ---
 
-## Hệ thống tài liệu (Documentation Hub)
+## Hệ thống phím tắt
 
-Xem chi tiết từng mô-đun kỹ thuật:
-- 📖 **[Tài liệu Wiki Tiếng Việt](docs/vi/Home.md)**
-- 🌐 **[English Documentation Wiki](docs/en/Home.md)**
-- 💡 **[Ví dụ mẫu code tích hợp thực tế](docs/README.md#code-integration-examples)**
+VanillaDatabase trang bị bảng phím tắt tiện lợi hỗ trợ thao tác nhanh trên toàn bộ hệ thống:
+
+| Ngữ cảnh | Phím tắt | Thao tác (Tiếng Việt) | Action (English) |
+| :--- | :--- | :--- | :--- |
+| **Toàn hệ thống** | `Ctrl + K` | Mở thanh tìm kiếm lệnh nhanh | Open Command Palette |
+| **Toàn hệ thống** | `Ctrl + B` | Mở cửa sổ tạo cơ sở dữ liệu mới | Open Create Database modal |
+| **Toàn hệ thống** | `Ctrl + \` | Thu gọn / Mở rộng Sidebar điều hướng | Toggle desktop sidebar collapse |
+| **Toàn hệ thống** | `G` rồi `D` | Về danh sách Database (Vim chord) | Navigate to Databases (Vim chord) |
+| **Toàn hệ thống** | `G` rồi `I` | Mở Hộp thư thông báo (Vim chord) | Navigate to Inbox (Vim chord) |
+| **Toàn hệ thống** | `Ctrl + Shift + L` | Chuyển đổi ngôn ngữ (EN / VI) | Toggle language (EN / VI) |
+| **Toàn hệ thống** | `Alt + T` | Chuyển đổi giao diện Sáng / Tối | Toggle theme (Light / Dark) |
+| **Toàn hệ thống** | `Shift + ?` | Mở trang tra cứu phím tắt | Open Shortcuts reference page |
+| **Chi tiết DB** | `1` .. `9` | Chuyển nhanh qua lại các tab Database | Switch database detail tabs |
+| **SQL Console** | `Ctrl + Enter` | Thực thi câu lệnh SQL đang soạn | Execute SQL statement |
+| **SQL Console** | `Ctrl + E` | Phân tích kế hoạch truy vấn EXPLAIN | Analyze EXPLAIN query plan |
+| **SQL Console** | `Ctrl + S` | Tải kết quả truy vấn ra file CSV | Export query results to CSV |
+| **SQL Console** | `Alt + Up / Down` | Duyệt lịch sử câu lệnh SQL đã chạy | Browse query execution history |
+| **SQL Console** | `Ctrl + /` | Bật/tắt comment dòng lệnh SQL (`--`) | Toggle SQL line comment (`--`) |
+| **SQL Console** | `F11` / `Esc` | Bật/tắt chế độ toàn màn hình Zen Mode | Toggle Fullscreen Zen Mode |
+| **Trình duyệt bảng** | `Alt + I` | Mở modal chèn dòng dữ liệu mới | Open Insert Row modal |
+| **Trình duyệt bảng** | `Alt + R` | Tải lại dữ liệu bảng và schema | Refresh table rows and schema |
+| **Trình duyệt bảng** | `[` / `]` | Lùi trang / Tiến trang dữ liệu | Previous / Next page |
+| **Trình duyệt bảng** | `/` | Nhảy nhanh vào ô tìm kiếm bảng | Focus table search input |
+| **Trình duyệt bảng** | `Del` | Xóa các dòng dữ liệu đang chọn | Bulk delete selected rows |
+| **Tác vụ Database** | `Ctrl + Shift + B` | Tạo bản sao lưu tức thì | Create instant backup snapshot |
+| **Tác vụ Database** | `Ctrl + Shift + D` | Mở modal nhân bản Database | Open Clone Database modal |
+| **Tác vụ Database** | `Alt + M` | Chạy kiểm tra toàn vẹn CSDL | Run `PRAGMA integrity_check` |
 
 ---
 
-## Giấy phép (License)
+## Kiểm thử & Đảm bảo chất lượng
 
-Dự án được phát hành theo giấy phép [MIT License](LICENSE).  
-Bản quyền (c) 2026 **Elaina2026**.
+Toàn bộ hệ thống kiểm thử vận hành tự động qua Vitest với kiểm chứng đầu-cuối:
+
+```bash
+# Chạy toàn bộ 94 bài kiểm thử tích hợp & đơn vị
+npm test
+
+# Kiểm tra kiểu dữ liệu TypeScript
+npm run typecheck
+
+# Chạy kiểm thử đo điểm hiệu năng
+npm run benchmark
+```
+
+Toàn bộ 94 bài kiểm thử xác minh:
+- Phân quyền RBAC đa người dùng, hạn mức tài khoản phụ và chặn vượt ngưỡng.
+- Kích hoạt 2FA TOTP, vòng đời 6 mã dự phòng và thách thức đăng nhập.
+- Thu hồi phiên làm việc tức thì khi thay đổi mật khẩu (VDB-SEC-01).
+- Chống phát lại mã TOTP đơn điệu tuân thủ RFC 6238 (VDB-SEC-02).
+- Mã hóa phong bì AES-256-GCM và dẫn xuất khóa an toàn PBKDF2.
+- Trình dịch phương ngữ SQL từ MySQL, PostgreSQL, CSV và NDJSON sang SQLite.
+- Giao dịch hàng loạt đảm bảo an toàn rollback khi xảy ra lỗi.
+- Phát luồng âm thanh và video phân đoạn HTTP 206 Partial Content.
+
+---
+
+## Bộ tài liệu chuyên sâu
+
+Truy cập các tài liệu học phần chuyên sâu tại:
+
+- **Trung tâm tài liệu**: [docs/README.md](docs/README.md)
+- **Tài liệu Tiếng Việt**:
+  - [01. Hướng dẫn khởi động](docs/vi/01-getting-started.md)
+  - [02. Kiến trúc & Thiết kế](docs/vi/02-architecture.md)
+  - [03. Động cơ cơ sở dữ liệu](docs/vi/03-database-engine.md)
+  - [04. Tham chiếu REST & SQL API](docs/vi/04-api-reference.md)
+  - [05. Phân quyền RBAC & 2FA](docs/vi/05-authentication-rbac-2fa.md)
+  - [06. Sự kiện Realtime & Webhooks](docs/vi/06-realtime-and-webhooks.md)
+  - [07. Kho lưu trữ Media & Phát luồng](docs/vi/07-storage-and-streaming.md)
+  - [08. Sao lưu & Bảo trì định kỳ](docs/vi/08-backup-and-restore.md)
+  - [09. Chuyển đổi & Nhập dữ liệu](docs/vi/09-migration-and-converter.md)
+  - [10. Vận hành Production](docs/vi/10-deployment.md)
+  - [11. Khắc phục sự cố thường gặp](docs/vi/11-troubleshooting.md)
+  - [12. Hướng dẫn phát triển mã nguồn](docs/vi/12-development.md)
+
+---
+
+## Giấy phép mã nguồn
+
+VanillaDatabase là phần mềm nguồn mở được cấp phép theo các điều khoản của [Giấy phép MIT](LICENSE).

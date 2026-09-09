@@ -7,11 +7,11 @@
 <!-- What problem does this solve or what capability does this introduce? -->
 
 ### Type of Change
-- [ ] 🐛 Bug fix (non-breaking change fixing an issue)
-- [ ] ✨ New feature (non-breaking change adding functionality)
-- [ ] 🛠️ Refactoring / Performance improvement
-- [ ] 📚 Documentation update
-- [ ] ⚠️ Breaking change (fix or feature causing existing behavior to change)
+- [ ] [FIX] Bug fix (non-breaking change fixing an issue)
+- [ ] [FEAT] New feature (non-breaking change adding functionality)
+- [ ] [REFACTOR] Refactoring / Performance improvement
+- [ ] [DOCS] Documentation update
+- [ ] [BREAKING] Breaking change (fix or feature causing existing behavior to change)
 
 ---
 

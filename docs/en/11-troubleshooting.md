@@ -1,36 +1,58 @@
-# Troubleshooting & FAQ
+# Troubleshooting & Diagnostic Guide
 
-Common errors, diagnostics, and operational questions for **VanillaDatabase**.
-
----
-
-## 1. Frequently Encountered Errors
-
-### 1. `SQLITE_BUSY: database is locked` (HTTP 503)
-- **Cause**: Another write transaction is currently committing or holding an exclusive lock.
-- **Solution**: VanillaDatabase defaults to a `5000ms` busy timeout (`VDB_SQL_BUSY_TIMEOUT_MS`). Ensure transactions are short and do not run blocking network calls inside atomic batch blocks.
-
-### 2. `ATTACH DATABASE is forbidden for security reasons` (HTTP 400)
-- **Cause**: An SQL query attempted to execute `ATTACH DATABASE`.
-- **Solution**: For multi-tenancy security, databases cannot access adjacent database files.
-
-### 3. `Requested range not satisfiable` (HTTP 416)
-- **Cause**: Browser requested a byte range beyond the file's total length.
-- **Solution**: Check the file's actual size in the dashboard storage explorer.
-
-### 4. `RATE_LIMIT_EXCEEDED` (HTTP 429)
-- **Cause**: The API token or user exceeded their configured requests per minute quota.
-- **Solution**: Increase the token rate limit in the token management panel or throttle client request frequency.
+Common operational errors, diagnostic steps, and frequently asked questions for **VanillaDatabase**.
 
 ---
 
-## 2. FAQ
+## 1. Frequently Encountered Operational Issues
 
-#### Q: Can I run VanillaDatabase on an inexpensive 512MB VPS?
-**A**: Yes. VanillaDatabase runs on native Node.js 22 with an ultra-lightweight footprint (~35MB–50MB RAM).
+### 1.1. `SQLITE_BUSY: database is locked` (HTTP 503)
+- **Root Cause**: Another transaction is currently holding an exclusive lock during a write or checkpoint.
+- **Remediation**:
+  - VanillaDatabase enforces a 5,000ms busy timeout (`VDB_SQL_BUSY_TIMEOUT_MS=5000`).
+  - Keep transactions concise. Never perform long-running network operations within batch transactions.
+  - Verify that WAL mode is active (`PRAGMA journal_mode;` returns `wal`).
 
-#### Q: How does VanillaDatabase handle backups during live writes?
-**A**: The backup service automatically executes `PRAGMA wal_checkpoint(FULL)` before taking a point-in-time snapshot, ensuring clean data consistency.
+### 1.2. Cloudflare 502 Bad Gateway
+- **Root Cause**: Cloudflare proxies HTTPS traffic to origin port 443 (which is closed) instead of your backend listening port (e.g. 3000 or 25589).
+- **Remediation**:
+  - In Cloudflare Dashboard -> **Rules** -> **Origin Rules**, create a rule rewriting destination port to your backend application port.
+  - Set SSL/TLS encryption mode to **Flexible** if origin is HTTP, or **Full** if origin has a self-signed certificate.
 
-#### Q: Where are my files and databases stored?
-**A**: All tenant databases reside at `data/databases/`, media files at `data/storage/`, backups at `data/backups/`, and system metadata at `data/system/vanilladb.sqlite`.
+### 1.3. Browser Stuck on "Loading VanillaDatabase..."
+- **Root Cause**: Network latency or unresolved API response preventing the dashboard from hydrating.
+- **Remediation**:
+  - VanillaDatabase includes a 12-second `AbortController` timeout on `apiRequest` and a 3-second fallback timer in `useAuth`.
+  - If still hanging, verify that the backend process is running and reachable via `curl http://localhost:3000/health`.
+
+### 1.4. `Failed to load module script: Expected JavaScript but responded with text/html`
+- **Root Cause**: Development uncompiled files are being served instead of the compiled production client bundle.
+- **Remediation**:
+  - Run `npm run build` to compile the Vite client into `dist/client/`.
+
+### 1.5. Session Cookie Invalidation (`Session revoked due to password or credential change`)
+- **Root Cause**: User password was changed or an administrator modified account role/status (VDB-SEC-01).
+- **Remediation**:
+  - Re-authenticate via `POST /api/auth/login` to obtain a fresh session cookie with the current `token_version`.
+
+### 1.6. `INVALID_TOTP_CODE` during 2FA Login
+- **Root Cause**: Clock drift on the authenticator device or code replay attempt within the 90-second window (VDB-SEC-02).
+- **Remediation**:
+  - Synchronize the system time on your device.
+  - Wait for the next 30-second time-step cycle before entering a fresh 6-digit code.
+
+---
+
+## 2. Frequently Asked Questions (FAQ)
+
+### Can VanillaDatabase run on an entry-level 512MB RAM VPS?
+Yes. VanillaDatabase consumes approximately 35MB to 50MB of RAM under baseline load and operates efficiently on low-resource instances.
+
+### How does VanillaDatabase handle backups during live write traffic?
+The backup engine executes an atomic `PRAGMA wal_checkpoint(FULL)` prior to snapshot capture. Active read and write operations are not blocked.
+
+### Where is all persistent data located on disk?
+- Databases: `data/databases/:id.sqlite`
+- Media Assets: `data/storage/:databaseId/`
+- Backups: `data/backups/:databaseId/`
+- System Metadata: `data/system/vanilladb.sqlite`

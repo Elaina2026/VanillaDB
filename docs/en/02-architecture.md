@@ -1,91 +1,100 @@
 # Architecture & Engine Design
 
-This document details the internal architecture, connection pooling, concurrency model, and multi-tenant data isolation mechanisms of **VanillaDatabase**.
+Technical specification of the internal architecture, connection pooling, concurrency model, and multi-tenant data isolation mechanisms in **VanillaDatabase**.
 
 ---
 
-## 1. High-Level Architectural Diagram
+## 1. High-Level System Topology
 
 ```
-                      ┌─────────────────────────────────┐
-                      │        HTTP / SSE Clients       │
-                      │  (Web Dashboard, SDKs, Scripts) │
-                      └────────────────┬────────────────┘
-                                       │
-                     ┌─────────────────┴─────────────────┐
-                     │ Fastify HTTP Server (Port: 3000)  │
-                     │  - Helmet Security & CORS Guard   │
-                     │  - Session Cookie & Bearer Auth   │
-                     │  - Multipart Upload & Range 206   │
-                     │  - Realtime Metrics & Telemetry   │
-                     └─────────────────┬─────────────────┘
-                                       │
-        ┌──────────────────────────────┴──────────────────────────────┐
-        ▼                                                             ▼
-┌──────────────────────────────┐              ┌──────────────────────────────┐
-│ Control Plane (/api/*)       │              │ Data Plane (/v1/*)           │
-│ • Admin Authentication       │              │ • API Bearer Token Guard     │
-│ • Multi-User RBAC & Quotas   │              │ • Sliding Rate Limiter (429) │
-│ • Multi-DB SQL Translator    │              │ • Parameterized Query Engine │
-│ • Scheduled Backup Worker    │              │ • Atomic Batch Transaction   │
-│ • Webhook Event Dispatcher   │              │ • Realtime SSE Stream Bus    │
-│ • Audit & Activity Logs      │              │ • Media Storage (Range 206)  │
-└──────────────┬───────────────┘              └──────────────┬───────────────┘
-               │                                             │
-               ▼                                             ▼
-┌──────────────────────────────┐              ┌──────────────────────────────┐
-│ System Metadata Store        │              │ Database Manager Pool        │
-│ • data/system/vanilladb.sqlite              │ • Connection Handle Cache    │
-│ • Schema migrations & users  │              │ • SQL Safety Sandbox         │
-│ • API tokens & audit logs    │              │ • Vector Math & SQL Crypto   │
-└──────────────────────────────┘              └──────────────┬───────────────┘
-                                                             │
-                                                             ▼
-                                              ┌──────────────────────────────┐
-                                              │ Isolated Tenant Databases    │
-                                              │ • data/databases/:id.sqlite  │
-                                              │ • WAL Mode & Busy Timeout    │
-                                              │ • data/storage/:id/*         │
-                                              │ • data/backups/:id/*.sqlite  │
-                                              └──────────────────────────────┘
+                       +-----------------------------------+
+                       |        HTTP / SSE Clients         |
+                       |  (Web Dashboard, SDKs, Scripts)   |
+                       +-----------------+-----------------+
+                                         |
+                                         v
+                       +-----------------------------------+
+                       | Fastify HTTP Server (Port: 3000)  |
+                       |  - Helmet Security & CORS Guard   |
+                       |  - Session Cookie & Bearer Auth   |
+                       |  - Multipart Upload & Range 206   |
+                       |  - Realtime Metrics & Telemetry   |
+                       +-----------------+-----------------+
+                                         |
+        +--------------------------------+--------------------------------+
+        |                                                                 |
+        v                                                                 v
++------------------------------+                  +------------------------------+
+| Control Plane (/api/*)       |                  | Data Plane (/v1/*)           |
+| - Admin Authentication       |                  | - API Bearer Token Guard     |
+| - Multi-User RBAC & Quotas   |                  | - Sliding Rate Limiter (429) |
+| - Multi-DB SQL Translator    |                  | - Parameterized Query Engine |
+| - Scheduled Backup Worker    |                  | - Atomic Batch Transaction   |
+| - Webhook Event Dispatcher   |                  | - Realtime SSE Stream Bus    |
+| - Audit & Activity Logs      |                  | - Media Storage (Range 206)  |
++--------------+---------------+                  +--------------+---------------+
+               |                                                 |
+               v                                                 v
++------------------------------+                  +------------------------------+
+| System Metadata Store        |                  | Database Manager Pool        |
+| - data/system/vanilladb.sqlite                  | - Connection Handle Cache    |
+| - Schema migrations & users  |                  | - SQL Safety Sandbox         |
+| - API tokens & audit logs    |                  | - Vector Math & SQL Crypto   |
++------------------------------+                  +--------------+---------------+
+                                                                 |
+                                                                 v
+                                                  +------------------------------+
+                                                  | Isolated Tenant Databases    |
+                                                  | - data/databases/:id.sqlite  |
+                                                  | - WAL Mode & Busy Timeout    |
+                                                  | - data/storage/:id/*         |
+                                                  | - data/backups/:id/*.sqlite  |
+                                                  +------------------------------+
 ```
 
 ---
 
-## 2. Plane Separation: Control vs Data
+## 2. Multi-Tenant Storage Isolation
 
-VanillaDatabase cleanly separates operational control from tenant data traffic:
+VanillaDatabase enforces strict physical separation between system state and tenant data:
+
+| Component | Storage Path | Isolation Guarantee |
+| :--- | :--- | :--- |
+| **System Metadata** | `data/system/vanilladb.sqlite` | Contains users, session tracking (`token_version`), API tokens, database registry, webhooks, and audit trails. |
+| **Tenant Databases** | `data/databases/:id.sqlite` | Individual SQLite database per tenant with dedicated WAL journal and shared-memory (`-shm`) index. |
+| **Media Assets** | `data/storage/:databaseId/*` | Database-partitioned AES-256-GCM encrypted media files. |
+| **Encrypted Backups** | `data/backups/:databaseId/*` | Encrypted snapshot archives (`.sqlite.venc`) with SHA-256 checksum manifests. |
+
+---
+
+## 3. Database Manager & Concurrency Model
+
+### Write-Ahead Logging (WAL Mode)
+Every database is initialized with:
+```sql
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA foreign_keys = ON;
+PRAGMA busy_timeout = 5000;
+```
+- **Concurrent Readers & Writer**: Multiple read connections execute simultaneously without blocking incoming write operations.
+- **Handle Cache**: The database connection pool (`DatabaseManager`) maintains active database handles in memory. Handles idle for more than 5 minutes are closed to minimize file descriptor consumption.
+
+### Query Safety Engine
+All public queries run through `DatabaseManager.validateSqlSafety()` before compilation:
+- **Blocked Operations**: `ATTACH DATABASE`, `DETACH DATABASE`, `load_extension()`, and `PRAGMA writable_schema`.
+- **Prepared Statements**: Metadata queries exclusively utilize parameterized bindings.
+
+---
+
+## 4. Control Plane vs Data Plane Separation
 
 ### Control Plane (`/api/*`)
-- Governs administrative operations: database creation/deletion, API token issuance, scheduled jobs, member invitations, backups, and user management.
-- Guarded by session cookie authentication (`vdb_session`) with `Argon2id` verification and RBAC checks.
-- Backed by the system metadata database (`data/system/vanilladb.sqlite`).
+- Accessible only to authenticated platform users and administrators.
+- Handles user provisioning, database creation/cloning, system diagnostics, and audit log exports.
+- Governed by HMAC session cookies (`vdb_session`) with `token_version` invalidation.
 
 ### Data Plane (`/v1/*`)
-- High-throughput tenant execution plane for SQL queries, transactional batch executions, and media streaming.
-- Guarded by scoped API bearer tokens (`vdb_live_*`, `vdb_test_*`) and sliding-window rate limiters.
-- Fully isolated to the target database instance.
-
----
-
-## 3. Multi-Tenancy & Data Isolation
-
-### Discrete Database Files
-Every tenant database created is stored as a dedicated SQLite file:
-- Primary database file: `data/databases/db_<nanoid>.sqlite`
-- Write-Ahead Log: `data/databases/db_<nanoid>.sqlite-wal`
-- Shared Memory: `data/databases/db_<nanoid>.sqlite-shm`
-
-### Isolation Advantages
-1. **Absolute Security**: Cross-tenant data leaks via SQL injection or poorly formed `JOIN` clauses are physically impossible across file boundaries.
-2. **Per-Tenant Backup & Portability**: Individual databases can be backed up, restored, cloned, or downloaded without locking other databases.
-3. **Hard Quota Enforcement**: File sizes can be checked against per-tenant storage caps (`max_size_mb`).
-
----
-
-## 4. Concurrency & Performance Engine
-
-- **PRAGMA journal_mode = WAL**: Write-Ahead Logging allows concurrent readers and writers without lock contention.
-- **PRAGMA busy_timeout = 5000**: When a write lock is active, subsequent read/write requests wait up to 5000ms before returning `SQLITE_BUSY`.
-- **Handle Cache Pool (`dbManager`)**: Frequently queried database handles are cached in memory with a 60-second sliding expiration, minimizing OS file open/close overhead.
-- **Atomic File Checkpoints**: Backups execute `PRAGMA wal_checkpoint(FULL)` to ensure zero dirty pages remain uncommitted before snapshotting.
+- High-performance, low-overhead public interface for application traffic.
+- Authenticated via scoped API tokens (`vdb_live_*`, `vdb_test_*`).
+- Enforces sliding-window rate limits and per-table access controls.

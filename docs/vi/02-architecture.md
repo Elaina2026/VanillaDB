@@ -1,91 +1,100 @@
-# Kiến trúc & Thiết kế Động cơ
+# Kiến trúc Hệ thống & Động cơ
 
-Tài liệu này giải thích chi tiết cấu trúc kiến trúc bên trong, cơ chế quản lý bộ đệm kết nối (connection pooling), mô hình xử lý đồng thời và giải pháp cô lập dữ liệu đa người dùng (multi-tenant) của **VanillaDatabase**.
+Đặc tả kỹ thuật kiến trúc nội bộ, cơ chế quản lý bộ nhớ đệm kết nối, mô hình đồng thời và cô lập dữ liệu đa người thuê trong **VanillaDatabase**.
 
 ---
 
-## 1. Sơ đồ Kiến trúc Tổng thể
+## 1. Sơ đồ Tô-pô Hệ thống
 
 ```
-                      ┌─────────────────────────────────┐
-                      │     Clients HTTP / Luồng SSE    │
-                      │  (Giao diện Web, SDKs, Scripts) │
-                      └────────────────┬────────────────┘
-                                       │
-                     ┌─────────────────┴─────────────────┐
-                     │ Máy chủ HTTP Fastify (Cổng: 3000) │
-                     │  - Bảo mật Helmet & Bộ lọc CORS   │
-                     │  - Xác thực Cookie & Bearer Token │
-                     │  - Tải tệp Multipart & Range 206  │
-                     │  - Thu thập chỉ số & Telemetry    │
-                     └─────────────────┬─────────────────┘
-                                       │
-        ┌──────────────────────────────┴──────────────────────────────┐
-        ▼                                                             ▼
-┌──────────────────────────────┐              ┌──────────────────────────────┐
-│ Control Plane (/api/*)       │              │ Data Plane (/v1/*)           │
-│ • Xác thực Admin & Phiên     │              │ • Kiểm soát API Bearer Token │
-│ • Phân quyền RBAC & Hạn mức  │              │ • Giới hạn tần suất (429)    │
-│ • Dịch chuyển đa hệ CSDL SQL │              │ • Động cơ SQL tham số hóa    │
-│ • Lập lịch sao lưu tự động   │              │ • Giao dịch Batch nguyên tử  │
-│ • Bộ phát sự kiện Webhook    │              │ • Kênh SSE thời gian thực    │
-│ • Nhật ký kiểm toán hệ thống │              │ • Lưu trữ & phát luồng Range │
-└──────────────┬───────────────┘              └──────────────┬───────────────┘
-               │                                             │
-               ▼                                             ▼
-┌──────────────────────────────┐              ┌──────────────────────────────┐
-│ Kho Metadata Hệ thống        │              │ Bộ đệm Quản lý Kết nối CSDL  │
-│ • data/system/vanilladb.sqlite              │ • Bộ nhớ đệm Handle kết nối  │
-│ • Lịch sử di chuyển schema   │              │ • Hộp cát bảo mật cú pháp    │
-│ • Người dùng, Token, Cấu hình│              │ • Hàm Vector AI & Mật mã SQL │
-└──────────────────────────────┘              └──────────────┬───────────────┘
-                                                             │
-                                                             ▼
-                                              ┌──────────────────────────────┐
-                                              │ Tệp CSDL SQLite Khách thuê   │
-                                              │ • data/databases/:id.sqlite  │
-                                              │ • Chế độ WAL & Busy Timeout  │
-                                              │ • data/storage/:id/*         │
-                                              │ • data/backups/:id/*.sqlite  │
-                                              └──────────────────────────────┘
+                       +-----------------------------------+
+                       |      Tầng Khách HTTP / SSE        |
+                       |  (Bảng điều khiển, SDKs, Scripts) |
+                       +-----------------+-----------------+
+                                         |
+                                         v
+                       +-----------------------------------+
+                       |   Máy chủ Fastify (Cổng: 3000)    |
+                       |  - Lá chắn Helmet & CORS nghiêm   |
+                       |  - Phiên làm việc HMAC & Token    |
+                       |  - Tải tệp Multipart & Range 206  |
+                       |  - Giám sát CPU, RAM & IOPS       |
+                       +-----------------+-----------------+
+                                         |
+        +--------------------------------+--------------------------------+
+        |                                                                 |
+        v                                                                 v
++------------------------------+                  +------------------------------+
+| Control Plane (/api/*)       |                  | Data Plane (/v1/*)           |
+| - Quản trị người dùng & RBAC |                  | - Kiểm tra quyền API Token   |
+| - Hạn ngạch số lượng CSDL    |                  | - Giới hạn tốc độ cửa sổ trượt|
+| - Bộ chuyển đổi phương ngữ   |                  | - Động cơ thực thi tham số   |
+| - Worker chạy ngầm bảo trì   |                  | - Giao dịch nguyên tử theo lô |
+| - Điều phối sự kiện Webhook  |                  | - Luồng sự kiện Realtime SSE |
+| - Xuất nhật ký kiểm toán     |                  | - Phát luồng Media (Range 206)|
++--------------+---------------+                  +--------------+---------------+
+               |                                                 |
+               v                                                 v
++------------------------------+                  +------------------------------+
+| Siêu dữ liệu Metadata        |                  | Pool Quản lý Kết nối         |
+| - data/system/vanilladb.sqlite                  | - Lưu bộ nhớ đệm Handle      |
+| - Bảng người dùng, phiên bản |                  | - Hộp cát an toàn SQL        |
+| - Token & nhật ký hệ thống   |                  | - AI Vector & Hàm mã hóa SQL |
++------------------------------+                  +--------------+---------------+
+                                                                 |
+                                                                 v
+                                                  +------------------------------+
+                                                  | Cơ sở Dữ liệu Tenant Cô lập  |
+                                                  | - data/databases/:id.sqlite  |
+                                                  | - Chế độ WAL & Busy Timeout  |
+                                                  | - data/storage/:id/*         |
+                                                  | - data/backups/:id/*.sqlite  |
+                                                  +------------------------------+
 ```
 
 ---
 
-## 2. Phân tách Hai Tầng: Control Plane và Data Plane
+## 2. Cô lập Dữ liệu Đa người thuê
 
-VanillaDatabase phân tách rành mạch giữa luồng điều khiển quản trị và luồng dữ liệu của khách thuê:
+VanillaDatabase phân tách ranh giới vật lý tuyệt đối giữa siêu dữ liệu hệ thống và dữ liệu tenant:
 
-### Control Plane (`/api/*`)
-- Quản trị các tác vụ hệ thống: tạo/xóa database, phát hành API token, lập lịch backup, mời thành viên nhóm và quản lý người dùng.
-- Được bảo vệ bằng cookie phiên làm việc (`vdb_session`) với cơ chế xác minh băm mật khẩu `Argon2id` và kiểm tra quyền RBAC.
-- Dữ liệu được lưu trữ tại cơ sở dữ liệu metadata hệ thống (`data/system/vanilladb.sqlite`).
-
-### Data Plane (`/v1/*`)
-- Tầng thực thi dữ liệu hiệu năng cao dành cho các câu truy vấn SQL, giao dịch batch atomic và phát luồng media.
-- Được bảo vệ bằng các mã API Bearer Token có phạm vi quyền (`vdb_live_*`, `vdb_test_*`) kèm bộ lọc giới hạn tần suất cửa sổ trượt (sliding-window rate limiter).
-- Hoàn toàn cô lập trong phạm vi database đích được chỉ định.
+| Thành phần | Đường dẫn lưu trữ | Đảm bảo an toàn |
+| :--- | :--- | :--- |
+| **Siêu dữ liệu hệ thống** | `data/system/vanilladb.sqlite` | Lưu trữ tài khoản, phiên làm việc (`token_version`), danh sách token, thành viên database, webhook và nhật ký kiểm toán. |
+| **Cơ sở dữ liệu Tenant** | `data/databases/:id.sqlite` | Mỗi tenant sở hữu tệp SQLite riêng biệt với tệp nhật ký WAL và bộ chỉ mục bộ nhớ chia sẻ (`-shm`). |
+| **Kho tệp Media** | `data/storage/:databaseId/*` | Tệp tin đa phương tiện mã hóa AES-256-GCM phân vùng theo từng database. |
+| **Bản sao lưu** | `data/backups/:databaseId/*` | Tệp sao lưu mã hóa (`.sqlite.venc`) kèm mã băm kiểm tra toàn vẹn SHA-256. |
 
 ---
 
-## 3. Kiến trúc Đa khách thuê & Cô lập Dữ liệu
+## 3. Quản lý Kết nối & Mô hình Đồng thời
 
-### Tệp Cơ sở Dữ liệu Độc lập
-Mỗi cơ sở dữ liệu khách thuê được lưu trữ thành một tệp SQLite riêng biệt trên ổ đĩa:
-- Tệp database chính: `data/databases/db_<nanoid>.sqlite`
-- Nhật ký ghi trước (Write-Ahead Log): `data/databases/db_<nanoid>.sqlite-wal`
-- Bộ nhớ chia sẻ (Shared Memory): `data/databases/db_<nanoid>.sqlite-shm`
+### Chế độ Ghi nhật ký trước (WAL Mode)
+Mỗi database khi khởi tạo được áp dụng các pragma tiêu chuẩn:
+```sql
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA foreign_keys = ON;
+PRAGMA busy_timeout = 5000;
+```
+- **Đọc và Ghi Đồng thời**: Nhiều luồng đọc dữ liệu có thể vận hành đồng thời mà không chặn đứng thao tác ghi mới.
+- **Bộ nhớ đệm Handle**: `DatabaseManager` lưu các kết nối đang hoạt động trong bộ nhớ. Sau 5 phút không có truy vấn mới, kết nối tự động đóng để giải phóng file descriptor.
 
-### Ưu điểm của Cơ chế Cô lập
-1. **Bảo mật Tuyệt đối**: Ngăn chặn hoàn toàn rủi ro rò rỉ dữ liệu chéo giữa các khách thuê do tấn công SQL Injection hoặc mệnh đề `JOIN` nhầm lẫn.
-2. **Khả năng Di động & Sao lưu Riêng biệt**: Từng database có thể được sao lưu, phục hồi, nhân bản (clone) hoặc tải về mà không gây khóa các database khác.
-3. **Thực thi Hạn mức Nghiêm ngặt**: Dễ dàng kiểm soát dung lượng ổ đĩa theo từng khách thuê (`max_size_mb`).
+### Hộp cát An toàn Truy vấn
+Toàn bộ truy vấn SQL từ người dùng phải đi qua hàm kiểm duyệt `DatabaseManager.validateSqlSafety()`:
+- **Hành vi bị chặn đứng**: `ATTACH DATABASE`, `DETACH DATABASE`, `load_extension()` và `PRAGMA writable_schema`.
+- **Tham số hóa**: 100% truy vấn nội bộ sử dụng câu lệnh chuẩn bị (Prepared Statements).
 
 ---
 
-## 4. Động cơ Xử lý Đồng thời & Tối ưu Hiệu năng
+## 4. Phân tách Control Plane và Data Plane
 
-- **PRAGMA journal_mode = WAL**: Chế độ Write-Ahead Logging cho phép nhiều luồng đọc và một luồng ghi hoạt động song song mà không tranh chấp khóa.
-- **PRAGMA busy_timeout = 5000**: Khi xảy ra khóa ghi, các yêu cầu tiếp theo sẽ tự động chờ tối đa 5000ms trước khi trả về mã lỗi `SQLITE_BUSY`.
-- **Bộ nhớ đệm Handle kết nối (`dbManager`)**: Các kết nối SQLite thường xuyên truy vấn được lưu trong bộ nhớ với thời gian trượt 60 giây, giảm thiểu chi phí mở/đóng tệp ở cấp hệ điều hành.
-- **Điểm kiểm tra Checkpoint nguyên tử**: Trước khi sao lưu, hệ thống kích hoạt `PRAGMA wal_checkpoint(FULL)` đảm bảo không còn trang bẩn (dirty pages) chưa được ghi trước khi chụp snapshot.
+### Tầng Điều khiển Control Plane (`/api/*`)
+- Chỉ người dùng đã đăng nhập hoặc quản trị viên mới có thể truy cập.
+- Xử lý việc tạo mới, nhân bản, kiểm tra toàn vẹn CSDL và phân quyền thành viên.
+- Được bảo vệ bởi session cookie có đính kèm `token_version` để thu hồi phiên tức thì khi đổi mật khẩu.
+
+### Tầng Dữ liệu Data Plane (`/v1/*`)
+- Giao diện hiệu năng cao phục vụ kết nối trực tiếp từ ứng dụng và client SDK.
+- Xác thực qua API Token dạng Bearer (`vdb_live_*`, `vdb_test_*`).
+- Áp dụng giới hạn tốc độ trượt và phân quyền theo danh sách bảng.

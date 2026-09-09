@@ -7,7 +7,7 @@ Official Python client SDK for **VanillaDatabase (VanillaDB)** — Zero-configur
 
 ---
 
-## 📦 Installation
+## Installation
 
 ```bash
 pip install vanilladatabase
@@ -15,7 +15,7 @@ pip install vanilladatabase
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
 
 ```python
 import os
@@ -30,21 +30,21 @@ db = VanillaDatabase(
 
 ---
 
-## 📖 Feature Reference
+## Feature Reference
 
 ### 1. Fluent Table CRUD Query Builder
 
 Perform operations without writing raw SQL statements:
 
 ```python
-# 🟢 Insert row
+# Insert row
 insert_res = db.table("users").insert({
     "username": "elaina",
     "score": 100
 })
 print("Inserted ID:", insert_res.get("lastInsertRowid"))
 
-# 🔍 Select rows with filtering, ordering, pagination
+# Select rows with filtering, ordering, pagination
 result = db.table("users").select(
     limit=10,
     offset=0,
@@ -53,13 +53,13 @@ result = db.table("users").select(
 )
 print("Top Users:", result["rows"])
 
-# 🟡 Update row(s)
+# Update row(s)
 db.table("users").update(
     where={"id": 1},         # Condition (WHERE)
     values={"score": 250}    # Fields to update (SET)
 )
 
-# 🔴 Delete row(s)
+# Delete row(s)
 db.table("users").delete({"id": 1})
 ```
 
@@ -163,7 +163,7 @@ db.delete_file(file_record["id"])
 
 ---
 
-## 🛡️ Production & Reliability Best Practices
+## Production & Reliability Best Practices
 
 1. **Timeout Setting**: Set appropriate client timeouts (`30s` to `60s`) for background workers or sweep tasks.
 2. **Indexing**: Always create composite indexes on columns queried frequently (e.g. `CREATE INDEX IF NOT EXISTS idx_users_status_created ON users(status, created_at);`).
@@ -171,6 +171,6 @@ db.delete_file(file_record["id"])
 
 ---
 
-## 📄 License
+## License
 
 MIT © [VanillaDatabase](https://github.com/Elaina2026/VanillaDB)

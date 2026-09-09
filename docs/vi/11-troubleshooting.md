@@ -1,36 +1,58 @@
-# Khắc phục Sự cố & Câu hỏi Thường gặp (FAQ)
+# Cẩm nang Khắc phục Sự cố & FAQ
 
-Tổng hợp các mã lỗi phổ biến, chẩn đoán hệ thống và giải đáp vận hành cho **VanillaDatabase**.
-
----
-
-## 1. Các Lỗi Phổ biến & Biện pháp Xử lý
-
-### 1. `SQLITE_BUSY: database is locked` (HTTP 503)
-- **Nguyên nhân**: Một giao dịch ghi khác đang giữ khóa độc quyền hoặc đang trong quá trình ghi dữ liệu.
-- **Giải pháp**: VanillaDatabase mặc định cấu hình thời gian chờ bận `5000ms` (`VDB_SQL_BUSY_TIMEOUT_MS`). Hãy đảm bảo các giao dịch ghi diễn ra nhanh chóng và không chứa các lệnh gọi mạng chặn luồng bên trong khối batch nguyên tử.
-
-### 2. `ATTACH DATABASE is forbidden for security reasons` (HTTP 400)
-- **Nguyên nhân**: Câu lệnh SQL cố gắng thực thi lệnh `ATTACH DATABASE`.
-- **Giải pháp**: Nhằm đảm bảo an toàn cho kiến trúc đa khách thuê, các database không được phép truy cập chéo vào các tệp database lân cận.
-
-### 3. `Requested range not satisfiable` (HTTP 416)
-- **Nguyên nhân**: Trình duyệt yêu cầu một dải byte vượt quá tổng dung lượng của tệp tin.
-- **Giải pháp**: Kiểm tra lại kích thước thực tế của tệp tin trên trang quản lý lưu trữ storage.
-
-### 4. `RATE_LIMIT_EXCEEDED` (HTTP 429)
-- **Nguyên nhân**: Mã API Token hoặc người dùng đã gửi số lượng yêu cầu vượt quá hạn mức cấu hình trên mỗi phút.
-- **Giải pháp**: Tăng giới hạn tần suất của token trong trang quản lý mã khóa hoặc điều tiết tần suất gửi request từ phía ứng dụng khách.
+Tổng hợp các lỗi vận hành thường gặp, hướng dẫn chẩn đoán và giải đáp các thắc mắc phổ biến trong **VanillaDatabase**.
 
 ---
 
-## 2. Câu hỏi Thường gặp (FAQ)
+## 1. Các Sự cố Vận hành Thường gặp
 
-#### Q: VanillaDatabase có chạy được trên máy chủ VPS giá rẻ 512MB RAM không?
-**A**: Có. VanillaDatabase chạy trực tiếp trên Node.js 22 nguyên bản với mức tiêu thụ tài nguyên tối thiểu (~35MB–50MB RAM).
+### 1.1. Lỗi `SQLITE_BUSY: database is locked` (HTTP 503)
+- **Nguyên nhân**: Một tiến trình ghi khác đang giữ khóa độc quyền trong lúc commit hoặc checkpoint.
+- **Cách khắc phục**:
+  - VanillaDatabase áp dụng thời gian chờ 5,000ms (`VDB_SQL_BUSY_TIMEOUT_MS=5000`).
+  - Đảm bảo các giao dịch diễn ra nhanh chóng. Không gọi các tác vụ mạng dài hạn bên trong các khối giao dịch hàng loạt.
+  - Kiểm tra chế độ WAL đang hoạt động (`PRAGMA journal_mode;` trả về `wal`).
 
-#### Q: VanillaDatabase xử lý sao lưu như thế nào khi đang có thao tác ghi dữ liệu?
-**A**: Dịch vụ sao lưu tự động kích hoạt `PRAGMA wal_checkpoint(FULL)` trước khi chụp snapshot, đảm bảo tính nhất quán dữ liệu tuyệt đối mà không cần dừng máy chủ.
+### 1.2. Lỗi Cloudflare 502 Bad Gateway
+- **Nguyên nhân**: Cloudflare chuyển tiếp lưu lượng HTTPS vào cổng 443 của máy chủ gốc (đang đóng) thay vì cổng dịch vụ thực tế của backend (ví dụ: 3000 hoặc 25589).
+- **Cách khắc phục**:
+  - Vào Cloudflare Dashboard -> **Rules** -> **Origin Rules**, tạo rule viết lại cổng đích (Rewrite Destination Port) về cổng ứng dụng thực tế.
+  - Chọn chế độ mã hóa SSL/TLS là **Flexible** nếu máy chủ gốc chỉ hỗ trợ HTTP, hoặc **Full** nếu máy chủ có chứng chỉ SSL.
 
-#### Q: Các tệp tin và database được lưu trữ ở đâu trên đĩa?
-**A**: Toàn bộ database khách thuê nằm tại `data/databases/`, tệp media tại `data/storage/`, các bản sao lưu tại `data/backups/`, và metadata hệ thống tại `data/system/vanilladb.sqlite`.
+### 1.3. Trình duyệt Bị treo ở Màn hình "Loading VanillaDatabase..."
+- **Nguyên nhân**: Trễ mạng hoặc yêu cầu API kiểm tra trạng thái bị treo khiến giao diện không thể hoàn tất hydrate.
+- **Cách khắc phục**:
+  - VanillaDatabase đã tích hợp bộ ngắt `AbortController` (12 giây) trên `apiRequest` và cơ chế fallback 3 giây trong `useAuth`.
+  - Nếu vẫn treo, kiểm tra xem máy chủ backend có đang chạy và phản hồi hay không qua lệnh: `curl http://localhost:3000/health`.
+
+### 1.4. Lỗi `Failed to load module script: Expected JavaScript but responded with text/html`
+- **Nguyên nhân**: Máy chủ đang phục vụ tệp HTML chưa biên dịch thay vì gói bundle production hoàn chỉnh.
+- **Cách khắc phục**:
+  - Chạy `npm run build` để Vite biên dịch toàn bộ giao diện vào thư mục `dist/client/`.
+
+### 1.5. Phiên làm việc Bị thu hồi (`Session revoked due to password or credential change`)
+- **Nguyên nhân**: Người dùng đã đổi mật khẩu hoặc quản trị viên đã thay đổi quyền hạn/vô hiệu hóa tài khoản (VDB-SEC-01).
+- **Cách khắc phục**:
+  - Đăng nhập lại qua `POST /api/auth/login` để nhận cookie phiên mới mang giá trị `token_version` cập nhật.
+
+### 1.6. Lỗi `INVALID_TOTP_CODE` khi Đăng nhập 2FA
+- **Nguyên nhân**: Đồng hồ thiết bị xác thực bị lệch giờ hoặc mã OTP đã bị sử dụng trong vòng 90 giây trước đó (VDB-SEC-02).
+- **Cách khắc phục**:
+  - Đồng bộ lại giờ hệ thống trên điện thoại hoặc thiết bị xác thực.
+  - Đợi chu kỳ bước thời gian 30 giây tiếp theo để nhập mã mới.
+
+---
+
+## 2. Các Câu hỏi Thường gặp (FAQ)
+
+### VanillaDatabase có thể chạy trên VPS giá rẻ 512MB RAM không?
+Có. VanillaDatabase tiêu thụ khoảng 35MB đến 50MB RAM ở trạng thái cơ bản và vận hành cực kỳ ổn định trên các máy chủ tài nguyên thấp.
+
+### VanillaDatabase xử lý sao lưu thế nào khi đang có dữ liệu ghi liên tục?
+Hệ thống sao lưu tự động chạy `PRAGMA wal_checkpoint(FULL)` trước khi chụp snapshot. Các tác vụ đọc và ghi dữ liệu của người dùng không hề bị gián đoạn.
+
+### Toàn bộ dữ liệu được lưu trữ ở đâu trên ổ cứng?
+- Cơ sở dữ liệu: `data/databases/:id.sqlite`
+- Tệp Media: `data/storage/:databaseId/`
+- Bản sao lưu: `data/backups/:databaseId/`
+- Siêu dữ liệu hệ thống: `data/system/vanilladb.sqlite`

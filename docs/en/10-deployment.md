@@ -1,22 +1,38 @@
-# Deployment & Production Hardening
+# Production Deployment & Operations
 
-This guide explains how to deploy **VanillaDatabase** in production using Systemd, Docker, or Nginx Reverse Proxy.
-
----
-
-## 1. Production Best Practices Checklist
-
-- [ ] Set `NODE_ENV=production`.
-- [ ] Set a secure `VDB_SESSION_SECRET` (at least 32 random characters).
-- [ ] Set a persistent `VDB_DATA_DIR` on a fast SSD/NVMe drive.
-- [ ] Enable `VDB_TRUST_PROXY=true` when running behind Nginx or Cloudflare.
-- [ ] Configure firewall rules to ensure port 3000 is only accessible internally or via the reverse proxy.
+Production hardening, Systemd configuration, reverse proxy setup (Nginx / Caddy), Docker Compose, and Cloudflare Origin Rules routing in **VanillaDatabase**.
 
 ---
 
-## 2. Nginx Reverse Proxy Configuration
+## 1. Production Hardening Checklist
 
-VanillaDatabase requires reverse proxy buffering to be disabled for **Server-Sent Events (SSE)** and **HTTP 206 Partial Content Range Streaming**:
+- [ ] Set `NODE_ENV=production` in `.env`.
+- [ ] Generate secure 64-character hexadecimal secrets for `VDB_MASTER_KEY` and `VDB_SESSION_SECRET`.
+- [ ] Mount `VDB_DATA_DIR` on high-speed SSD or NVMe storage for optimal SQLite WAL throughput.
+- [ ] Configure `VDB_TRUST_PROXY=true` when deployed behind a reverse proxy or Cloudflare.
+- [ ] Configure host firewall (`ufw`) to restrict direct port access.
+
+---
+
+## 2. Cloudflare Origin Rules & Edge Setup
+
+When deploying VanillaDatabase behind Cloudflare with custom origin ports:
+
+### Architecture Recommendation
+Rather than maintaining an external proxy gateway process on the host, configure Cloudflare Edge routing directly:
+1. **SSL/TLS Mode**: Select **Flexible** or **Full (Strict)**.
+2. **Origin Rule Configuration**:
+   - Go to Cloudflare Dashboard -> **Rules** -> **Origin Rules**.
+   - Create rule named `vdb-origin-port`.
+   - Field: `Hostname` | Operator: `equals` | Value: `vanilladatabase.yourdomain.com`.
+   - Destination Port: Select **Rewrite to...** -> Enter your backend listening port (e.g. `25589` or `3000`).
+   - Deploy rule. Cloudflare terminates HTTPS on port 443 and proxies directly to your backend application port.
+
+---
+
+## 3. Nginx Reverse Proxy Configuration
+
+VanillaDatabase requires proxy buffering to be disabled for **Server-Sent Events (SSE)** and **HTTP 206 Partial Content Range Streaming**:
 
 ```nginx
 server {
@@ -32,8 +48,7 @@ server {
     ssl_certificate /etc/letsencrypt/live/db.yourdomain.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/db.yourdomain.com/privkey.pem;
 
-    # Maximum file upload size for database dumps & media
-    client_max_body_size 1024M;
+    client_max_body_size 100M;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -46,7 +61,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Disable buffering for SSE Realtime and Range 206 Media Streaming
+        # Disable proxy buffering for Realtime SSE & HTTP 206 Streaming
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 86400s;
@@ -54,47 +69,59 @@ server {
 }
 ```
 
-### Caddy Reverse Proxy (Automatic HTTPS / Let's Encrypt)
-
-```caddy
-db.yourdomain.com {
-    # Automatic SSL/TLS certificate management
-    reverse_proxy 127.0.0.1:3000 {
-        header_up X-Forwarded-Proto https
-        header_up Host {host}
-        # SSE realtime support
-        flush_interval -1
-    }
-}
-```
-
 ---
 
-## 3. Systemd Service Setup (Linux)
+## 4. Systemd Service Configuration
 
-Create `/etc/systemd/system/vanilladb.service`:
+Run VanillaDatabase as a persistent Linux background service (`/etc/systemd/system/vanilladb.service`):
 
 ```ini
 [Unit]
-Description=VanillaDatabase Engine
+Description=VanillaDatabase Server
 After=network.target
 
 [Service]
 Type=simple
-User=www-data
-WorkingDirectory=/var/www/vanilladb
-ExecStart=/usr/bin/node dist/src/server/index.js
+User=vanilladb
+WorkingDirectory=/opt/vanilladb
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node dist/server/index.js
 Restart=always
 RestartSec=5
-Environment=NODE_ENV=production
-Environment=VDB_DATA_DIR=/var/data/vanilladb
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Enable and start:
+Enable and start the service:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now vanilladb
+sudo systemctl enable vanilladb
+sudo systemctl start vanilladb
+```
+
+---
+
+## 5. Docker Compose Deployment
+
+```yaml
+version: '3.8'
+
+services:
+  vanilladb:
+    build: .
+    container_name: vanilladb-engine
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - VDB_MASTER_KEY=your_64_character_hex_key
+      - VDB_SESSION_SECRET=your_64_character_hex_key
+      - VDB_CORS_ORIGINS=https://db.yourdomain.com
+    volumes:
+      - ./data:/app/data
 ```

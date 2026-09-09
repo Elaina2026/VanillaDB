@@ -1,71 +1,83 @@
 # Xác thực, Phân quyền RBAC & Bảo mật 2FA
 
-Tài liệu này bao gồm các cấp bậc vai trò người dùng, cơ chế xác thực phiên đăng nhập trên Dashboard, mã API Bearer Token, phân quyền chi tiết, giới hạn tần suất cửa sổ trượt và xác thực hai yếu tố (2FA).
+Đặc tả toàn diện về các vai trò hệ thống, quyền hạn cơ sở dữ liệu, mã token phân quyền, cơ chế thu hồi phiên làm việc tức thì (`VDB-SEC-01`), chống phát lại mã TOTP (`VDB-SEC-02`) và quy trình phục hồi tài khoản 2FA.
 
 ---
 
-## 1. Kiểm soát Truy cập Dựa trên Vai trò (RBAC Đa Người dùng)
+## 1. Phân quyền RBAC & Thành viên Cơ sở Dữ liệu
 
-VanillaDatabase hỗ trợ ba cấp bậc vai trò người dùng theo thứ bậc:
+### 1.1. Các Vai trò Hệ thống (System Roles)
+VanillaDatabase phân định ba cấp độ vai trò trên toàn hệ thống:
 
-| Vai trò (Role) | Quyền hạn & Năng lực Hệ thống |
-| :--- | :--- |
-| **`super_admin`** | Toàn quyền kiểm soát hệ thống: tạo/quản lý người dùng, chỉnh sửa cài đặt hệ thống, truy cập tất cả database, không giới hạn hạn mức quota, bỏ qua giới hạn rate limit. |
-| **`admin`** | Quản trị toàn bộ database khách thuê, xem số liệu telemetry, quản lý sao lưu và webhook, xem danh sách người dùng. Không có quyền tạo hoặc xóa người dùng khác. |
-| **`user`** | Truy cập và quản trị **duy nhất** các database do tài khoản sở hữu (`owner_id`) hoặc được chia sẻ qua danh sách thành viên. Bị áp dụng hạn mức số lượng database (`max_databases`) và giới hạn tần suất (`rate_limit_per_minute`). |
-
----
-
-## 2. Xác thực Phiên làm việc trên Dashboard (Session Auth)
-
-- **Thuật toán băm**: Băm mật khẩu bằng `Argon2id` (chi phí bộ nhớ: 64MB, số vòng lặp thời gian: 3, mức độ song song: 4).
-- **Cookie phiên**: Cookie `vdb_session` được cấp phát khi đăng nhập với các cờ `HttpOnly`, `SameSite: Lax`, và `Secure` (trên môi trường production).
-- **Chữ ký phiên**: Dữ liệu phiên được ký mật mã học bằng HMAC-SHA256 (`userId:username:role:expiresAt`). Cookie phiên tự động hết hạn sau **7 ngày**.
-
----
-
-## 3. Mã API Bearer Token Phân quyền Chi tiết
-
-API Token cho phép các ứng dụng bên ngoài, hệ thống microservices và bot tương tác an toàn với các database khách thuê.
-
-### Phân loại & Tiền tố Token
-- **Live Tokens**: `vdb_live_<hex(64)>`
-- **Test Tokens**: `vdb_test_<hex(64)>`
-
-### Danh mục Quyền hạn của Token
-Mỗi token có thể được gán một hoặc nhiều quyền sau:
-
-| Quyền hạn | Mô tả | Câu lệnh SQL / Endpoint Cho phép |
+| Vai trò | Phạm vi & Quyền hạn | Hạn ngạch & Tốc độ truy vấn |
 | :--- | :--- | :--- |
-| `database:read` | Quyền chỉ đọc dữ liệu | `SELECT`, `PRAGMA table_info`, `EXPLAIN`, xem danh sách/nội dung file, kênh SSE |
-| `database:write`| Quyền ghi dữ liệu | `INSERT`, `UPDATE`, `DELETE`, tải lên/xóa file, thực thi giao dịch batch |
-| `database:ddl`  | Thay đổi cấu trúc bảng | `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX` |
-| `database:admin`| Toàn quyền quản trị database | Toàn bộ chức năng đọc, ghi, sửa cấu trúc DDL và bảo trì |
+| `super_admin` | Toàn quyền quản trị hệ thống: tạo/sửa/xóa người dùng, đổi cấu hình nền tảng, truy cập mọi database, xem nhật ký kiểm toán và số liệu viễn trắc. | Không giới hạn hạn ngạch; bỏ qua bộ lọc giới hạn tốc độ. |
+| `admin` | Quản trị mọi database của các tenant, xem giám sát hệ thống và nhật ký hoạt động. Không thể sửa hay xóa tài khoản người dùng khác. | Áp dụng theo cấu hình hệ thống chung. |
+| `user` | Cô lập tuyệt đối: chỉ xem và quản trị các database do chính mình sở hữu (`owner_id`) hoặc được mời tham gia với tư cách thành viên. | Giới hạn theo `max_databases` (mặc định 2) và `rate_limit_per_minute` (mặc định 180). |
 
-### Kiểm soát Truy cập Cấp độ Bảng (Table-Level Access Control)
-- **`allowed_tables`**: Danh sách trắng (whitelist) tùy chọn. Token **chỉ có thể** truy vấn hoặc sửa đổi các bảng nằm trong danh sách này.
-- **`denied_tables`**: Danh sách đen (blacklist) tùy chọn. Mọi truy vấn nhắm vào các bảng này đều bị từ chối ngay lập tức.
-
-### Giới hạn Tần suất Cửa sổ Trượt (Sliding-Window Rate Limiting)
-- Có thể cấu hình theo từng token (ví dụ: `rate_limit: 100` yêu cầu/phút).
-- Được thực thi bằng bộ đếm trong bộ nhớ RAM. Nếu vượt quá giới hạn, máy chủ trả về mã lỗi `HTTP 429 Too Many Requests` kèm tiêu đề thời gian thử lại cụ thể.
+### 1.2. Vai trò Thành viên trong Từng Database
+Mỗi database hỗ trợ chia sẻ quyền hạn làm việc nhóm:
+- **`owner`**: Chủ sở hữu, toàn quyền xóa database, nhân bản, tạo token, mời thành viên và phục hồi bản sao lưu.
+- **`admin`**: Cấu hình database, quản lý thành viên, thực hiện bảo trì và tạo token.
+- **`editor`**: Đọc, ghi dữ liệu, thay đổi cấu trúc bảng DDL và quản lý tệp tin media.
+- **`viewer`**: Chỉ có quyền đọc bảng, xem schema và phát luồng media.
 
 ---
 
-## 4. Xác thực Hai Yếu tố (2FA) & Khôi phục Tài khoản
+## 2. Quản lý Phiên & Thu hồi Tức thì (VDB-SEC-01)
 
-VanillaDatabase tích hợp giải pháp xác thực hai yếu tố chuẩn doanh nghiệp dựa trên chuẩn RFC 6238 TOTP:
+### Băm Mật khẩu Argon2id
+Mật khẩu người dùng được bảo vệ bằng thuật toán `Argon2id`:
+- Dung lượng bộ nhớ: 64 MB (65,536 KB)
+- Số vòng lặp: 3 vòng
+- Luồng tính toán: 4 luồng song song
 
-### Quy trình Kích hoạt
-1. `POST /api/auth/2fa/setup`: Tạo khóa bí mật base32 tương thích chuẩn RFC 6238 và tạo mã QR dạng SVG data URI.
-2. `POST /api/auth/2fa/activate`: Yêu cầu xác minh mật khẩu hiện tại và mã TOTP 6 chữ số hợp lệ. Sau khi kích hoạt thành công, hệ thống tự động sinh 6 mã dự phòng bảo mật (`XXXX-XXXX`).
+### Đánh Phiên bản Token & Thu hồi Phiên Ngay Lập tức
+Cookie phiên `vdb_session` chứa cấu trúc payload xác thực chữ ký HMAC-SHA256:
+```
+cookieValue = `${userId}.${username}.${role}.${expiresAt}.${tokenVersion}.${signature}`
+```
+- **Tự động Thu hồi**: Khi người dùng đổi mật khẩu (`POST /api/auth/change-password`) hoặc bị quản trị viên vô hiệu hóa, hệ thống cập nhật `token_version = token_version + 1`.
+- **Chốt chặn Middleware**: `requireAdminAuth` và `requireTokenPermission` đối chiếu `tokenVersion` trên cookie với cơ sở dữ liệu. Nếu không khớp, từ chối ngay lập tức với mã `401 Unauthorized` (`Session revoked due to password or credential change`).
 
-### Vòng đời của Mã Dự phòng (Backup Codes)
-- Mã dự phòng được lưu trữ kèm trạng thái sử dụng: `[{ code, used: boolean, used_at?: number }]`.
-- Phân biệt rõ ràng giữa mã còn hiệu lực (active) và mã đã sử dụng (burned) trên giao diện Cài đặt.
-- Người dùng có thể ẩn/hiện, sao chép, tải về máy hoặc tạo lại bộ mã mới (`POST /api/auth/2fa/regenerate-backup-codes`) sau khi xác nhận mật khẩu.
+---
 
-### Khôi phục Tài khoản Kép (Dual-Factor Recovery)
-Khi mất thiết bị xác thực, tài khoản có thể được khôi phục qua `POST /api/auth/recovery/reset-password`:
-- **Cách 1 (TOTP)**: Xác minh danh tính bằng mã 6 chữ số từ ứng dụng xác thực.
-- **Cách 2 (Mã dự phòng)**: Xác thực và vô hiệu hóa vĩnh viễn một mã dự phòng dùng một lần. Việc so sánh mã được thực hiện bằng hàm `crypto.timingSafeEqual` nhằm loại bỏ hoàn toàn nguy cơ tấn công kênh kề (timing attack).
+## 3. Khóa API Token Phân quyền Tinh gọn
+
+API Token cho phép ứng dụng bên ngoài, dịch vụ tự động hóa và bot kết nối an toàn mà không cần dùng cookie người dùng.
+
+### Định danh Token & An toàn Lưu trữ
+- **Token Hoạt động**: Tiền tố `vdb_live_<hex(64)>`.
+- **Token Kiểm thử**: Tiền tố `vdb_test_<hex(64)>`.
+- **Nguyên tắc Không rò rỉ**: Mã token thô chỉ hiển thị một lần duy nhất lúc tạo. Cơ sở dữ liệu chỉ lưu bản băm SHA-256 (`token_hash`).
+
+### Bảng Phân quyền Token
+| Quyền hạn | Khả năng thực thi | Câu lệnh SQL cho phép |
+| :--- | :--- | :--- |
+| `database:read` | Đọc dữ liệu và nhận sự kiện realtime | `SELECT`, `EXPLAIN`, luồng SSE, xem tệp |
+| `database:write`| Thay đổi dữ liệu và ghi media | `INSERT`, `UPDATE`, `DELETE`, tải/xóa tệp |
+| `database:ddl`  | Thay đổi cấu trúc bảng | `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX` |
+| `database:admin`| Toàn quyền quản trị cơ sở dữ liệu | Toàn bộ các quyền đọc, ghi, DDL và quản lý token |
+
+### Giới hạn Truy cập Theo Bảng
+- **`allowed_tables`**: Danh sách bảng cho phép. Truy vấn vào bảng ngoài danh sách này bị từ chối ngay (`403 FORBIDDEN`).
+- **`denied_tables`**: Danh sách bảng cấm. Mọi truy vấn vào bảng trong danh sách này đều bị chặn đứng.
+
+---
+
+## 4. Xác thực Hai lớp (2FA) & Phục hồi Tài khoản (VDB-SEC-02)
+
+VanillaDatabase tích hợp chuẩn xác thực 2FA Time-Based One-Time Passwords (TOTP) theo RFC 6238:
+
+### 4.1. Chống Phát lại Mã TOTP (RFC 6238 Mục 5.2)
+- Bộ máy xác thực (`verifyTotpCode`) theo dõi trường `last_totp_step` trong database.
+- Dù mã OTP 6 số còn nằm trong khoảng thời gian trôi dạt 90 giây (+/- 1 bước), hành vi gửi lại mã có `candidateStep <= last_totp_step` đều bị từ chối triệt để.
+
+### 4.2. Mã Phục hồi Dự phòng (Backup Codes)
+- Khi kích hoạt 2FA (`POST /api/auth/2fa/activate`), máy chủ cấp **6 mã phục hồi dự phòng** (định dạng `XXXX-XXXX`).
+- Mỗi mã dự phòng chỉ dùng được một lần duy nhất. Khi sử dụng để đăng nhập hoặc đặt lại mật khẩu, mã được đánh dấu đã cháy kèm thời gian sử dụng.
+
+### 4.3. Quy trình Phục hồi Khẩn cấp
+Người dùng bị mất thiết bị xác thực có thể truy cập `#/reset-password` để lấy lại tài khoản thông qua:
+1. Mã TOTP 6 số từ ứng dụng xác thực (nếu vẫn còn thiết bị).
+2. Một trong các mã dự phòng 8 ký tự chưa từng sử dụng.

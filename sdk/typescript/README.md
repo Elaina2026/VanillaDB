@@ -7,7 +7,7 @@ Official TypeScript & Node.js client SDK for **VanillaDatabase (VanillaDB)** —
 
 ---
 
-## 📦 Installation
+## Installation
 
 ```bash
 npm install @nullex/vanilladb
@@ -15,7 +15,7 @@ npm install @nullex/vanilladb
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
 
 ```typescript
 import { VanillaDatabase } from '@nullex/vanilladb';
@@ -29,7 +29,7 @@ const db = new VanillaDatabase({
 
 ---
 
-## 📖 Feature Reference
+## Feature Reference
 
 ### 1. Fluent Table CRUD Query Builder
 
@@ -43,14 +43,14 @@ interface User {
   created_at?: number;
 }
 
-// 🟢 Insert row
+// Insert row
 const insertRes = await db.from<User>('users').insert({
   username: 'elaina',
   score: 100,
 });
 console.log('Inserted Row ID:', insertRes.lastInsertRowid);
 
-// 🔍 Select rows with filtering, ordering, pagination
+// Select rows with filtering, ordering, pagination
 const { rows, rowCount } = await db.from<User>('users').select({
   limit: 10,
   offset: 0,
@@ -59,13 +59,13 @@ const { rows, rowCount } = await db.from<User>('users').select({
 });
 console.log(`Fetched ${rowCount} users:`, rows);
 
-// 🟡 Update row(s)
+// Update row(s)
 await db.from<User>('users').update(
   { id: 1 },              // Target condition (WHERE)
   { score: 250 }          // Fields to update (SET)
 );
 
-// 🔴 Delete row(s)
+// Delete row(s)
 await db.from<User>('users').delete({ id: 1 });
 ```
 
@@ -171,7 +171,7 @@ await db.deleteFile(fileRecord.id);
 
 ---
 
-## 🛡️ Production & Reliability Best Practices
+## Production & Reliability Best Practices
 
 1. **Timeout Setting**: For heavy queries or background sweep tasks, ensure appropriate timeout settings on your HTTP client.
 2. **Indexing**: Always create composite indexes on columns queried frequently (e.g. `CREATE INDEX IF NOT EXISTS idx_users_status_created ON users(status, created_at);`).
@@ -179,6 +179,6 @@ await db.deleteFile(fileRecord.id);
 
 ---
 
-## 📄 License
+## License
 
 MIT © [VanillaDatabase](https://github.com/Elaina2026/VanillaDB)

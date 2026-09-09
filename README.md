@@ -1,297 +1,356 @@
 <p align="center">
-  <img src="src/web/assets/logo.svg" alt="VanillaDatabase Logo" width="130" height="130" />
+  <img src="public/logo.svg" alt="VanillaDatabase Logo" width="120" height="120" />
 </p>
 
 <h1 align="center">VanillaDatabase (VanillaDB)</h1>
 
 <p align="center">
-  <strong>High-performance, multi-tenant SQLite cloud engine with REST & SQL APIs, live Server-Sent Events (SSE), database-scoped media streaming (HTTP 206), AES-256-GCM data-at-rest encryption, automated backup snapshots, webhooks, and AI vector math functions.</strong>
+  <strong>Enterprise-Grade Multi-Tenant SQLite Cloud Engine with High-Performance REST & SQL APIs, Live Server-Sent Events (SSE), Database-Scoped Media Streaming (HTTP 206), AES-256-GCM Encryption at Rest, Automated Backups, and Native Vector Mathematics.</strong>
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-22%2B-green.svg?logo=node.js" alt="Node.js 22+" /></a>
-  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.8-blue.svg?logo=typescript" alt="TypeScript" /></a>
-  <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-black.svg?logo=fastify" alt="Fastify" /></a>
-  <a href="https://www.sqlite.org/"><img src="https://img.shields.io/badge/SQLite-node:sqlite%20(WAL)-003B57.svg?logo=sqlite" alt="SQLite" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/Version-1.3.2-orange.svg" alt="Version 1.3.2" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-0969da.svg?style=flat-square" alt="License: MIT" /></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-22%2B-22c55e.svg?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 22+" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.8-3178c6.svg?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
+  <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Version-1.3.2-ea580c.svg?style=flat-square" alt="Version 1.3.2" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Tests-94%20passed-22c55e.svg?style=flat-square" alt="94 Tests Passed" /></a>
 </p>
 
 <p align="center">
-  <a href="#overview">Overview</a> •
-  <a href="README.vi.md">Tiếng Việt (VI)</a> •
-  <a href="#key-features">Key Features</a> •
-  <a href="#architecture">Architecture</a> •
-  <a href="#quickstart">Quickstart</a> •
-  <a href="#configuration">Configuration</a> •
-  <a href="#api-reference">API Reference</a> •
-  <a href="#client-sdks">SDKs</a> •
-  <a href="#comparison">Comparison</a> •
-  <a href="#keyboard-shortcuts">Shortcuts</a> •
-  <a href="docs/en/Home.md">Full Wiki (EN)</a> •
-  <a href="docs/vi/Home.md">Wiki (VI)</a>
+  <strong>[ <a href="#overview">Overview</a> ]</strong> &bull;
+  <strong>[ <a href="README.vi.md">Phiên bản Tiếng Việt</a> ]</strong> &bull;
+  <strong>[ <a href="#architecture">Architecture</a> ]</strong> &bull;
+  <strong>[ <a href="#key-capabilities">Key Capabilities</a> ]</strong> &bull;
+  <strong>[ <a href="#quickstart">Quickstart</a> ]</strong> &bull;
+  <strong>[ <a href="#security-model">Security Model</a> ]</strong> &bull;
+  <strong>[ <a href="#api-reference">API Reference</a> ]</strong> &bull;
+  <strong>[ <a href="#keyboard-shortcuts">Shortcuts</a> ]</strong> &bull;
+  <strong>[ <a href="docs/README.md">Documentation Suite</a> ]</strong>
 </p>
 
 ---
 
 ## Overview
 
-**VanillaDatabase (VanillaDB)** is a lightweight, self-hosted multi-tenant database server built natively on Node.js 22+ (`node:sqlite`) and Fastify.
+VanillaDatabase (VanillaDB) is a self-hosted, lightweight multi-tenant SQLite cloud platform engineered with Node.js 22+ and Fastify.
 
-Instead of managing separate heavy database servers for every client, project, or internal tool, VanillaDatabase manages **multiple isolated SQLite databases** dynamically on disk. Each database functions as an independent tenant with its own WAL journal, API tokens, media storage, automated backups, webhooks, and live event streams.
+Rather than running monolithic database clusters for every client, project, or microservice, VanillaDatabase dynamically provisions and orchestrates **isolated SQLite database instances** on disk. Each tenant database functions as an independent storage unit with dedicated Write-Ahead Logging (WAL), scoped API tokens, encrypted backups, media storage, asynchronous webhooks, and live event streams.
 
-### Target Audience & Primary Use Cases
-- **Full-Stack & Backend Developers**: Instant multi-tenant backend without provisioning cloud PostgreSQL/MySQL clusters.
-- **Discord & Telegram Bot Developers**: Low-overhead persistent storage (~35MB–50MB RAM total server consumption).
-- **Internal Tools & SaaS Startups**: Isolate customer data into discrete `.sqlite` files with role-based access control and storage quotas.
-- **Edge / Homelab / Single VPS Hosting**: Production-grade ACID relational database with zero cold-starts and self-contained zero-config setup.
-
----
-
-## Key Features
-
-- 🚀 **Multi-Tenant SQLite Engine**: Spawn unlimited isolated databases by ID (`db_<nanoid>`). Automatic WAL mode, busy timeout retry, foreign key constraints, and 60-second handle caching.
-- 🔐 **Data-at-Rest Encryption (AES-256-GCM)**: Authenticated envelope encryption (`VENC` signature, PBKDF2 derived keys) for database backup files and database-scoped media assets.
-- 👥 **Multi-User RBAC & Quotas**: Three-tier role hierarchy (`super_admin`, `admin`, `user`) with database quantity quotas (`max_databases`) and per-user request rate limits (`rate_limit_per_minute`).
-- 🛡️ **Scoped API Tokens & Rate Limiting**: Generate tokens (`vdb_live_*`, `vdb_test_*`) with granular permissions (`database:read`, `database:write`, `database:ddl`, `database:admin`), allowed/denied table restrictions, token expiration, and per-token sliding window rate limiting.
-- ⚡ **Realtime Event Streaming (SSE)**: Built-in Server-Sent Events stream (`/v1/databases/:id/realtime`) dispatching table mutations (`insert`, `update`, `delete`, `schema`) to frontend clients and SDKs.
-- 📁 **Database-Scoped Media Storage**: Upload images, audio, and video files with transparent decryption and **HTTP 206 Partial Content Range Streaming** for audio/video scrub playback.
-- 🔄 **Multi-Dialect Database Importer & Converter**: Auto-converts dumps from **MySQL** (`AUTO_INCREMENT`, backticks, inline keys), **PostgreSQL** (`SERIAL`, `COPY FROM stdin`), **MongoDB / NDJSON / JSON** (schema inference), **CSV**, and binary **SQLite** (`.db`/`.sqlite`).
-- 🧠 **AI Vector Math & SQL Crypto Helpers**: Native SQLite custom functions: `vec_cosine_similarity()`, `vec_cosine_distance()`, `encrypt_aes()`, `decrypt_aes()`, `hash_sha256()`, and `hash_hmac()`.
-- 📊 **Visual Query Profiler & Telemetry**: Analyze `EXPLAIN QUERY PLAN` outputs for full table scan detection, view system health telemetry (CPU, RAM, QPS, Latency, Network I/O), and inspect 24-hour request metrics.
-- 🔔 **Webhooks Engine**: Asynchronous HTTP POST event dispatcher with HMAC-SHA256 signature verification (`X-Vanilla-Signature`), customizable event filters, and native Discord/Slack embed formatting.
-- ⏰ **Automated Scheduled Backups**: Background cron scheduler supporting hourly, 6-hour, 12-hour, daily, and weekly automated encrypted snapshots with retention cleanup.
-- 🔐 **Dual-Factor Recovery & 2FA TOTP**: RFC 6238 TOTP authenticator app integration, one-time 6-digit challenge, persistent 8-character backup recovery codes with active/used lifecycle tracking, and dedicated `#/reset-password` recovery flow.
-- 💻 **Modern Web Dashboard**: Single-page dashboard built with React 19, Tailwind CSS, Monaco SQL Editor, and TanStack Table.
+> [!NOTE]
+> All tenant databases operate with strict isolation under `data/databases/:id.sqlite`. System metadata is partitioned separately under `data/system/vanilladb.sqlite`.
 
 ---
 
 ## Architecture
 
 ```
-                      ┌─────────────────────────────────┐
-                      │        HTTP / SSE Clients       │
-                      │  (Web Dashboard, SDKs, Scripts) │
-                      └────────────────┬────────────────┘
-                                       │
-                     ┌─────────────────┴─────────────────┐
-                     │ Fastify HTTP Server (Port: 3000)  │
-                     │  - Helmet Security & CORS Guard   │
-                     │  - Session Cookie & Bearer Auth   │
-                     │  - Multipart Upload & Range 206   │
-                     │  - Realtime Metrics & Telemetry   │
-                     └─────────────────┬─────────────────┘
-                                       │
-        ┌──────────────────────────────┴──────────────────────────────┐
-        ▼                                                             ▼
-┌──────────────────────────────┐              ┌──────────────────────────────┐
-│ Control Plane (/api/*)       │              │ Data Plane (/v1/*)           │
-│ • Admin Authentication       │              │ • API Bearer Token Guard     │
-│ • Multi-User RBAC & Quotas   │              │ • Sliding Rate Limiter (429) │
-│ • Multi-DB SQL Translator    │              │ • Parameterized Query Engine │
-│ • Scheduled Backup Worker    │              │ • Atomic Batch Transaction   │
-│ • Webhook Event Dispatcher   │              │ • Realtime SSE Stream Bus    │
-│ • Audit & Activity Logs      │              │ • Media Storage (Range 206)  │
-└──────────────┬───────────────┘              └──────────────┬───────────────┘
-               │                                             │
-               ▼                                             ▼
-┌──────────────────────────────┐              ┌──────────────────────────────┐
-│ System Metadata Store        │              │ Database Manager Pool        │
-│ • data/system/vanilladb.sqlite              │ • Connection Handle Cache    │
-│ • Schema migrations & users  │              │ • SQL Safety Sandbox         │
-│ • API tokens & audit logs    │              │ • Vector Math & SQL Crypto   │
-└──────────────────────────────┘              └──────────────┬───────────────┘
-                                                             │
-                                                             ▼
-                                              ┌──────────────────────────────┐
-                                              │ Isolated Tenant Databases    │
-                                              │ • data/databases/:id.sqlite  │
-                                              │ • WAL Mode & Busy Timeout    │
-                                              │ • data/storage/:id/*         │
-                                              │ • data/backups/:id/*.sqlite  │
-                                              └──────────────────────────────┘
+                       +-----------------------------------+
+                       |       HTTP / SSE Client Layer     |
+                       | (Browser Dashboard, SDKs, Scripts)|
+                       +-----------------+-----------------+
+                                         |
+                                         v
+                       +-----------------------------------+
+                       |    Fastify HTTP Server (Port 3000)|
+                       |   - Helmet Security & Strict CSP  |
+                       |   - Session HMAC & Token Auth     |
+                       |   - Rate Limiter & SSRF Firewall  |
+                       +-----------------+-----------------+
+                                         |
+         +-------------------------------+-------------------------------+
+         |                               |                               |
+         v                               v                               v
++-----------------+             +-----------------+             +-----------------+
+|  Control Plane  |             |   Data Plane    |             |   Storage & SSE |
+|  /api/admin/*   |             |   /v1/databases |             |  /v1/databases/ |
+|  /api/auth/*    |             |   /:id/query    |             |  :id/storage    |
++--------+--------+             +--------+--------+             +--------+--------+
+         |                               |                               |
+         v                               v                               v
++-----------------+             +-----------------+             +-----------------+
+| System Metadata |             |  Tenant Engine  |             |  Encrypted Media|
+| (better-sqlite3)|             | (Pooled Handles)|             |  (AES-256-GCM)  |
+| - Users & Roles |             | - WAL Mode      |             | - HTTP 206      |
+| - DB Members    |             | - AI Vector Math|             | - Range Seek    |
+| - Tokens & Logs |             | - Foreign Keys  |             | - Zero-Leak     |
++-----------------+             +-----------------+             +-----------------+
 ```
+
+---
+
+## Key Capabilities
+
+### [ENGINE] Multi-Tenant SQLite Orchestration
+- Dynamic creation of dedicated SQLite databases identified by nanoid (`db_<nanoid>`).
+- Native Write-Ahead Logging (WAL mode), busy-timeout retry handling, foreign key enforcement, and memory-cached connection pooling.
+- AI vector distance and similarity functions (`vec_cosine_similarity()`, `vec_cosine_distance()`) registered natively.
+- Cryptographic SQL functions: `encrypt_aes()`, `decrypt_aes()`, `hash_sha256()`, `hash_hmac()`.
+
+### [SECURITY] OWASP Hardened & Cryptographic Defense
+- **Session Revocation (VDB-SEC-01):** HMAC cookie signatures bind user `token_version`. Password changes and account disabling revoke active sessions immediately across all clients.
+- **TOTP Replay Protection (VDB-SEC-02):** Monotonic time-step tracking enforcing RFC 6238 Section 5.2. OTP codes cannot be reused within the 90-second drift tolerance window.
+- **SSRF Network Blocker:** Outbound webhooks block loopback (`127.0.0.0/8`), private subnets (RFC 1918), link-local addresses, and cloud metadata endpoints (`169.254.169.254`).
+- **Data-at-Rest Encryption:** AES-256-GCM envelope encryption with authenticated headers (`VENC` signature, PBKDF2 salt, 128-bit authentication tag).
+- **Engine Sandboxing:** `ATTACH DATABASE`, `DETACH DATABASE`, and binary extension loading (`load_extension`) are permanently disabled.
+
+### [RBAC] Multi-User Access Control & Quotas
+- Three system roles: `super_admin`, `admin`, `user`.
+- Database membership roles: `owner`, `admin`, `editor`, `viewer`.
+- Granular database quantity quotas (`max_databases`) and per-user request throttling (`rate_limit_per_minute`).
+- Self-service registration with automatic quota assignment.
+
+### [API] Scoped Token System
+- Generate tokens prefixed with `vdb_live_*` or `vdb_test_*`.
+- Granular scopes: `database:read`, `database:write`, `database:ddl`, `database:admin`.
+- Table-level allowlists and denylists.
+- Raw tokens are never stored; only SHA-256 hashes are persisted in system metadata.
+
+### [REALTIME] Server-Sent Events & Webhooks
+- SSE streaming endpoint at `/v1/databases/:id/realtime` dispatching database mutations (`insert`, `update`, `delete`, `schema`).
+- Webhook dispatcher with HMAC-SHA256 request signing (`X-Vanilla-Signature`), payload retries, and Discord/Slack formatting.
+
+### [STORAGE] Media Assets & HTTP 206 Streaming
+- Database-scoped file storage with transparent chunked encryption.
+- HTTP 206 Partial Content range requests for audio and video scrubbing.
+
+### [UX] Enterprise Dashboard & Bilingual Matrix
+- Modern single-page management console built with React 19, Tailwind CSS v4, Lucide icons, and Monaco SQL Editor.
+- Complete bilingual support (English & Tiếng Việt) across all pages and notifications.
+- Integrated keyboard shortcuts: Vim chords (`G+D`, `G+I`), collapsible sidebar (`Ctrl+\`), SQL console operations (`Ctrl+Enter`, `Ctrl+E`, `Ctrl+S`, `Alt+Up/Down`, `F11`), and table browser hotkeys (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).
 
 ---
 
 ## Quickstart
 
 ### Prerequisites
-- **Node.js**: `v22.0.0` or higher (required for native `node:sqlite`).
-- **NPM**: `v10.0.0` or higher.
-- **Operating System**: Linux, macOS, or Windows.
+- Node.js 22.0.0 or higher
+- npm 10.0.0 or higher
 
-### Installation
-
+### 1. Clone & Install
 ```bash
-# 1. Clone repository
 git clone https://github.com/Elaina2026/VanillaDB.git
-cd VanillaDatabase
-
-# 2. Install dependencies
+cd VanillaDB
 npm install
+```
 
-# 3. Copy environment template
+### 2. Configure Environment
+```bash
 cp .env.example .env
+```
 
-# 4. Build client and server
+Review core variables in `.env`:
+```env
+PORT=3000
+HOST=0.0.0.0
+NODE_ENV=production
+VDB_MASTER_KEY=generate_a_secure_64_character_hex_key
+VDB_SESSION_SECRET=generate_a_secure_64_character_hex_key
+VDB_CORS_ORIGINS=http://localhost:3000
+```
+
+### 3. Build & Run
+```bash
+# Build frontend and server bundles
 npm run build
 
-# 5. Start the server
+# Start production server
 npm start
 ```
 
-Open your browser at **`http://localhost:3000`** to set up your primary Super Administrator account.
+For development with hot reloading:
+```bash
+npm run dev
+```
+
+The web dashboard is accessible at `http://localhost:3000`.
 
 ---
 
-## Configuration
+## Configuration Reference
 
-All configuration is managed via environment variables or `.env`:
-
-| Variable | Required | Default | Description |
-| :--- | :---: | :---: | :--- |
-| `NODE_ENV` | No | `development` | Runtime environment (`production` / `development`) |
-| `VDB_HOST` | No | `0.0.0.0` | Host IP address to bind |
-| `VDB_PORT` | No | `3000` | Port for incoming HTTP requests |
-| `VDB_DATA_DIR` | No | `./data` | Directory where SQLite databases and backups reside |
-| `VDB_SESSION_SECRET` | No | *Auto-generated* | Secret for signing session cookies (min 32 chars) |
-| `VDB_MASTER_KEY` | No | *Auto-generated* | Master key for AES-256-GCM data-at-rest encryption |
-| `VDB_ADMIN_USERNAME` | No | `null` | Optional admin username to bootstrap on first run |
-| `VDB_ADMIN_PASSWORD` | No | `null` | Optional admin password to bootstrap on first run |
-| `VDB_TRUST_PROXY` | No | `false` | Enable client IP extraction behind reverse proxies |
-| `VDB_CORS_ORIGINS` | No | `*` | Allowed CORS origins (comma-separated) |
-| `VDB_SQL_BUSY_TIMEOUT_MS`| No | `5000` | SQLite busy timeout retry in milliseconds |
-| `VDB_MAX_REQUEST_BODY_MB`| No | `10` | Maximum JSON request body size in MB |
-| `VDB_MAX_IMPORT_MB` | No | `1024` | Maximum file upload size for database imports |
-| `VDB_MAX_QUERY_ROWS` | No | `100000` | Max rows returned per query execution |
-| `VDB_QUERY_TIMEOUT_MS`| No | `0` | Query timeout limit in milliseconds (0 = disabled) |
-| `VDB_LOG_LEVEL` | No | `info` | Logging level (`debug`, `info`, `warn`, `error`) |
+| Variable | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `PORT` | number | `3000` | HTTP listening port |
+| `HOST` | string | `0.0.0.0` | Network binding interface |
+| `NODE_ENV` | string | `development` | Runtime environment (`development`, `production`, `test`) |
+| `VDB_MASTER_KEY` | string | Auto-generated | 256-bit encryption key for database and media encryption |
+| `VDB_SESSION_SECRET` | string | Auto-generated | HMAC secret for session cookies and temporary tokens |
+| `VDB_CORS_ORIGINS` | string | `*` | Allowed CORS origins (comma-separated for multiple domains) |
+| `VDB_DATA_DIR` | string | `./data` | File storage path for SQLite databases, backups, and media |
+| `VDB_MAX_REQUEST_SIZE_MB` | number | `10` | Maximum body size for SQL requests and payload imports |
+| `VDB_STORAGE_MAX_FILE_SIZE_MB` | number | `100` | Maximum file size for media asset uploads |
+| `VDB_STORAGE_ENCRYPTION` | boolean | `true` | Enable AES-256-GCM encryption for stored media files |
+| `VDB_DEFAULT_USER_MAX_DATABASES` | number | `2` | Default database quota for newly registered users |
+| `VDB_DEFAULT_USER_RATE_LIMIT` | number | `180` | Default request-per-minute quota for regular users |
 
 ---
 
 ## API Reference
 
-All Data Plane requests (`/v1/...`) require an API Bearer token in the `Authorization` header: `Bearer vdb_live_...` or query parameter `?token=vdb_live_...`.
+### Data Plane (Tenant Database Operations)
 
-### 1. Parameterized SQL Query
-- **Endpoint**: `POST /v1/databases/:databaseId/query`
-- **Permissions**: `database:read` or `database:write`
-- **Request Body**:
-```json
+All Data Plane endpoints require authentication via Bearer API token (`Authorization: Bearer vdb_live_...`) or active session cookie.
+
+```bash
+# Execute SQL Query (SELECT)
+POST /v1/databases/:databaseId/query
+Content-Type: application/json
+
 {
-  "sql": "SELECT id, username, score FROM users WHERE score >= ? ORDER BY score DESC LIMIT ?",
-  "params": [100, 10]
-}
-```
-- **Response**:
-```json
-{
-  "success": true,
-  "data": {
-    "columns": ["id", "username", "score"],
-    "rows": [
-      { "id": 1, "username": "alice", "score": 250 }
-    ],
-    "rowCount": 1,
-    "durationMs": 0.42
-  }
+  "sql": "SELECT id, username, email FROM users WHERE status = ? LIMIT 10;",
+  "params": ["active"]
 }
 ```
 
-### 2. Atomic Batch Transaction
-- **Endpoint**: `POST /v1/databases/:databaseId/batch`
-- **Permissions**: `database:write`
-- **Request Body**:
-```json
+```bash
+# Execute SQL Mutation (INSERT, UPDATE, DELETE)
+POST /v1/databases/:databaseId/exec
+Content-Type: application/json
+
+{
+  "sql": "UPDATE users SET status = ? WHERE id = ?;",
+  "params": ["verified", "usr_123"]
+}
+```
+
+```bash
+# Transactional Batch Execution
+POST /v1/databases/:databaseId/batch
+Content-Type: application/json
+
 {
   "transaction": true,
   "statements": [
-    { "sql": "UPDATE accounts SET balance = balance - ? WHERE id = ?", "params": [50, "acc_1"] },
-    { "sql": "UPDATE accounts SET balance = balance + ? WHERE id = ?", "params": [50, "acc_2"] }
+    { "sql": "UPDATE accounts SET balance = balance - 100 WHERE id = ?;", "params": ["acc_a"] },
+    { "sql": "UPDATE accounts SET balance = balance + 100 WHERE id = ?;", "params": ["acc_b"] }
   ]
 }
 ```
 
-### 3. Realtime SSE Stream
-- **Endpoint**: `GET /v1/databases/:databaseId/realtime?table=users`
-- **Permissions**: `database:read`
-- **Response**: `text/event-stream` stream delivering real-time table mutations (`insert`, `update`, `delete`, `schema`).
-
-### 4. Media Storage & HTTP 206 Streaming
-- **Upload File**: `POST /v1/databases/:databaseId/files` (Multipart form-data)
-- **List Files**: `GET /v1/databases/:databaseId/files`
-- **Stream Media**: `GET /v1/files/:fileId/view` (Supports `Range: bytes=0-1048575` headers)
-- **Delete File**: `DELETE /v1/databases/:databaseId/files/:fileId`
-
----
-
-## Client SDKs
-
-### TypeScript / Node.js
 ```bash
-npm install @nullex/vanilladb
+# Connect to Live Realtime SSE Stream
+GET /v1/databases/:databaseId/realtime
+Accept: text/event-stream
 ```
 
-```typescript
-import { VanillaDatabase } from '@nullex/vanilladb';
-
-const db = new VanillaDatabase({
-  url: 'http://localhost:3000/v1/databases/db_your_database_id',
-  token: 'vdb_live_your_token_here'
-});
-
-// Parameterized SQL query
-const { rows } = await db.query('SELECT * FROM users WHERE score > ?', [50]);
-
-// Realtime SSE event subscription
-const unsubscribe = db.subscribe((event) => {
-  console.log('Realtime event:', event);
-}, 'users');
+```bash
+# Stream Media File with Range Support
+GET /v1/databases/:databaseId/storage/:fileId
+Range: bytes=0-1048575
 ```
+
+### Control Plane (Administrative & Security Endpoints)
+
+| Method | Endpoint | Access | Purpose |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/register` | Public | Self-service user account registration |
+| `POST` | `/api/auth/login` | Public | User authentication and session cookie generation |
+| `POST` | `/api/auth/login/2fa` | Public | Step-up 2FA verification with TOTP code or backup code |
+| `POST` | `/api/auth/change-password` | Authenticated | Password update with automatic session revocation |
+| `GET` | `/api/admin/databases` | Authenticated | List accessible tenant databases |
+| `POST` | `/api/admin/databases` | Authenticated | Create a new tenant database |
+| `POST` | `/api/admin/databases/:id/clone` | Admin / Owner | Clone database instance for branching |
+| `POST` | `/api/admin/databases/:id/backups` | Admin / Owner | Trigger instant encrypted backup snapshot |
+| `POST` | `/api/admin/databases/:id/maintenance` | Admin / Owner | Execute `integrity_check`, `vacuum`, or `optimize` |
+| `GET` | `/api/system/status` | Super Admin | Realtime CPU, RAM, and host disk space telemetry |
 
 ---
 
 ## Keyboard Shortcuts
 
-| Shortcut | Description |
-| :--- | :--- |
-| **`Ctrl + K`** | Open Command Palette / Universal search |
-| **`Ctrl + B`** | Open Create Database modal |
-| **`Ctrl + Shift + L`** | Toggle interface language (English / Vietnamese) |
-| **`Alt + T`** *(or `Ctrl + Shift + T`)* | Toggle theme (Light / Dark) |
-| **`Alt + 1` .. `Alt + 6`** | Navigate to Overview, Telemetry, Databases, Activity, Users, Settings |
-| **`1 .. 9`** | Switch between Database Detail tabs |
-| **`Shift + ?`** | Open Keyboard Shortcuts reference modal |
-| **`Ctrl + Enter`** | Execute active query in SQL Console |
-| **`Esc`** | Close active modals or Command Palette |
+VanillaDatabase features a comprehensive shortcut matrix accessible from anywhere in the platform:
+
+| Context | Shortcut | Action (English) | Thao tác (Tiếng Việt) |
+| :--- | :--- | :--- | :--- |
+| **Global** | `Ctrl + K` | Open Command Palette | Mở thanh tìm kiếm lệnh nhanh |
+| **Global** | `Ctrl + B` | Open Create Database modal | Mở cửa sổ tạo cơ sở dữ liệu mới |
+| **Global** | `Ctrl + \` | Toggle desktop sidebar collapse | Thu gọn / Mở rộng Sidebar điều hướng |
+| **Global** | `G` then `D` | Navigate to Databases (Vim chord) | Về danh sách Database (Vim chord) |
+| **Global** | `G` then `I` | Navigate to Inbox (Vim chord) | Mở Hộp thư thông báo (Vim chord) |
+| **Global** | `Ctrl + Shift + L` | Toggle language (EN / VI) | Chuyển đổi ngôn ngữ (EN / VI) |
+| **Global** | `Alt + T` | Toggle theme (Light / Dark) | Chuyển đổi giao diện Sáng / Tối |
+| **Global** | `Shift + ?` | Open Shortcuts reference page | Mở trang tra cứu phím tắt |
+| **DB Detail** | `1` .. `9` | Switch database detail tabs | Chuyển nhanh qua lại các tab Database |
+| **SQL Console** | `Ctrl + Enter` | Execute SQL statement | Thực thi câu lệnh SQL đang soạn |
+| **SQL Console** | `Ctrl + E` | Analyze EXPLAIN query plan | Phân tích kế hoạch truy vấn EXPLAIN |
+| **SQL Console** | `Ctrl + S` | Export query results to CSV | Tải kết quả truy vấn ra file CSV |
+| **SQL Console** | `Alt + Up / Down` | Browse query execution history | Duyệt lịch sử câu lệnh SQL đã chạy |
+| **SQL Console** | `Ctrl + /` | Toggle SQL line comment (`--`) | Bật/tắt comment dòng lệnh SQL |
+| **SQL Console** | `F11` / `Esc` | Toggle Fullscreen Zen Mode | Bật/tắt chế độ toàn màn hình Zen Mode |
+| **Table Browser**| `Alt + I` | Open Insert Row modal | Mở modal chèn dòng dữ liệu mới |
+| **Table Browser**| `Alt + R` | Refresh table rows and schema | Tải lại dữ liệu bảng và schema |
+| **Table Browser**| `[` / `]` | Previous / Next page | Lùi trang / Tiến trang dữ liệu |
+| **Table Browser**| `/` | Focus table search input | Nhảy nhanh vào ô tìm kiếm bảng |
+| **Table Browser**| `Del` | Bulk delete selected rows | Xóa các dòng dữ liệu đang chọn |
+| **DB Actions** | `Ctrl + Shift + B`| Create instant backup snapshot | Tạo bản sao lưu tức thì |
+| **DB Actions** | `Ctrl + Shift + D`| Open Clone Database modal | Mở modal nhân bản Database |
+| **DB Actions** | `Alt + M` | Run `PRAGMA integrity_check` | Chạy kiểm tra toàn vẹn cơ sở dữ liệu |
 
 ---
 
-## Comparison
+## Testing & Quality Assurance
 
-| Feature | VanillaDatabase | SQLite (Direct) | PocketBase | Supabase (Cloud) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Architecture** | Multi-Tenant SQLite Server | Embedded C Library | Single Embedded DB (Go) | Managed PostgreSQL Cluster |
-| **Multi-Tenancy** | Unlimited dynamic databases | Single DB file | Single DB file | Multi-instance / Organization |
-| **Cold Starts** | **0ms (Local WAL)** | 0ms | 0ms | 5s – 30s (Free tier sleep) |
-| **RAM Usage** | **~35MB – 50MB** | Process memory | ~30MB – 60MB | ~500MB – 1GB+ |
-| **Data Encryption** | Built-in AES-256-GCM at-rest | Requires SQLite extensions | OS level | Managed cloud encryption |
-| **Media Storage** | Built-in HTTP 206 Streaming | None | Built-in disk storage | S3-compatible cloud storage |
-| **Realtime** | Built-in SSE bus | None | Built-in SSE | PostgreSQL Realtime (WAL) |
+The test suite runs with Vitest and executes end-to-end assertions against the server instance:
+
+```bash
+# Run complete test suite (94 integration & unit tests)
+npm test
+
+# Run TypeScript typecheck
+npm run typecheck
+
+# Run performance benchmarks
+npm run benchmark
+```
+
+All 94 tests cover:
+- Multi-user RBAC, sub-account limits, and quota caps.
+- 2FA TOTP activation, backup codes lifecycle, and step-up login challenges.
+- Session revocation on credential update (VDB-SEC-01).
+- Monotonic time-step TOTP replay rejection (VDB-SEC-02).
+- AES-256-GCM envelope encryption and PBKDF2 key derivation.
+- SQL syntax translation from MySQL, PostgreSQL, CSV, and NDJSON.
+- Transactional batch executions and rollback safety.
+- HTTP 206 Partial Content range audio/video streaming.
 
 ---
 
-## Documentation Hub
+## Documentation Suite
 
-Explore the full in-depth documentation modules:
-- 📖 **[English Wiki](docs/en/Home.md)**
-- 🇻🇳 **[Tài liệu Tiếng Việt](docs/vi/Home.md)**
-- 💡 **[Practical Code Examples](docs/README.md#code-integration-examples)**
+For detailed technical guides, visit the documentation directories:
+
+- **Documentation Hub**: [docs/README.md](docs/README.md)
+- **English Guides**:
+  - [01. Getting Started](docs/en/01-getting-started.md)
+  - [02. Architecture & Design](docs/en/02-architecture.md)
+  - [03. Database Engine](docs/en/03-database-engine.md)
+  - [04. REST & SQL API](docs/en/04-api-reference.md)
+  - [05. Authentication & RBAC](docs/en/05-authentication-rbac-2fa.md)
+  - [06. Realtime & Webhooks](docs/en/06-realtime-and-webhooks.md)
+  - [07. Storage & Streaming](docs/en/07-storage-and-streaming.md)
+  - [08. Backup & Maintenance](docs/en/08-backup-and-restore.md)
+  - [09. Migration & Import](docs/en/09-migration-and-converter.md)
+  - [10. Production Deployment](docs/en/10-deployment.md)
+  - [11. Troubleshooting & FAQ](docs/en/11-troubleshooting.md)
+  - [12. Development Guide](docs/en/12-development.md)
+- **Tài liệu Tiếng Việt**:
+  - [01. Bắt đầu nhanh](docs/vi/01-getting-started.md)
+  - [02. Kiến trúc hệ thống](docs/vi/02-architecture.md)
+  - [03. Động cơ cơ sở dữ liệu](docs/vi/03-database-engine.md)
+  - [04. Tham chiếu REST API](docs/vi/04-api-reference.md)
+  - [05. Phân quyền & 2FA](docs/vi/05-authentication-rbac-2fa.md)
+  - [06. Sự kiện & Webhooks](docs/vi/06-realtime-and-webhooks.md)
+  - [07. Lưu trữ Media & Luồng](docs/vi/07-storage-and-streaming.md)
+  - [08. Sao lưu & Bảo trì](docs/vi/08-backup-and-restore.md)
+  - [09. Di chuyển dữ liệu](docs/vi/09-migration-and-converter.md)
+  - [10. Triển khai Production](docs/vi/10-deployment.md)
+  - [11. Xử lý sự cố & FAQ](docs/vi/11-troubleshooting.md)
+  - [12. Hướng dẫn phát triển](docs/vi/12-development.md)
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).  
-Copyright (c) 2026 **Elaina2026**.
+VanillaDatabase is open-source software licensed under the [MIT License](LICENSE).

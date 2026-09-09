@@ -1,71 +1,83 @@
-# Authentication, RBAC & Permissions
+# Authentication, RBAC & 2FA Security
 
-This document covers user roles, dashboard session authentication, API tokens, granular permissions, sliding-window rate limiting, and two-factor authentication.
-
----
-
-## 1. Multi-User RBAC (Role-Based Access Control)
-
-VanillaDatabase supports three hierarchical user roles:
-
-| Role | Permissions & Capabilities |
-| :--- | :--- |
-| **`super_admin`** | Full system control: create/manage users, edit system settings, access all databases, unrestricted quotas, rate limit bypass. |
-| **`admin`** | Manage all tenant databases, view telemetry, manage backups and webhooks, inspect users list. Cannot create or delete other users. |
-| **`user`** | Access and manage **only** databases owned by their account (`owner_id`) or shared via database members. Subject to quota limits (`max_databases`) and rate limiting (`rate_limit_per_minute`). |
+Comprehensive specification of system roles, database permissions, scoped API tokens, session revocation (`VDB-SEC-01`), TOTP replay prevention (`VDB-SEC-02`), and two-factor recovery.
 
 ---
 
-## 2. Dashboard Session Authentication
+## 1. Multi-User RBAC & Database Membership
 
-- **Algorithm**: `Argon2id` password hashing (memory cost: 64MB, time cost: 3 iterations, parallelism: 4).
-- **Session Cookie**: `vdb_session` cookie issued upon login with `HttpOnly`, `SameSite: Lax`, and `Secure` (in production).
-- **Session Signature**: Cryptographically signed HMAC-SHA256 payload (`userId:username:role:expiresAt`). Session cookies expire automatically after **7 days**.
+### 1.1. System Roles
+VanillaDatabase enforces a hierarchical three-tier platform role model:
+
+| Role | Scope & Permissions | Quotas & Throttling |
+| :--- | :--- | :--- |
+| `super_admin` | Global platform administration: manage all users, edit platform settings, provision/delete any database, inspect telemetry and audit logs. | Unrestricted quotas; bypasses per-user rate limiters. |
+| `admin` | Database management across all tenants, view system metrics and activity logs. Cannot modify or delete other user accounts. | Subject to global configuration defaults. |
+| `user` | Isolated access: can only view and manage databases they own (`owner_id`) or have been explicitly invited to as a database member. | Restricted by `max_databases` (default 2) and `rate_limit_per_minute` (default 180). |
+
+### 1.2. Database-Level Membership Roles
+Within each tenant database, fine-grained collaboration roles apply:
+- **`owner`**: Full ownership rights, database deletion, cloning, token generation, member invitations, and backup restoration.
+- **`admin`**: Database configuration, member invitations, maintenance operations, and token generation.
+- **`editor`**: Read, write, DDL, table modifications, and media asset management.
+- **`viewer`**: Strictly read-only access to query tables, inspect schema, and stream media.
+
+---
+
+## 2. Session Management & Revocation (VDB-SEC-01)
+
+### Password Hashing
+All user passwords are encrypted using `Argon2id`:
+- Memory cost: 64 MB (65,536 KB)
+- Time cost: 3 iterations
+- Parallelism: 4 threads
+
+### Session Token Versioning & Instant Invalidation
+The session cookie `vdb_session` uses an HMAC-SHA256 authenticated payload:
+```
+cookieValue = `${userId}.${username}.${role}.${expiresAt}.${tokenVersion}.${signature}`
+```
+- **Automatic Revocation**: Whenever a user changes their password (`POST /api/auth/change-password`) or is disabled by an administrator, the database increments `token_version = token_version + 1`.
+- **Middleware Check**: `requireAdminAuth` and `requireTokenPermission` compare the cookie's `tokenVersion` against the database record. Mismatched cookies are rejected immediately with `401 Unauthorized` (`Session revoked due to password or credential change`).
 
 ---
 
 ## 3. Scoped API Tokens
 
-API tokens allow external applications, microservices, and bots to interact with tenant databases securely.
+API tokens authenticate external applications, automated microservices, and scripts without using user session cookies.
 
-### Token Types & Prefix
-- **Live Tokens**: `vdb_live_<hex(64)>`
-- **Test Tokens**: `vdb_test_<hex(64)>`
+### Token Types & Storage Security
+- **Live Tokens**: Prefixed with `vdb_live_<hex(64)>`.
+- **Test Tokens**: Prefixed with `vdb_test_<hex(64)>`.
+- **Zero-Leak Storage**: Plaintext tokens are displayed to the user once upon creation. Only the SHA-256 hash (`token_hash`) is stored in the database.
 
-### Granular Token Permissions
-Each token can be assigned one or more permissions:
-
-| Permission | Description | Allowed SQL / Endpoints |
+### Granular Permission Scopes
+| Permission | Capabilities | Allowed SQL Operations |
 | :--- | :--- | :--- |
-| `database:read` | Read-only access | `SELECT`, `PRAGMA table_info`, `EXPLAIN`, list/view files, SSE stream |
-| `database:write`| Write access | `INSERT`, `UPDATE`, `DELETE`, upload/delete files, execute batch |
-| `database:ddl`  | Schema modifications | `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX` |
-| `database:admin`| Full database administration | All read, write, DDL, and management functions |
+| `database:read` | Read-only queries and stream consumption | `SELECT`, `EXPLAIN`, SSE stream, read files |
+| `database:write`| Data mutation and media asset writes | `INSERT`, `UPDATE`, `DELETE`, upload/delete files |
+| `database:ddl`  | Schema alterations | `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX` |
+| `database:admin`| Full database administration | All read, write, DDL, and token operations |
 
-### Table-Level Access Control
-- **`allowed_tables`**: Optional whitelist. The token can **only** query or modify tables in this array.
-- **`denied_tables`**: Optional blacklist. Queries targeting tables in this array are rejected immediately.
-
-### Sliding-Window Rate Limiting
-- Configurable per-token (e.g. `rate_limit: 100` req/minute).
-- Enforced using an in-memory bucket map. Exceeding the rate limit returns `HTTP 429 Too Many Requests` with a clear retry timeout header.
+### Table-Level Access Restrictions
+- **`allowed_tables`**: Optional allowlist. Queries targeting tables not in this list are rejected (`403 FORBIDDEN`).
+- **`denied_tables`**: Optional denylist. Any query referencing tables in this list is blocked immediately.
 
 ---
 
-## 4. Two-Factor Authentication (2FA) & Recovery
+## 4. Two-Factor Authentication (2FA) & Recovery (VDB-SEC-02)
 
-VanillaDatabase features enterprise-grade two-factor authentication based on RFC 6238 TOTP:
+VanillaDatabase implements Two-Factor Authentication using RFC 6238 Time-Based One-Time Passwords (TOTP):
 
-### Activation Flow
-1. `POST /api/auth/2fa/setup`: Generates an RFC 6238 compliant base32 secret and an SVG QR data URI.
-2. `POST /api/auth/2fa/activate`: Requires account password verification and a valid 6-digit TOTP code. Upon success, generates 6 cryptographically secure backup codes (`XXXX-XXXX`).
+### 4.1. TOTP Replay Prevention (RFC 6238 Section 5.2)
+- The verification engine (`verifyTotpCode`) tracks `last_totp_step` in the database.
+- Even if a 6-digit OTP code is technically within the +/- 1 time-step drift tolerance window (90 seconds), any attempt to replay a code with `candidateStep <= last_totp_step` is strictly rejected.
 
-### Backup Codes Lifecycle
-- Backup codes are stored with usage state: `[{ code, used: boolean, used_at?: number }]`.
-- Active vs burned codes are distinguished in the Settings dashboard.
-- Users can view, hide, copy, download, or regenerate backup codes (`POST /api/auth/2fa/regenerate-backup-codes`) using password confirmation.
+### 4.2. Backup Recovery Codes
+- Upon activating 2FA (`POST /api/auth/2fa/activate`), the server issues **6 cryptographically random backup recovery codes** (formatted as `XXXX-XXXX`).
+- Each backup code is single-use. When verified via `/api/auth/login/2fa` or `/api/auth/recovery/reset-password`, the code is atomically marked as used with a timestamp, preventing reuse.
 
-### Dual-Factor Account Recovery
-If an authenticator device is lost, accounts can be recovered via `POST /api/auth/recovery/reset-password`:
-- **Method 1 (TOTP)**: Validates identity using the 6-digit authenticator code.
-- **Method 2 (Backup Code)**: Validates and permanently burns an active single-use backup code. Comparisons use `crypto.timingSafeEqual` to eliminate timing attack vectors.
+### 4.3. Account Recovery Workflow
+If an authenticator device is lost, users can navigate to `#/reset-password` and recover their account using either:
+1. Dynamic 6-digit TOTP code (if still accessible).
+2. Unused 8-character Backup Recovery Code.

@@ -1,46 +1,70 @@
-# Tài liệu Kỹ thuật VanillaDatabase (Wiki Tiếng Việt)
+# Tài liệu Kỹ thuật VanillaDatabase (Tiếng Việt)
 
 Chào mừng bạn đến với hệ thống tài liệu kỹ thuật chi tiết của **VanillaDatabase (VanillaDB)**.
 
 ---
 
-## 📚 Danh mục tài liệu
+## Điều hướng & Lựa chọn ngôn ngữ
 
-1. [**Bắt đầu & Thiết lập Môi trường**](01-getting-started.md)
-   - Yêu cầu hệ thống, các bước cài đặt, cấu hình biến môi trường, khởi tạo Super Admin ban đầu.
-2. [**Kiến trúc & Thiết kế Động cơ**](02-architecture.md)
-   - Kiến trúc SQLite đa khách thuê (Multi-tenant), chế độ WAL, bộ đệm kết nối, phân tách Control Plane và Data Plane.
-3. [**Quản trị Cơ sở Dữ liệu & Động cơ SQL**](03-database-engine.md)
-   - Quản lý cấu trúc bảng, câu lệnh tham số hóa an toàn, giao dịch batch atomic, hàm toán học AI vector và mật mã tích hợp.
-4. [**Data Plane & Tham chiếu REST API**](04-api-reference.md)
-   - Đặc tả chi tiết các endpoint SQL query, batch transaction, thao tác CRUD bảng, kho tệp media và phân tích truy vấn.
-5. [**Xác thực, Phân quyền RBAC & Bảo mật 2FA**](05-authentication-rbac-2fa.md)
-   - Cấp bậc người dùng, hạn mức database, mã API Bearer Token, kiểm soát tần suất gọi API, RFC 6238 TOTP và mã dự phòng.
-6. [**Luồng dữ liệu thời gian thực (SSE) & Webhooks**](06-realtime-and-webhooks.md)
-   - Luồng Server-Sent Events (SSE), bộ phát sự kiện webhook bất đồng bộ, chữ ký bảo mật HMAC-SHA256, tích hợp Discord và Slack.
-7. [**Lưu trữ Media & Phát luồng HTTP 206**](07-storage-and-streaming.md)
-   - Tải lên tệp tin, mã hóa phong bì AES-256-GCM tại chỗ, phát luồng video/audio phân đoạn HTTP 206 Partial Content.
-8. [**Sao lưu, Phục hồi & Tác vụ định kỳ**](08-backup-and-restore.md)
-   - Tạo ảnh chụp nhị phân (Snapshot), kiểm tra tính toàn vẹn checksum SHA-256, khôi phục dữ liệu và lên lịch Cron Jobs tự động.
-9. [**Bộ chuyển đổi CSDL Đa hệ quản trị**](09-migration-and-converter.md)
-   - Di chuyển dữ liệu từ MySQL, PostgreSQL, MongoDB, NDJSON, CSV và SQLite nhị phân vào VanillaDatabase.
-10. [**Triển khai & Vận hành Production**](10-deployment.md)
-    - Cấu hình dịch vụ Systemd, thiết lập Nginx Reverse Proxy kèm chứng chỉ SSL/TLS, đóng gói Docker.
-11. [**Khắc phục Sự cố & Câu hỏi thường gặp**](11-troubleshooting.md)
-    - Các mã lỗi phổ biến, giải quyết tình trạng database locked/busy, xung đột cổng mạng và cấp quyền truy cập file.
-12. [**Hướng dẫn Phát triển & Đóng góp**](12-development.md)
-    - Cấu trúc thư mục dự án, chạy bộ kiểm thử Vitest, kiểm tra benchmark hiệu năng và quy trình đóng góp mã nguồn.
+- **Trung tâm tài liệu**: [Central Hub](../README.md)
+- **Phiên bản Tiếng Anh**: [English Documentation](../en/Home.md)
+- **Mã nguồn dự án**: [GitHub Repository](https://github.com/Elaina2026/VanillaDB)
 
 ---
 
-## 💡 Ví dụ mã tích hợp thực tế
+## Mục lục chuyên đề
 
-- [Ví dụ gọi REST API bằng cURL](../examples/curl.vi.md)
-- [Ví dụ SDK Node.js & TypeScript](../examples/nodejs.vi.md)
+### [CHUYÊN ĐỀ 01] Hướng dẫn Khởi động & Cài đặt
+- Tệp: [01-getting-started.md](01-getting-started.md)
+- Nội dung: Yêu cầu hệ thống, cấu hình biến môi trường, khởi tạo tài khoản Super Admin ban đầu, lệnh CLI đặt lại mật khẩu và kiểm tra trạng thái sức khỏe.
+
+### [CHUYÊN ĐỀ 02] Kiến trúc Hệ thống & Động cơ
+- Tệp: [02-architecture.md](02-architecture.md)
+- Nội dung: Kiến trúc SQLite đa người thuê, chế độ Write-Ahead Logging (WAL), tách biệt Control Plane và Data Plane, quản lý bộ nhớ đệm kết nối và tối ưu RAM.
+
+### [CHUYÊN ĐỀ 03] Quản trị Cơ sở Dữ liệu & Động cơ SQL
+- Tệp: [03-database-engine.md](03-database-engine.md)
+- Nội dung: Vòng đời tạo và quản lý database, kiểm tra cấu trúc schema, thực thi truy vấn tham số hóa, giao dịch theo lô, hàm AI vector và hàm mã hóa SQL.
+
+### [CHUYÊN ĐỀ 04] Tầng Dữ liệu & Tham chiếu REST API
+- Tệp: [04-api-reference.md](04-api-reference.md)
+- Nội dung: Quy chuẩn chi tiết các endpoint `/v1/databases/:id/query`, `/exec`, `/batch`, `/tables`, `/schema`, `/realtime`, và `/storage`.
+
+### [CHUYÊN ĐỀ 05] Xác thực, Phân quyền RBAC & Bảo mật 2FA
+- Tệp: [05-authentication-rbac-2fa.md](05-authentication-rbac-2fa.md)
+- Nội dung: Phân quyền vai trò hệ thống (`super_admin`, `admin`, `user`), vai trò database (`owner`, `admin`, `editor`, `viewer`), mã token Bearer, thu hồi phiên làm việc (`VDB-SEC-01`), chống phát lại mã TOTP (`VDB-SEC-02`) và mã dự phòng.
+
+### [CHUYÊN ĐỀ 06] Sự kiện Realtime (SSE) & Webhooks
+- Tệp: [06-realtime-and-webhooks.md](06-realtime-and-webhooks.md)
+- Nội dung: Kết nối Server-Sent Events, định dạng gói tin thay đổi dữ liệu, hệ thống gửi webhook bất đồng bộ, ký xác thực HMAC-SHA256 và cơ chế chặn SSRF.
+
+### [CHUYÊN ĐỀ 07] Kho Lưu trữ Media & Phát luồng HTTP 206
+- Tệp: [07-storage-and-streaming.md](07-storage-and-streaming.md)
+- Nội dung: Lưu trữ media theo database, mã hóa khối AES-256-GCM trong suốt và phát luồng âm thanh/video phân đoạn HTTP 206 Partial Content.
+
+### [CHUYÊN ĐỀ 08] Sao lưu, Phục hồi & Hẹn giờ Tự động
+- Tệp: [08-backup-and-restore.md](08-backup-and-restore.md)
+- Nội dung: Tạo bản sao lưu tức thì, xác minh mã kiểm tra toàn vẹn SHA-256, khôi phục database theo thời điểm và worker chạy ngầm dọn dẹp log.
+
+### [CHUYÊN ĐỀ 09] Chuyển đổi & Nhập Cơ sở Dữ liệu Đa phương ngữ
+- Tệp: [09-migration-and-converter.md](09-migration-and-converter.md)
+- Nội dung: Hướng dẫn chuyển đổi dữ liệu từ MySQL, PostgreSQL, MongoDB / NDJSON, CSV và file nhị phân SQLite.
+
+### [CHUYÊN ĐỀ 10] Triển khai Production & Vận hành Cloudflare
+- Tệp: [10-deployment.md](10-deployment.md)
+- Nội dung: Hướng dẫn cấu hình dịch vụ systemd, thiết lập Cloudflare SSL Flexible kết hợp Origin Rules dẫn cổng, Docker Compose và cập nhật không gián đoạn.
+
+### [CHUYÊN ĐỀ 11] Cẩm nang Khắc phục Sự cố & FAQ
+- Tệp: [11-troubleshooting.md](11-troubleshooting.md)
+- Nội dung: Xử lý lỗi tranh chấp khóa `SQLITE_BUSY`, lỗi định dạng MIME type, quản lý bộ nhớ, sự cố phiên đăng nhập và quy trình phục hồi khẩn cấp.
+
+### [CHUYÊN ĐỀ 12] Hướng dẫn Phát triển Mã nguồn & Đóng góp
+- Tệp: [12-development.md](12-development.md)
+- Nội dung: Thiết lập môi trường lập trình local, chạy kiểm thử Vitest (94/94 passed), kiểm tra biên dịch, quy chuẩn code và quy trình mở PR.
 
 ---
 
-## 🌐 Tùy chọn ngôn ngữ
+## Ví dụ Tích hợp Thực tế
 
-- 🇬🇧 **[English Documentation Wiki](../en/Home.md)**
-- 📖 **[Trung tâm tài liệu chính](../README.md)**
+- [Ví dụ Tích hợp qua cURL](../examples/curl.vi.md)
+- [Ví dụ Tích hợp Node.js & TypeScript SDK](../examples/nodejs.vi.md)

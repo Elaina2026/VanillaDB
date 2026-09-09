@@ -1,42 +1,43 @@
 # Quản trị Cơ sở Dữ liệu & Động cơ SQL
 
-Tài liệu này giải thích chi tiết các thao tác SQL, hàm mở rộng tùy biến tích hợp, kiểm tra cấu trúc bảng, phân nhánh (branching) và các giao dịch batch trong **VanillaDatabase**.
+Đặc tả kỹ thuật các thao tác cơ sở dữ liệu, hàm SQL tự định nghĩa bản địa, kiểm tra cấu trúc schema, nhân bản cơ sở dữ liệu và giao dịch hàng loạt trong **VanillaDatabase**.
 
 ---
 
-## 1. Thao tác Cơ sở Dữ liệu
+## 1. Vòng đời & Thao tác Quản trị Cơ sở Dữ liệu
 
-### Tạo Cơ sở Dữ liệu Mới
-Cơ sở dữ liệu có thể được tạo qua giao diện Dashboard hoặc Admin API:
-- Định dạng ID: `db_<nanoid(16)>` (ví dụ: `db_pMI8Tn-5MvVgh9-1`)
-- Định dạng Slug: Chuỗi định danh duy nhất thân thiện với URL (ví dụ: `production-store-db`)
+### Khởi tạo & Định danh
+Cơ sở dữ liệu có thể được tạo qua Giao diện web hoặc API Control Plane:
+- **Định danh ID**: Định dạng `db_<nanoid(16)>` (ví dụ: `db_pMI8Tn-5MvVgh9-1`).
+- **Slug**: Chuỗi định danh an toàn URL (ví dụ: `production-store-db`).
+- **Định danh chủ sở hữu**: Ràng buộc với ID người dùng tạo để phục vụ phân quyền RBAC và tính toán hạn mức.
 
-### Phân nhánh / Nhân bản 1-Click (Branching & Cloning)
-VanillaDatabase hỗ trợ nhân bản cơ sở dữ liệu gần như tức thì:
-- Thực thi lệnh đồng bộ nguyên tử `PRAGMA wal_checkpoint(FULL)` trên database gốc.
-- Sao chép tệp tin sang một phiên bản khách thuê mới.
-- Khởi tạo bản ghi metadata tương ứng, cho phép kiểm thử môi trường staging/nhánh an toàn mà không ảnh hưởng tới dữ liệu production.
+### Nhân bản Database Tức thì (1-Click Branching)
+VanillaDatabase hỗ trợ nhân bản database ngay lập tức phục vụ môi trường staging hoặc thử nghiệm tính năng:
+1. Chạy `PRAGMA wal_checkpoint(FULL)` trên database gốc để đồng bộ dữ liệu vào tệp chính.
+2. Thực hiện sao chép nguyên tử tệp `.sqlite` trên ổ đĩa sang phiên bản tenant mới.
+3. Tạo bản ghi siêu dữ liệu độc lập. Các thao tác ghi trên bản sao hoàn toàn không ảnh hưởng đến dữ liệu production.
 
-### Các Tác vụ Bảo trì Định kỳ (Maintenance)
-Các tác vụ sau có thể chạy trực tiếp qua API (`POST /api/admin/databases/:id/maintenance`) hoặc trên Dashboard:
-1. `integrity_check`: Kiểm tra tính toàn vẹn toàn diện trên cây B-Tree, cấu trúc trang dữ liệu và các chỉ mục.
-2. `quick_check`: Kiểm tra nhanh tình trạng hệ thống và bỏ qua bước duyệt chỉ mục sâu.
-3. `wal_checkpoint`: Thực thi lệnh `PRAGMA wal_checkpoint(TRUNCATE)` để ghi toàn bộ dữ liệu từ tệp WAL vào tệp chính và thu hồi kích thước file WAL về 0 byte.
-4. `vacuum`: Chống phân mảnh các trang dữ liệu, hoàn trả dung lượng trống về hệ điều hành và tối ưu hóa cấu trúc lưu trữ.
-5. `reindex`: Tái tạo lại toàn bộ chỉ mục (index) trong cơ sở dữ liệu.
-6. `optimize`: Phân tích bảng dữ liệu và cập nhật bảng thống kê cho bộ lập kế hoạch truy vấn của SQLite.
+### Lệnh Bảo trì Hệ thống
+Các tác vụ quản trị sau có thể thực thi qua `POST /api/admin/databases/:id/maintenance`:
+- `integrity_check`: Chạy `PRAGMA integrity_check` kiểm tra tính toàn vẹn cấu trúc B-Tree, bảng cấp phát trang và chỉ mục.
+- `quick_check`: Kiểm tra nhanh bỏ qua quét chỉ mục phụ.
+- `wal_checkpoint`: Thực thi `PRAGMA wal_checkpoint(TRUNCATE)` để ghi sạch thay đổi từ file WAL vào file chính và đặt kích thước file WAL về 0 byte.
+- `vacuum`: Chống phân mảnh các trang dữ liệu và hoàn trả các khối trống về hệ điều hành máy chủ.
+- `reindex`: Tái xây dựng toàn bộ chỉ mục trên database.
+- `optimize`: Thu thập số liệu thống kê schema và tinh chỉnh ước lượng của bộ lập kế hoạch truy vấn SQLite.
 
 ---
 
-## 2. Hàm SQL Mở rộng Tích hợp Sẵn (Native Custom Functions)
+## 2. Hàm SQL Mở rộng Bản địa (Native Custom Functions)
 
-VanillaDatabase tích hợp sẵn các hàm mở rộng trực tiếp vào từng phiên bản SQLite:
+Mỗi kết nối SQLite được đăng ký sẵn các hàm mở rộng C/C++ trực tiếp:
 
-### Hàm Toán học Vector AI (Vector Embeddings & RAG)
-Phù hợp để lưu trữ mảng vector embedding trong các cột kiểu chuỗi JSON chuẩn:
+### Hàm Toán học AI Vector
+Hỗ trợ tính toán khoảng cách embedding vector lưu dưới dạng chuỗi JSON:
 
 ```sql
--- Tính toán độ tương đồng Cosine giữa hai mảng vector (1.0 = trùng khớp hoàn toàn, 0.0 = trực giao)
+-- Tính toán độ tương đồng Cosine (1.0 = trùng khớp tuyệt đối, 0.0 = trực giao)
 SELECT id, title,
        vec_cosine_similarity(embedding, '[0.012, 0.421, -0.198, 0.087]') as similarity
 FROM document_embeddings
@@ -44,23 +45,51 @@ WHERE similarity > 0.75
 ORDER BY similarity DESC
 LIMIT 5;
 
--- Tính khoảng cách Cosine (0.0 = trùng khớp, 2.0 = đối lập hoàn toàn)
+-- Tính khoảng cách Cosine (0.0 = trùng khớp tuyệt đối, 2.0 = đối lập)
 SELECT id, vec_cosine_distance(embedding, '[0.1, 0.2, 0.3]') as dist
 FROM items
 ORDER BY dist ASC;
 ```
 
-### Hàm Mật mã học Trực tiếp trong SQL (Native Crypto)
-- `encrypt_aes(plaintext, key)`: Mã hóa chuỗi văn bản bằng chuẩn xác thực AES-256-GCM.
-- `decrypt_aes(ciphertext, key)`: Giải mã chuỗi văn bản đã được mã hóa AES-256-GCM.
-- `hash_sha256(data)`: Tính toán mã băm SHA-256 dạng chuỗi hex tiêu chuẩn.
-- `hash_hmac(data, secret)`: Tính toán mã băm xác thực thông điệp HMAC-SHA256.
+### Hàm Mật mã học Trực tiếp trong SQL
+Mã hóa và băm dữ liệu trực tiếp trong câu lệnh:
+
+```sql
+-- Mã hóa dữ liệu nhạy cảm bằng chuẩn AES-256-GCM
+SELECT id, encrypt_aes(ssn_plaintext, 'khoa_bi_mat_256bit') as ssn_encrypted
+FROM customer_records;
+
+-- Giải mã chuỗi đã mã hóa
+SELECT id, decrypt_aes(ssn_encrypted, 'khoa_bi_mat_256bit') as ssn_plaintext
+FROM customer_records;
+
+-- Tính toán mã băm SHA-256
+SELECT hash_sha256('chuoi_can_bam');
+
+-- Tính toán chữ ký HMAC-SHA256
+SELECT hash_hmac('du_lieu_payload', 'khoa_ky_secret');
+```
 
 ---
 
-## 3. Hộp cát Bảo mật SQL (SQL Safety Sandbox)
+## 3. Giao dịch Lô Nguyên tử (Atomic Batch Transactions)
 
-Để đảm bảo tính an toàn cho mô hình đa khách thuê và độ ổn định của máy chủ, động cơ SQL từ chối nghiêm ngặt các câu lệnh nguy hiểm:
-- **`ATTACH DATABASE` & `DETACH DATABASE`**: Nghiêm cấm hoàn toàn nhằm ngăn chặn truy cập trái phép vào các tệp database lân cận.
-- **`load_extension()`**: Nghiêm cấm nhằm chặn nạp các thư viện nhị phân tùy ý từ bên ngoài.
-- **Các lệnh PRAGMA nguy hiểm**: Việc can thiệp trực tiếp vào `data_version`, `journal_mode` hoặc `foreign_keys` đều được kiểm soát và chặn nếu vi phạm chính sách an toàn.
+Tầng Data Plane hỗ trợ gửi lô nhiều câu lệnh SQL trong một giao dịch duy nhất qua `/v1/databases/:id/batch`:
+
+```json
+{
+  "transaction": true,
+  "statements": [
+    {
+      "sql": "UPDATE bank_accounts SET balance = balance - 100 WHERE id = ?;",
+      "params": ["acc_alice"]
+    },
+    {
+      "sql": "UPDATE bank_accounts SET balance = balance + 100 WHERE id = ?;",
+      "params": ["acc_bob"]
+    }
+  ]
+}
+```
+
+Nếu bất kỳ câu lệnh nào trong lô thất bại (vi phạm ràng buộc hoặc lỗi cú pháp), toàn bộ giao dịch được hoàn tác (rollback) lập tức, đảm bảo tính toàn vẹn tuyệt đối.

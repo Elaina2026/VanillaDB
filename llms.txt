@@ -1,0 +1,16 @@
+# VanillaDatabase (VanillaDB)
+
+> Enterprise-Grade Multi-Tenant SQLite Cloud Engine with High-Performance REST & SQL APIs, Live Server-Sent Events (SSE), Database-Scoped Media Streaming (HTTP 206), AES-256-GCM Encryption at Rest, Automated Backups, and Native Vector Mathematics.
+
+- Docs Hub: https://github.com/Elaina2026/VanillaDB/blob/main/docs/README.md
+- Full English Wiki: https://github.com/Elaina2026/VanillaDB/blob/main/docs/en/Home.md
+- Full Vietnamese Wiki: https://github.com/Elaina2026/VanillaDB/blob/main/docs/vi/Home.md
+- LLM Architecture Context: https://github.com/Elaina2026/VanillaDB/blob/main/llms.md
+- Agent Guidelines: https://github.com/Elaina2026/VanillaDB/blob/main/AGENTS.md
+
+## Core Technical Specs
+- Runtime: Node.js 22+ with native better-sqlite3 (WAL Mode)
+- Web Framework: Fastify 5.2 (REST and SSE)
+- Security: Argon2id password hashing, HMAC SHA-256 session cookies with token versioning (VDB-SEC-01), RFC 6238 TOTP with monotonic step replay protection (VDB-SEC-02), SSRF LAN blocking, AES-256-GCM media encryption
+- Frontend: React 19, Tailwind CSS v4, Monaco SQL Editor, Lucide Icons, Full Bilingual (EN/VI)
+- Testing: Vitest end-to-end test suite (94 passed tests)

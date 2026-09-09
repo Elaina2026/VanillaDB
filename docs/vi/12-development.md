@@ -1,50 +1,68 @@
-# Hướng dẫn Phát triển & Đóng góp Mã nguồn
+# Hướng dẫn Phát triển Mã nguồn & Đóng góp
 
-Tài liệu hướng dẫn dành cho các nhà phát triển muốn tham gia đóng góp mã nguồn, chạy đo lường hiệu năng (benchmark) hoặc mở rộng tính năng cho **VanillaDatabase**.
+Cẩm nang chi tiết dành cho các nhà phát triển mong muốn đóng góp, mở rộng tính năng hoặc đo lường hiệu năng của **VanillaDatabase**.
 
 ---
 
 ## 1. Quy trình Phát triển Cục bộ
 
-### Thiết lập Môi trường Phát triển
+### Thiết lập Môi trường Local
 ```bash
-# Sao chép kho mã nguồn
+# Tải mã nguồn dự án
 git clone https://github.com/Elaina2026/VanillaDB.git
-cd VanillaDatabase
+cd VanillaDB
 
 # Cài đặt các gói phụ thuộc
 npm install
 
-# Khởi chạy máy chủ phát triển với chế độ tải lại tự động (hot reload)
+# Khởi chạy môi trường phát triển với hot-reload
 npm run dev
 ```
 
+Môi trường phát triển sẽ khởi động đồng thời Fastify và Vite dev server với tính năng Hot Module Replacement (HMR) cho giao diện web.
+
 ---
 
-## 2. Kiểm thử Tự động & Kiểm tra Chất lượng Mã nguồn
+## 2. Kiểm thử Tự động & Đảm bảo Chất lượng
 
-### Chạy Bộ Kiểm thử Tự động (Vitest)
+### Chạy Kiểm thử Vitest
 ```bash
 npm test
 ```
-Chạy toàn bộ bộ kiểm thử tích hợp nhằm xác minh:
-- Quy trình xác thực và khởi tạo tài khoản quản trị ban đầu.
-- Thực thi câu lệnh SQL tham số hóa và hộp cát bảo mật an toàn.
-- Phân quyền API Token theo phạm vi và giới hạn tần suất gọi API.
-- Giao dịch batch nguyên tử kèm cơ chế tự động hoàn tác khi xảy ra lỗi.
-- Tải lên tệp media, mã hóa tĩnh AES-256-GCM và phát luồng HTTP 206 Partial Content.
-- Tạo bản sao lưu, khôi phục dữ liệu và kiểm tra toàn vẹn checksum SHA-256.
-- Bộ phát sự kiện Webhook ký mã hóa HMAC-SHA256.
-- Các hàm toán học tính toán vector AI tùy biến.
-- Xác thực hai yếu tố (2FA TOTP) và quy trình khôi phục bằng mã dự phòng.
+Toàn bộ 94 bài kiểm thử tích hợp xác thực:
+- Thiết lập quản trị viên ban đầu và cơ chế đăng nhập.
+- Thực thi SQL an toàn qua hộp cát và tham số hóa.
+- Phân quyền token theo phạm vi và danh sách bảng cho phép/chặn.
+- Giao dịch nguyên tử theo lô với bảo đảm rollback an toàn.
+- Kho lưu trữ media mã hóa AES-256-GCM và phát luồng HTTP 206 Partial Content.
+- Tạo bản sao lưu ảnh chụp mã hóa, phục hồi và kiểm tra toàn vẹn mã băm SHA-256.
+- Gửi webhook bất đồng bộ kèm chữ ký HMAC và tường lửa chặn SSRF.
+- Hàm AI vector bản địa (`vec_cosine_similarity()`, `vec_cosine_distance()`).
+- Thu hồi phiên làm việc tức thì khi thay đổi mật khẩu (`VDB-SEC-01`).
+- Chống phát lại mã xác thực TOTP 2FA theo RFC 6238 (`VDB-SEC-02`).
 
-### Kiểm tra Kiểu dữ liệu TypeScript
+### Kiểm tra Biên dịch & Kiểu dữ liệu TypeScript
 ```bash
+# Biên dịch giao diện và mã nguồn máy chủ
+npm run build
+
+# Chỉ chạy kiểm tra kiểu dữ liệu
 npm run typecheck
 ```
 
-### Đo lường Hiệu năng Thực tế (Benchmark)
+### Đo điểm Hiệu năng (Benchmark)
 ```bash
 npm run benchmark
 ```
-Thực hiện các bài đo tải với độ đồng thời cao nhằm đánh giá thông lượng xử lý và độ trễ (p50, p95, p99) cho các thao tác chèn đơn lẻ, đọc dữ liệu song song và giao dịch theo lô.
+Đo đạc thông lượng xử lý và phân phối độ trễ (p50, p95, p99) khi ghi đơn, đọc song song và giao dịch hàng loạt.
+
+---
+
+## 3. Quy chuẩn Đóng góp & Tạo Pull Request
+
+Trước khi gửi Pull Request:
+1. Đảm bảo toàn bộ 94 bài kiểm thử Vitest vượt qua mà không có lỗi hồi quy.
+2. Khẳng định lệnh `npm run build` kết thúc thành công với 0 lỗi TypeScript.
+3. Tuân thủ phong cách lập trình: Fastify route schemas, Zod validation và Pino logger.
+4. Đồng bộ tài liệu song ngữ tại cả `docs/en/` và `docs/vi/`.
+5. Tuyệt đối không sử dụng các biểu tượng unicode emoji thông thường trong tài liệu, commit message hoặc log hệ thống.

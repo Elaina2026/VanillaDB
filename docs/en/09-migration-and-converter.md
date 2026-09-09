@@ -1,40 +1,42 @@
 # Multi-Database Dialect Importer & Converter
 
-VanillaDatabase features a built-in multi-dialect SQL and document translator that automatically ingests dumps from other database systems and converts them into SQLite.
+Technical guide for ingesting and converting database dumps from MySQL, PostgreSQL, MongoDB / NDJSON, CSV, and native binary SQLite databases into **VanillaDatabase**.
 
 ---
 
-## 1. Supported Formats & Conversions
+## 1. Supported Formats & Conversion Pipeline
 
-### 1. MySQL Dumps (`.sql`, `.dump`)
-- Strips backticks (`` `users` `` $\rightarrow$ `"users"`).
-- Translates `AUTO_INCREMENT` to `INTEGER PRIMARY KEY AUTOINCREMENT`.
-- Maps MySQL column types (`VARCHAR`, `TINYINT`, `DATETIME`, `JSON`, `ENUM`) to standard SQLite storage affinities (`TEXT`, `INTEGER`, `REAL`, `BLOB`).
-- Strips MySQL table options (`ENGINE=InnoDB`, `DEFAULT CHARSET=utf8mb4`, `COLLATE=...`).
-- Extracts inline `KEY` and `INDEX` definitions into separate `CREATE INDEX` statements.
+VanillaDatabase incorporates an in-engine SQL dialect translator (`src/server/utils/sqlTranslator.ts`) to ingest external database schemas and data files without third-party ETL tools.
 
-### 2. PostgreSQL Dumps (`.sql`, `.dump`)
-- Translates `SERIAL` and `BIGSERIAL` $\rightarrow$ `INTEGER PRIMARY KEY AUTOINCREMENT`.
-- Removes schema prefixes (`"public"."users"` $\rightarrow$ `"users"`).
-- Maps PostgreSQL types (`BYTEA`, `TIMESTAMPTZ`, `JSONB`, `UUID`, `CITEXT`, `FLOAT8`) to SQLite types.
-- Translates `COPY table (col1, col2) FROM stdin; ... \.` blocks into atomic `INSERT INTO` batches.
+### 1.1. MySQL Dumps (`.sql`, `.dump`)
+- Replaces backtick quotes with standard SQLite identifier quotes.
+- Converts `AUTO_INCREMENT` column definitions to `INTEGER PRIMARY KEY AUTOINCREMENT`.
+- Maps MySQL specific datatypes (`VARCHAR`, `TINYINT`, `DATETIME`, `JSON`, `ENUM`) to standard SQLite storage affinities (`TEXT`, `INTEGER`, `REAL`, `BLOB`).
+- Strips unsupported storage options (`ENGINE=InnoDB`, `DEFAULT CHARSET=utf8mb4`, `COLLATE=...`).
+- Extracts inline `KEY` and `INDEX` clauses into standalone `CREATE INDEX` statements.
 
-### 3. MongoDB & NDJSON / JSON (`.json`, `.ndjson`, `.jsonl`)
-- Automatically samples records to infer column data types (`INTEGER`, `REAL`, `TEXT`).
-- Generates `CREATE TABLE` DDL and inserts all records in an atomic batch.
+### 1.2. PostgreSQL Dumps (`.sql`, `.dump`)
+- Converts `SERIAL` and `BIGSERIAL` to `INTEGER PRIMARY KEY AUTOINCREMENT`.
+- Strips PostgreSQL schema namespace prefixes (e.g. `"public"."users"` -> `"users"`).
+- Normalizes PostgreSQL types (`BYTEA`, `TIMESTAMPTZ`, `JSONB`, `UUID`, `CITEXT`, `FLOAT8`).
+- Parses PostgreSQL `COPY table (col1, col2) FROM stdin; ... \.` data blocks and transforms them into atomic `INSERT INTO` batches.
 
-### 4. CSV Files (`.csv`)
-- Parses headers and inserts rows into existing tables or auto-creates a table.
+### 1.3. MongoDB, JSON & NDJSON (`.json`, `.ndjson`, `.jsonl`)
+- Samples input documents to automatically infer schema columns and storage types (`INTEGER`, `REAL`, `TEXT`).
+- Generates a matching `CREATE TABLE` DDL and streams document records in transactional batches.
 
-### 5. SQLite Binary Databases (`.sqlite`, `.db`)
-- Directly replaces the tenant database binary after checking the `SQLite format 3` header signature.
+### 1.4. CSV Spreadsheets (`.csv`)
+- Parses header row and inserts records into specified target tables or infers a new table schema.
+
+### 1.5. Native Binary SQLite Databases (`.sqlite`, `.db`)
+- Directly loads native binary databases after verifying the `SQLite format 3` 16-byte magic header signature.
 
 ---
 
-## 2. Exporting Data
+## 2. Export Formats
 
-Databases can be exported via `GET /api/admin/databases/:id/export?format=<format>`:
-- **`sql`**: Generates a standard SQL dump with `CREATE TABLE` and `INSERT INTO` statements wrapped in a transaction.
-- **`sqlite` / `db`**: Flushes the WAL journal (`PRAGMA wal_checkpoint(PASSIVE)`) and downloads the raw `.sqlite` binary file.
-- **`json`**: Exports rows as a JSON array.
-- **`csv`**: Exports rows as CSV with comma delimiters and escaped quotes.
+Tenant databases can be exported via `GET /api/admin/databases/:id/export?format=<format>`:
+- **`sql`**: Generates a standard SQL dump containing DDL statements and `INSERT INTO` records wrapped in a transaction.
+- **`sqlite` / `db`**: Flushes the active WAL journal via `PRAGMA wal_checkpoint(PASSIVE)` and streams the raw binary file.
+- **`json`**: Exports table data formatted as an array of JSON objects.
+- **`csv`**: Exports table rows formatted as CSV with standard RFC 4180 escaping.

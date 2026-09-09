@@ -8,10 +8,10 @@ The VanillaDatabase maintainers take security seriously. We appreciate responsib
 
 Security patches and updates are actively provided for:
 
-| Version | Supported |
+| Version | Supported Status |
 | :--- | :--- |
-| `1.x` | ✅ Yes |
-| `< 1.0.0` | ❌ No |
+| `1.x` | Active Support |
+| `< 1.0.0` | End of Life (Unsupported) |
 
 ---
 
