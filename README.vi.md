@@ -39,7 +39,7 @@
 Thay vì phải duy trì các cụm cơ sở dữ liệu cồng kềnh cho từng khách hàng, dự án nhỏ hoặc microservices, VanillaDatabase tự động khởi tạo và điều phối các **cơ sở dữ liệu SQLite độc lập** trực tiếp trên ổ đĩa. Mỗi cơ sở dữ liệu tenant vận hành như một thực thể lưu trữ riêng biệt với tệp nhật ký WAL, khóa API token phân quyền, bản sao lưu mã hóa, kho lưu trữ media, webhook bất đồng bộ và luồng dữ liệu thời gian thực.
 
 > [!NOTE]
-> Tất cả cơ sở dữ liệu tenant được cô lập hoàn toàn tại đường dẫn `data/databases/:id.sqlite`. Siêu dữ liệu hệ thống (metadata) được phân vùng độc lập tại `data/system/vanilladb.sqlite`.
+> **Cam kết cô lập:** Tất cả cơ sở dữ liệu tenant được cô lập hoàn toàn tại đường dẫn `data/databases/:id.sqlite`. Siêu dữ liệu hệ thống (metadata) được phân vùng độc lập tại `data/system/vanilladb.sqlite`.
 
 ---
 
@@ -82,40 +82,40 @@ Thay vì phải duy trì các cụm cơ sở dữ liệu cồng kềnh cho từn
 
 ## Tính năng cốt lõi
 
-### [ENGINE] Điều phối Động cơ SQLite Đa người thuê
+### <img src="https://img.shields.io/badge/%C4%90%E1%BB%98NG%20C%C6%A0-SQLite%20WAL-003b57?style=flat-square&logo=sqlite&logoColor=white" height="20" alt="Động cơ" /> Điều phối Động cơ SQLite Đa người thuê
 - Tự động sinh cơ sở dữ liệu SQLite biệt lập theo định danh nanoid (`db_<nanoid>`).
 - Kích hoạt chế độ Write-Ahead Logging (WAL), cơ chế thử lại khi bận (busy-timeout retry), ràng buộc khóa ngoại (foreign keys) và lưu bộ nhớ đệm kết nối.
 - Đăng ký sẵn các hàm toán học khoảng cách và tương đồng AI vector: `vec_cosine_similarity()`, `vec_cosine_distance()`.
 - Tích hợp hàm mật mã trực tiếp trong câu lệnh SQL: `encrypt_aes()`, `decrypt_aes()`, `hash_sha256()`, `hash_hmac()`.
 
-### [SECURITY] Phòng thủ Chiều sâu & Chuẩn Mật mã OWASP
+### <img src="https://img.shields.io/badge/B%E1%BA%A2O%20M%E1%BA%ACT-OWASP%20Hardened-10b981?style=flat-square&logo=securityscorecard&logoColor=white" height="20" alt="Bảo mật" /> Phòng thủ Chiều sâu & Chuẩn Mật mã OWASP
 - **Thu hồi phiên làm việc tức thì (VDB-SEC-01):** Chữ ký HMAC của session cookie ràng buộc chặt chẽ với `token_version` của người dùng. Mọi hành vi đổi mật khẩu hoặc vô hiệu hóa tài khoản từ admin sẽ hủy hiệu lực của phiên cũ ngay lập tức trên toàn bộ thiết bị.
 - **Chống phát lại mã TOTP 2FA (VDB-SEC-02):** Lưu vết bước thời gian đơn điệu (`last_totp_step`) tuân thủ nghiêm ngặt chuẩn RFC 6238 Mục 5.2. Mã xác thực 6 số không thể bị sử dụng lại lần thứ hai trong cùng cửa sổ trôi dạt 90 giây.
 - **Tường lửa Chặn SSRF:** Webhook gửi ra ngoài chặn hoàn toàn dải mạng riêng tư (RFC 1918), địa chỉ loopback (`127.0.0.0/8`), link-local và điểm cuối siêu dữ liệu đám mây (`169.254.169.254`).
 - **Mã hóa Dữ liệu Tĩnh (Data-at-Rest):** Mã hóa phong bì AES-256-GCM kèm tiêu đề xác thực (`VENC` signature, PBKDF2 salt, 128-bit authentication tag).
 - **Cách ly Hộp cát Engine:** Các lệnh nguy hiểm như `ATTACH DATABASE`, `DETACH DATABASE` và nạp module nhị phân `load_extension` bị vô hiệu hóa vĩnh viễn ở tầng lõi.
 
-### [RBAC] Phân quyền Đa cấp độ & Hạn ngạch Quota
+### <img src="https://img.shields.io/badge/PH%C3%82N%20QUY%E1%BB%80N-RBAC%20Quotas-6366f1?style=flat-square&logo=auth0&logoColor=white" height="20" alt="Phân quyền" /> Phân quyền Đa cấp độ & Hạn ngạch Quota
 - Ba vai trò hệ thống: `super_admin`, `admin`, `user`.
 - Bốn vai trò trong từng cơ sở dữ liệu: `owner`, `admin`, `editor`, `viewer`.
 - Kiểm soát hạn mức số lượng cơ sở dữ liệu (`max_databases`) và giới hạn tốc độ truy vấn theo người dùng (`rate_limit_per_minute`).
 - Tự đăng ký tài khoản với chính sách cấp phát hạn mức tự động.
 
-### [API] Khóa Token Phân quyền Tinh gọn
+### <img src="https://img.shields.io/badge/API-REST%20%26%20SQL-000000?style=flat-square&logo=fastify&logoColor=white" height="20" alt="API" /> Khóa Token Phân quyền Tinh gọn
 - Sinh khóa API token với tiền tố `vdb_live_*` hoặc `vdb_test_*`.
 - Phạm vi quyền hạn chi tiết: `database:read`, `database:write`, `database:ddl`, `database:admin`.
 - Danh sách bảng cho phép (allowlist) và chặn truy cập (denylist).
 - Không bao giờ lưu token thô; cơ sở dữ liệu chỉ lưu bản băm SHA-256.
 
-### [REALTIME] Phát Sự kiện SSE & Webhooks Bất đồng bộ
+### <img src="https://img.shields.io/badge/REALTIME-SSE%20Stream-3b82f6?style=flat-square&logo=socketdotio&logoColor=white" height="20" alt="Realtime" /> Phát Sự kiện SSE & Webhooks Bất đồng bộ
 - Luồng Server-Sent Events tại `/v1/databases/:id/realtime` phát đi các thay đổi dữ liệu bảng (`insert`, `update`, `delete`, `schema`).
 - Hệ thống webhook gửi sự kiện bất đồng bộ kèm chữ ký bảo mật HMAC-SHA256 (`X-Vanilla-Signature`), tự động thử lại khi lỗi và định dạng sẵn thông báo Discord/Slack.
 
-### [STORAGE] Kho Lưu trữ Media & Phát luồng HTTP 206
+### <img src="https://img.shields.io/badge/L%C6%AFU%20TR%E1%BB%AE-HTTP%20206-8b5cf6?style=flat-square&logo=ipfs&logoColor=white" height="20" alt="Lưu trữ" /> Kho Lưu trữ Media & Phát luồng HTTP 206
 - Lưu trữ tệp tin theo phạm vi cơ sở dữ liệu với cơ chế mã hóa khối trong suốt.
 - Hỗ trợ tiêu đề `Range` của HTTP 206 Partial Content cho phép nghe nhạc, xem video mượt mà, hỗ trợ tua đến từng vị trí bất kỳ.
 
-### [UX] Bảng điều khiển Quản trị & Ma trận Phím tắt Song ngữ
+### <img src="https://img.shields.io/badge/GIAO%20DI%E1%BB%86N-React%2019-3178c6?style=flat-square&logo=react&logoColor=white" height="20" alt="Giao diện" /> Bảng điều khiển Quản trị & Ma trận Phím tắt Song ngữ
 - Giao diện quản trị hiện đại, mượt mà được xây dựng bằng React 19, Tailwind CSS v4, Lucide icons và trình soạn thảo Monaco SQL Editor.
 - Hỗ trợ song ngữ toàn diện (Tiếng Việt & English) trên tất cả các trang, thông báo và modal.
 - Hệ thống phím tắt tích hợp: Vim chords (`G+D`, `G+I`), thu gọn sidebar (`Ctrl+\`), thao tác soạn thảo SQL (`Ctrl+Enter`, `Ctrl+E`, `Ctrl+S`, `Alt+Up/Down`, `F11`) và duyệt bảng dữ liệu (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).

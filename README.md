@@ -39,7 +39,7 @@ VanillaDatabase (VanillaDB) is a self-hosted, lightweight multi-tenant SQLite cl
 Rather than running monolithic database clusters for every client, project, or microservice, VanillaDatabase dynamically provisions and orchestrates **isolated SQLite database instances** on disk. Each tenant database functions as an independent storage unit with dedicated Write-Ahead Logging (WAL), scoped API tokens, encrypted backups, media storage, asynchronous webhooks, and live event streams.
 
 > [!NOTE]
-> All tenant databases operate with strict isolation under `data/databases/:id.sqlite`. System metadata is partitioned separately under `data/system/vanilladb.sqlite`.
+> **Isolation Guarantee:** All tenant databases operate with strict filesystem isolation under `data/databases/:id.sqlite`. System metadata is partitioned separately under `data/system/vanilladb.sqlite`.
 
 ---
 
@@ -82,40 +82,40 @@ Rather than running monolithic database clusters for every client, project, or m
 
 ## Key Capabilities
 
-### [ENGINE] Multi-Tenant SQLite Orchestration
+### <img src="https://img.shields.io/badge/ENGINE-SQLite%20WAL-003b57?style=flat-square&logo=sqlite&logoColor=white" height="20" alt="Engine" /> Multi-Tenant SQLite Orchestration
 - Dynamic creation of dedicated SQLite databases identified by nanoid (`db_<nanoid>`).
 - Native Write-Ahead Logging (WAL mode), busy-timeout retry handling, foreign key enforcement, and memory-cached connection pooling.
 - AI vector distance and similarity functions (`vec_cosine_similarity()`, `vec_cosine_distance()`) registered natively.
 - Cryptographic SQL functions: `encrypt_aes()`, `decrypt_aes()`, `hash_sha256()`, `hash_hmac()`.
 
-### [SECURITY] OWASP Hardened & Cryptographic Defense
+### <img src="https://img.shields.io/badge/SECURITY-OWASP%20Hardened-10b981?style=flat-square&logo=securityscorecard&logoColor=white" height="20" alt="Security" /> OWASP Hardened & Cryptographic Defense
 - **Session Revocation (VDB-SEC-01):** HMAC cookie signatures bind user `token_version`. Password changes and account disabling revoke active sessions immediately across all clients.
 - **TOTP Replay Protection (VDB-SEC-02):** Monotonic time-step tracking enforcing RFC 6238 Section 5.2. OTP codes cannot be reused within the 90-second drift tolerance window.
 - **SSRF Network Blocker:** Outbound webhooks block loopback (`127.0.0.0/8`), private subnets (RFC 1918), link-local addresses, and cloud metadata endpoints (`169.254.169.254`).
 - **Data-at-Rest Encryption:** AES-256-GCM envelope encryption with authenticated headers (`VENC` signature, PBKDF2 salt, 128-bit authentication tag).
 - **Engine Sandboxing:** `ATTACH DATABASE`, `DETACH DATABASE`, and binary extension loading (`load_extension`) are permanently disabled.
 
-### [RBAC] Multi-User Access Control & Quotas
+### <img src="https://img.shields.io/badge/RBAC-Multi--User-6366f1?style=flat-square&logo=auth0&logoColor=white" height="20" alt="RBAC" /> Multi-User Access Control & Quotas
 - Three system roles: `super_admin`, `admin`, `user`.
 - Database membership roles: `owner`, `admin`, `editor`, `viewer`.
 - Granular database quantity quotas (`max_databases`) and per-user request throttling (`rate_limit_per_minute`).
 - Self-service registration with automatic quota assignment.
 
-### [API] Scoped Token System
+### <img src="https://img.shields.io/badge/API-REST%20%26%20SQL-000000?style=flat-square&logo=fastify&logoColor=white" height="20" alt="API" /> Scoped Token System
 - Generate tokens prefixed with `vdb_live_*` or `vdb_test_*`.
 - Granular scopes: `database:read`, `database:write`, `database:ddl`, `database:admin`.
 - Table-level allowlists and denylists.
 - Raw tokens are never stored; only SHA-256 hashes are persisted in system metadata.
 
-### [REALTIME] Server-Sent Events & Webhooks
+### <img src="https://img.shields.io/badge/REALTIME-SSE%20Stream-3b82f6?style=flat-square&logo=socketdotio&logoColor=white" height="20" alt="Realtime" /> Server-Sent Events & Webhooks
 - SSE streaming endpoint at `/v1/databases/:id/realtime` dispatching database mutations (`insert`, `update`, `delete`, `schema`).
 - Webhook dispatcher with HMAC-SHA256 request signing (`X-Vanilla-Signature`), payload retries, and Discord/Slack formatting.
 
-### [STORAGE] Media Assets & HTTP 206 Streaming
+### <img src="https://img.shields.io/badge/STORAGE-HTTP%20206-8b5cf6?style=flat-square&logo=ipfs&logoColor=white" height="20" alt="Storage" /> Media Assets & HTTP 206 Streaming
 - Database-scoped file storage with transparent chunked encryption.
 - HTTP 206 Partial Content range requests for audio and video scrubbing.
 
-### [UX] Enterprise Dashboard & Bilingual Matrix
+### <img src="https://img.shields.io/badge/UX-React%2019-3178c6?style=flat-square&logo=react&logoColor=white" height="20" alt="Dashboard" /> Enterprise Dashboard & Bilingual Matrix
 - Modern single-page management console built with React 19, Tailwind CSS v4, Lucide icons, and Monaco SQL Editor.
 - Complete bilingual support (English & Tiếng Việt) across all pages and notifications.
 - Integrated keyboard shortcuts: Vim chords (`G+D`, `G+I`), collapsible sidebar (`Ctrl+\`), SQL console operations (`Ctrl+Enter`, `Ctrl+E`, `Ctrl+S`, `Alt+Up/Down`, `F11`), and table browser hotkeys (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).
