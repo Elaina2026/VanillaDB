@@ -25,9 +25,9 @@
 - Use professional bracketed semantic markers (`[CORE]`, `[SECURITY]`, `[API]`, `[NOTE]`, `[WARN]`) or GitHub Markdown callouts.
 
 ## Automatic Memory & Context Retention
-- Always automatically persist important architectural decisions, security fixes, and milestone summaries into AgentMemory and `.claude/projects/.../memory/session-history-chronology.md` in the background.
+- Always persist important architectural decisions, security fixes, and milestone summaries into `.claude/projects/.../memory/session-history-chronology.md` in the background.
+- Memory capture is automated via `claude-mem` (hooks capture tool uses, edits, and session summaries into `~/.claude-mem`).
 - Never wait for the user to request manual memory saving.
-- Automatically register new lessons learned via `memory_lesson_save`.
 
 ## Development & Test Commands
 - Run test suite: `npm test` (94 Vitest tests passing)
