@@ -205,6 +205,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       resource: 'system',
       result: 'success',
       requestId: req.id,
+      details: JSON.stringify({ ip: req.ip || '127.0.0.1' }),
     });
 
     return reply.status(201).send({
@@ -289,6 +290,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       resource: 'auth',
       result: 'success',
       requestId: req.id,
+      details: JSON.stringify({ ip: req.ip || '127.0.0.1' }),
     });
 
     return reply.send({
@@ -438,6 +440,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       resource: 'auth',
       result: 'success',
       requestId: req.id,
+      details: JSON.stringify({ ip: req.ip || '127.0.0.1' }),
     });
 
     return reply.send({

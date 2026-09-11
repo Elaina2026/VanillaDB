@@ -1968,6 +1968,220 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  fastify.post('/users/:userId/revoke-sessions', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+    const { userId } = req.params as { userId: string };
+    const user = authService.getUserById(userId);
+    if (!user) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+      });
+    }
+
+    try {
+      const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+      metaDb.prepare('UPDATE users SET token_version = token_version + 1, updated_at = ? WHERE id = ?').run(Date.now(), userId);
+
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'user.revoke_sessions',
+        resource: userId,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ targetUsername: user.username }),
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          userId,
+          token_version: (user.token_version || 1) + 1,
+        },
+      });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'REVOKE_SESSIONS_ERROR', message: err.message },
+      });
+    }
+  });
+
+  fastify.post('/users/bulk', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+    const BulkSchema = z.object({
+      userIds: z.array(z.string().min(1)).min(1),
+      action: z.enum(['activate', 'disable', 'revoke_sessions', 'set_role']),
+      role: z.enum(['super_admin', 'admin', 'user']).optional(),
+    });
+
+    const parsed = BulkSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid bulk action parameters', details: parsed.error.issues },
+      });
+    }
+
+    const { userIds, action, role } = parsed.data;
+    if (action === 'set_role' && !role) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'ROLE_REQUIRED', message: 'Role parameter is required for set_role action' },
+      });
+    }
+
+    // Always exclude calling user to prevent accidental self-lockout/self-modification
+    const targetIds = userIds.filter(id => id !== req.adminUser?.userId);
+    if (targetIds.length === 0) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'CANNOT_MODIFY_SELF', message: 'Cannot perform bulk action on current account' },
+      });
+    }
+
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+
+    // Guard: Prevent disabling or demoting all super_admins
+    if (action === 'disable' || (action === 'set_role' && role !== 'super_admin')) {
+      const ph = targetIds.map(() => '?').join(', ');
+      const affectedSuperAdmins = metaDb.prepare(
+        `SELECT COUNT(*) as count FROM users WHERE id IN (${ph}) AND role = 'super_admin'`
+      ).get(...targetIds) as { count: number };
+
+      const totalSuperAdmins = metaDb.prepare(
+        `SELECT COUNT(*) as count FROM users WHERE role = 'super_admin' AND status = 'active'`
+      ).get() as { count: number };
+
+      if (totalSuperAdmins.count - affectedSuperAdmins.count < 1) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'CANNOT_DISABLE_LAST_SUPER_ADMIN', message: 'Cannot disable or demote the last active super_admin' },
+        });
+      }
+    }
+
+    try {
+      const now = Date.now();
+      const ph = targetIds.map(() => '?').join(', ');
+
+      metaDb.exec('BEGIN TRANSACTION;');
+      try {
+        if (action === 'activate') {
+          metaDb.prepare(`UPDATE users SET status = 'active', updated_at = ? WHERE id IN (${ph})`).run(now, ...targetIds);
+        } else if (action === 'disable') {
+          metaDb.prepare(`UPDATE users SET status = 'disabled', token_version = token_version + 1, updated_at = ? WHERE id IN (${ph})`).run(now, ...targetIds);
+        } else if (action === 'revoke_sessions') {
+          metaDb.prepare(`UPDATE users SET token_version = token_version + 1, updated_at = ? WHERE id IN (${ph})`).run(now, ...targetIds);
+        } else if (action === 'set_role') {
+          metaDb.prepare(`UPDATE users SET role = ?, token_version = token_version + 1, updated_at = ? WHERE id IN (${ph})`).run(role!, now, ...targetIds);
+        }
+        metaDb.exec('COMMIT;');
+      } catch (innerErr) {
+        metaDb.exec('ROLLBACK;');
+        throw innerErr;
+      }
+
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: `users.bulk_${action}`,
+        resource: targetIds.join(','),
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ affectedCount: targetIds.length, action, role }),
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          affectedCount: targetIds.length,
+          skippedSelf: userIds.length !== targetIds.length,
+        },
+      });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'BULK_ACTION_ERROR', message: err.message },
+      });
+    }
+  });
+
+  fastify.get('/users/:userId/summary', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
+    const { userId } = req.params as { userId: string };
+    const user = authService.getUserById(userId);
+    if (!user) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+      });
+    }
+
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+
+    // 1. Recent IP from audit_logs
+    let recentIp = '127.0.0.1';
+    const auditIpRow = metaDb.prepare(
+      `SELECT details FROM audit_logs WHERE user = ? AND details LIKE '%"ip":%' ORDER BY timestamp DESC LIMIT 1`
+    ).get(user.username) as { details: string } | undefined;
+    if (auditIpRow?.details) {
+      try {
+        const parsed = JSON.parse(auditIpRow.details);
+        if (parsed.ip) recentIp = parsed.ip;
+      } catch {}
+    }
+
+    // 2. SQL queries in last 24h
+    activityService.flush();
+    const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
+    const queryCountRow = metaDb.prepare(`
+      SELECT COUNT(*) as count FROM activity_logs
+      WHERE timestamp >= ? AND (token_id LIKE ? OR database_id IN (SELECT id FROM databases WHERE owner_id = ?))
+    `).get(cutoff24h, `%${user.username}%`, user.id) as { count: number } | undefined;
+    const sqlQueries24h = queryCountRow?.count || 0;
+
+    // 3. Owned databases with actual disk size
+    const dbRows = metaDb.prepare(
+      `SELECT id, name, slug, description, max_size_mb, created_at FROM databases WHERE owner_id = ? ORDER BY created_at DESC`
+    ).all(user.id) as Array<{ id: string; name: string; slug: string; description: string | null; max_size_mb: number | null; created_at: number }>;
+
+    const databases = dbRows.map(d => {
+      let sizeBytes = 0;
+      try {
+        const dbPath = dbManager.resolveDatabasePath(d.id);
+        if (fs.existsSync(dbPath)) {
+          sizeBytes += fs.statSync(dbPath).size;
+          const walPath = `${dbPath}-wal`;
+          if (fs.existsSync(walPath)) {
+            sizeBytes += fs.statSync(walPath).size;
+          }
+        }
+      } catch {}
+      return {
+        id: d.id,
+        name: d.name,
+        slug: d.slug,
+        description: d.description,
+        sizeBytes,
+        maxSizeMb: d.max_size_mb,
+        createdAt: d.created_at,
+      };
+    });
+
+    // 4. Recent 10 audit events for this user
+    const recentAuditEvents = metaDb.prepare(
+      `SELECT id, user, action, resource, result, request_id, details, timestamp FROM audit_logs WHERE user = ? OR resource = ? ORDER BY timestamp DESC LIMIT 10`
+    ).all(user.username, user.id);
+
+    return reply.send({
+      success: true,
+      data: {
+        user,
+        recentIp,
+        sqlQueries24h,
+        databases,
+        recentAuditEvents,
+      },
+    });
+  });
+
   // Scheduled Jobs (Cron Tasks)
   fastify.get('/databases/:id/jobs', async (req, reply) => {
     const { id } = req.params as { id: string };

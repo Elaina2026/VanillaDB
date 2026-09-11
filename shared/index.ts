@@ -423,6 +423,32 @@ export interface DatabaseRateLimitWarning {
   percentage: number;
 }
 
+export interface UserSummaryDatabase {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  sizeBytes: number;
+  maxSizeMb: number | null;
+  createdAt: number;
+}
+
+export interface UserSummaryResponse {
+  user: UserRecord;
+  recentIp: string;
+  sqlQueries24h: number;
+  databases: UserSummaryDatabase[];
+  recentAuditEvents: AuditRecord[];
+}
+
+export type BulkUserAction = 'activate' | 'disable' | 'revoke_sessions' | 'set_role';
+
+export interface BulkUserActionRequest {
+  userIds: string[];
+  action: BulkUserAction;
+  role?: UserRole;
+}
+
 export interface UserDashboardStats {
   databasesCount: number;
   maxDatabases: number;
