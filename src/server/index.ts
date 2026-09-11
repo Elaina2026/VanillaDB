@@ -86,12 +86,12 @@ export async function buildApp() {
     loggerInstance: logger,
     trustProxy: config.trustProxy,
     bodyLimit: config.maxRequestBodyMb * 1024 * 1024,
-    // Native HTTP timeouts block Slowloris socket exhaustion
-    connectionTimeout: 10_000,
-    requestTimeout: 30_000,
-    keepAliveTimeout: 5_000,
+    // Native HTTP timeouts configured to prevent premature ECONNRESET on large batch/media operations
+    connectionTimeout: 30_000,
+    requestTimeout: 120_000,
+    keepAliveTimeout: 15_000,
   });
-  app.server.headersTimeout = 10_000;
+  app.server.headersTimeout = 35_000;
 
   // Parse empty JSON body safely
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body: string, done) => {
@@ -221,19 +221,25 @@ export async function buildApp() {
       });
     }
 
-    // Request execution timeout safeguard
-    const timer = setTimeout(() => {
-      if (!reply.sent) {
-        reply.status(504).send({
-          success: false,
-          error: { code: 'REQUEST_TIMEOUT', message: 'Request execution exceeded time limit.' }
-        });
-      }
-    }, 25_000);
-    if (timer.unref) timer.unref();
+    // Request execution timeout safeguard (skip for live SSE streams; extend to 120s for batch/storage)
+    const isRealtime = req.url.includes('/realtime');
+    if (!isRealtime) {
+      const isHeavyRoute = req.url.includes('/batch') || req.url.includes('/storage') || req.url.includes('/import');
+      const timeoutMs = isHeavyRoute ? 120_000 : 60_000;
 
-    reply.raw.once('finish', () => clearTimeout(timer));
-    reply.raw.once('close', () => clearTimeout(timer));
+      const timer = setTimeout(() => {
+        if (!reply.sent && !reply.raw.destroyed) {
+          reply.status(504).send({
+            success: false,
+            error: { code: 'REQUEST_TIMEOUT', message: 'Request execution exceeded time limit.' }
+          });
+        }
+      }, timeoutMs);
+      if (timer.unref) timer.unref();
+
+      reply.raw.once('finish', () => clearTimeout(timer));
+      reply.raw.once('close', () => clearTimeout(timer));
+    }
   });
 
   app.addHook('onSend', async (req, reply, payload) => {
@@ -265,19 +271,47 @@ export async function buildApp() {
     systemService.recordRequestMetrics(bytesIn, bytesOut, durationMs, isError);
   });
 
-  // Error handler supporting Debug Mode with stack traces
+  // Error handler supporting Debug Mode with stack traces and client abort suppression
   app.setErrorHandler((error: any, req, reply) => {
     const settings = systemService.getSettings();
     const statusCode = error.statusCode || 500;
     const isDebug = settings.debug_mode || !config.isProduction;
 
-    logger.error({
-      err: error,
-      reqId: req.id,
-      method: req.method,
-      url: req.url,
-      statusCode,
-    }, `API Request error: ${error.message}`);
+    // Detect client-initiated disconnects or aborted sockets (ECONNRESET, premature close, etc.)
+    const isClientAbort =
+      error.code === 'ECONNRESET' ||
+      error.code === 'ERR_STREAM_PREMATURE_CLOSE' ||
+      error.code === 'FST_ERR_CTP_ABORTED' ||
+      error.message === 'aborted' ||
+      Boolean((req.raw as any).aborted) ||
+      Boolean(req.raw.destroyed) ||
+      Boolean(reply.raw.destroyed);
+
+    if (isClientAbort) {
+      logger.warn({
+        reqId: req.id,
+        method: req.method,
+        url: req.url,
+        code: error.code || 'ECONNRESET',
+      }, `Client connection aborted: ${req.method} ${req.url}`);
+
+      // Socket is closed or destroyed by client; do not attempt to write response to a dead connection
+      if (reply.raw.destroyed || reply.raw.writableEnded) {
+        return;
+      }
+    } else {
+      logger.error({
+        err: error,
+        reqId: req.id,
+        method: req.method,
+        url: req.url,
+        statusCode,
+      }, `API Request error: ${error.message}`);
+    }
+
+    if (reply.raw.destroyed || reply.raw.writableEnded) {
+      return;
+    }
 
     // Sanitize 500 error messages in production to prevent leaking internal database schemas or server details
     let clientMessage = error.message || 'An internal server error occurred';

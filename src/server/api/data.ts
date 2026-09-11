@@ -309,6 +309,10 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
         timestamp: Date.now(),
       });
 
+      if (reply.raw.destroyed || reply.raw.writableEnded) {
+        return;
+      }
+
       return reply.send({ success: true, data: result });
     } catch (err: any) {
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
@@ -320,6 +324,10 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
         status: 'error',
         errorMessage: err.message,
       });
+
+      if (reply.raw.destroyed || reply.raw.writableEnded) {
+        return;
+      }
 
       return reply.status(err.statusCode || 400).send({
         success: false,
