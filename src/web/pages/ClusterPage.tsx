@@ -142,7 +142,7 @@ export const ClusterPage: React.FC = () => {
 
   if (isLoading && !clusterStatus) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex-1 flex items-center justify-center h-full min-h-[400px]">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <RefreshCw className="w-4 h-4 animate-spin" />
           <span>{t('cluster.loading', 'Loading cluster telemetry...')}</span>
@@ -156,7 +156,7 @@ export const ClusterPage: React.FC = () => {
   const localNodeFull = clusterStatus?.localNodeFull || false;
 
   return (
-    <div className="space-y-6">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6 pb-24">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
