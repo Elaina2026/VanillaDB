@@ -10,6 +10,7 @@ import { authService } from '../src/server/services/auth.js';
 import { storageService } from '../src/server/services/storage.js';
 import { generateTotpCode, generateTotpSecret } from '../src/server/utils/totp.js';
 import { getMetadataDb } from '../src/server/db/metadata.js';
+import { config } from '../src/server/config/index.js';
 
 describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to Z)', () => {
   let app: any;
@@ -22,53 +23,13 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
     await app.ready();
 
     // 1. Ensure admin session exists
-    let setupRes = await app.inject({
-      method: 'POST',
-      url: '/api/auth/setup',
-      payload: {
-        username: `sec_admin_${runId}`,
-        password: 'AdminPassword123!',
-        confirmPassword: 'AdminPassword123!',
-      },
-    });
-
-    if (setupRes.statusCode === 201) {
-      adminCookie = `vdb_session=${setupRes.cookies.find((c: any) => c.name === 'vdb_session').value}`;
-    } else {
-      let loginRes = await app.inject({
-        method: 'POST',
-        url: '/api/auth/login',
-        payload: {
-          username: 'admin_test',
-          password: 'SuperSecretPassword123!',
-        },
-      });
-      if (loginRes.statusCode !== 200) {
-        // Fallback login with environment credentials
-        loginRes = await app.inject({
-          method: 'POST',
-          url: '/api/auth/login',
-          payload: {
-            username: process.env.VDB_ADMIN_USERNAME || 'VanillaDatabase',
-            password: process.env.VDB_ADMIN_PASSWORD || '123456',
-          },
-        });
-      }
-      if (loginRes.statusCode === 200 && loginRes.json().data?.require2fa) {
-        const { generateTotpCode } = await import('../src/server/utils/totp.js');
-        const metaDb = (await import('../src/server/db/metadata.js')).getMetadataDb();
-        const row = metaDb.prepare("SELECT totp_secret FROM users WHERE username = 'VanillaDatabase' OR username = 'admin_test'").get() as any;
-        const tempToken = loginRes.json().data.tempToken;
-        const otp = generateTotpCode(row.totp_secret);
-        loginRes = await app.inject({
-          method: 'POST',
-          url: '/api/auth/login/2fa',
-          payload: { tempToken, code: otp },
-        });
-      }
-      expect(loginRes.statusCode).toBe(200);
-      adminCookie = `vdb_session=${loginRes.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+    const metaDb = (await import('../src/server/db/metadata.js')).getMetadataDb();
+    let admin = metaDb.prepare("SELECT * FROM users WHERE role = 'super_admin' LIMIT 1").get() as any;
+    if (!admin) {
+      admin = await authService.createAdminUser(`sec_admin_${runId}`, 'AdminPassword123!', 'super_admin');
     }
+    const adminCookieObj = authService.generateSessionCookie(admin, config.sessionSecret);
+    adminCookie = `vdb_session=${adminCookieObj.cookieValue}`;
 
     // 2. Create base test database for admin
     const dbRes = await app.inject({
