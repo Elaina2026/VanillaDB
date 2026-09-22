@@ -18,6 +18,10 @@ export class SystemService {
   private metricsHistory: MetricHistoryPoint[] = [];
   private readonly maxHistoryPoints = 60; // 60 points * 5s = 5 minutes of high-res real-time data
 
+  // [PERF] Short-lived status cache: avoids 4 SQL queries + os.cpus() on every API poll
+  private statusCache: { data: SystemStatus; expiresAt: number } | null = null;
+  private readonly statusCacheTtlMs = 10_000; // 10s cache — matches frontend polling floor
+
   // Cumulative metrics counters
   private totalNetworkIn = 0;
   private totalNetworkOut = 0;
@@ -123,6 +127,8 @@ export class SystemService {
     } catch (err) {
       logger.warn({ err }, 'Failed to refresh storage cache');
     }
+    // Storage data changed — invalidate status cache so next poll reflects new numbers
+    this.statusCache = null;
   }
 
   public recordRequestMetrics(bytesIn: number, bytesOut: number, durationMs: number, isError: boolean): void {
@@ -414,6 +420,7 @@ export class SystemService {
     }
 
     this.refreshStorageCache();
+    this.statusCache = null; // Invalidate status cache so next request reflects updated settings
 
     const updated = this.getSettings();
 
@@ -427,6 +434,12 @@ export class SystemService {
   }
 
   public getSystemStatus(): SystemStatus {
+    // [PERF] Serve from cache if still fresh — avoids repeated SQL + stat() on every poll
+    const now = Date.now();
+    if (this.statusCache && this.statusCache.expiresAt > now) {
+      return this.statusCache.data;
+    }
+
     const dbs = databaseService.listDatabases();
     const metaDb = getMetadataDb();
     const sqliteVersionRow = metaDb.prepare('SELECT sqlite_version() as version').get() as { version: string };
@@ -436,7 +449,7 @@ export class SystemService {
     const webhooksRow = metaDb.prepare('SELECT COUNT(*) as count FROM webhooks WHERE active = 1').get() as { count: number };
 
     // 24h Activity stats
-    const past24h = Date.now() - 24 * 60 * 60 * 1000;
+    const past24h = now - 24 * 60 * 60 * 1000;
     const activity24h = metaDb.prepare(`
       SELECT
         COUNT(*) as total,
@@ -463,7 +476,7 @@ export class SystemService {
       diskSpace = this.cachedDiskSpace;
     }
 
-    return {
+    const result: SystemStatus = {
       version: '1.3.2',
       nodeVersion: process.version,
       sqliteVersion: sqliteVersionRow.version,
@@ -504,6 +517,8 @@ export class SystemService {
         ],
       },
     };
+    this.statusCache = { data: result, expiresAt: now + this.statusCacheTtlMs };
+    return result;
   }
 
   public destroy(): void {

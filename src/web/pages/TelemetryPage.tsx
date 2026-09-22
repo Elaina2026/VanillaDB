@@ -29,18 +29,20 @@ import {
 export const TelemetryPage: React.FC = () => {
   const { t } = useI18n();
   const [timeRange, setTimeRange] = useState<TimeRange>('1h');
-  const [refreshInterval, setRefreshInterval] = useState<number>(1000); // Default to live 1s
+  const [refreshInterval, setRefreshInterval] = useState<number>(5000); // Default 5s — 1s caused lag
 
   const { data: status, isLoading: isStatusLoading, refetch: refetchStatus } = useQuery<SystemStatus>({
     queryKey: ['systemStatus'],
     queryFn: () => apiRequest('/api/system/status'),
     refetchInterval: refreshInterval > 0 ? refreshInterval : false,
+    staleTime: Math.max(0, refreshInterval - 500),
   });
 
   const { data: metricsHistory, isLoading: isHistoryLoading, refetch: refetchMetrics } = useQuery<SystemMetricsHistory>({
     queryKey: ['metricsHistory'],
     queryFn: () => apiRequest('/api/system/metrics'),
     refetchInterval: refreshInterval > 0 ? refreshInterval : false,
+    staleTime: Math.max(0, refreshInterval - 500),
   });
 
   const totalStorage =
@@ -98,7 +100,7 @@ export const TelemetryPage: React.FC = () => {
             <option value={1000}>{t('telemetry.live1s', 'Live Realtime: 1s')}</option>
             <option value={2000}>{t('telemetry.live2s', 'Refresh: 2s (High-Res)')}</option>
             <option value={5000}>{t('telemetry.live5s', 'Refresh: 5s (Default)')}</option>
-            <option value={15000}>{t('telemetry.live15s', 'Refresh: 15s')}</option>
+            <option value={15000}>{t('telemetry.live15s', 'Refresh: 15s (Low-Res)')}</option>
             <option value={0}>{t('telemetry.pause', 'Manual Pause')}</option>
           </select>
 

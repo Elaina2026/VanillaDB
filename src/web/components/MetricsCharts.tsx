@@ -1,4 +1,4 @@
-import React, { useState, useId } from 'react';
+import React, { useState, useId, useMemo, memo } from 'react';
 import type { SystemStatus, MetricHistoryPoint } from '@shared/index.js';
 import { formatBytes } from '../lib/utils.js';
 import { useI18n } from '../hooks/useI18n.js';
@@ -82,10 +82,10 @@ function buildSeries(timeRange: TimeRange, status?: SystemStatus, timeline?: Met
 /* -------------------------------------------------------------------------- */
 /* 1. Network In/Out Area Chart                                               */
 /* -------------------------------------------------------------------------- */
-export const NetworkChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus; timeline?: MetricHistoryPoint[] }> = ({ timeRange, status, timeline }) => {
+export const NetworkChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus; timeline?: MetricHistoryPoint[] }> = memo(({ timeRange, status, timeline }) => {
   const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const data = buildSeries(timeRange, status, timeline);
+  const data = useMemo(() => buildSeries(timeRange, status, timeline), [timeRange, status, timeline]);
   const chartId = useId().replace(/:/g, '');
 
   const width = 500;
@@ -211,15 +211,15 @@ export const NetworkChart: React.FC<{ timeRange: TimeRange; status?: SystemStatu
       </div>
     </div>
   );
-};
+});
 
 /* -------------------------------------------------------------------------- */
 /* 2. Realtime CPU & RAM Dual Area Trend Chart (%)                             */
 /* -------------------------------------------------------------------------- */
-export const CpuRamChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus; timeline?: MetricHistoryPoint[] }> = ({ timeRange, status, timeline }) => {
+export const CpuRamChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus; timeline?: MetricHistoryPoint[] }> = memo(({ timeRange, status, timeline }) => {
   const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const data = buildSeries(timeRange, status, timeline);
+  const data = useMemo(() => buildSeries(timeRange, status, timeline), [timeRange, status, timeline]);
   const chartId = useId().replace(/:/g, '');
 
   const width = 500;
@@ -341,12 +341,12 @@ export const CpuRamChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus
       </div>
     </div>
   );
-};
+});
 
 /* -------------------------------------------------------------------------- */
 /* 3. Storage Breakdown Chart                                                 */
 /* -------------------------------------------------------------------------- */
-export const StorageBreakdownChart: React.FC<{ status?: SystemStatus }> = ({ status }) => {
+export const StorageBreakdownChart: React.FC<{ status?: SystemStatus }> = memo(({ status }) => {
   const { t } = useI18n();
   const [hoverSegment, setHoverSegment] = useState<string | null>(null);
 
@@ -466,15 +466,15 @@ export const StorageBreakdownChart: React.FC<{ status?: SystemStatus }> = ({ sta
       </div>
     </div>
   );
-};
+});
 
 /* -------------------------------------------------------------------------- */
 /* 4. Request Volume & Error Rate Timeline                                    */
 /* -------------------------------------------------------------------------- */
-export const RequestVolumeChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus; timeline?: MetricHistoryPoint[] }> = ({ timeRange, status, timeline }) => {
+export const RequestVolumeChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus; timeline?: MetricHistoryPoint[] }> = memo(({ timeRange, status, timeline }) => {
   const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const data = buildSeries(timeRange, status, timeline);
+  const data = useMemo(() => buildSeries(timeRange, status, timeline), [timeRange, status, timeline]);
 
   const width = 500;
   const height = 180;
@@ -602,7 +602,7 @@ export const RequestVolumeChart: React.FC<{ timeRange: TimeRange; status?: Syste
       </div>
     </div>
   );
-};
+});
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
@@ -619,7 +619,7 @@ export const DatabaseOperationsTimelineChart: React.FC<{
     ddlCount: number;
     totalCount: number;
   }>;
-}> = ({ timeline }) => {
+}> = memo(({ timeline }) => {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const chartId = useId().replace(/:/g, '');
 
@@ -732,12 +732,12 @@ export const DatabaseOperationsTimelineChart: React.FC<{
       </div>
     </div>
   );
-};
+});
 
-export const QueryLatencyChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus; timeline?: MetricHistoryPoint[] }> = ({ timeRange, status, timeline }) => {
+export const QueryLatencyChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus; timeline?: MetricHistoryPoint[] }> = memo(({ timeRange, status, timeline }) => {
   const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const data = buildSeries(timeRange, status, timeline);
+  const data = useMemo(() => buildSeries(timeRange, status, timeline), [timeRange, status, timeline]);
   const chartId = useId().replace(/:/g, '');
 
   const width = 500;
@@ -856,4 +856,4 @@ export const QueryLatencyChart: React.FC<{ timeRange: TimeRange; status?: System
       </div>
     </div>
   );
-};
+});

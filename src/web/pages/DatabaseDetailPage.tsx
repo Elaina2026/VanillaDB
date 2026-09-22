@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Database,
@@ -137,11 +137,13 @@ export const DatabaseDetailPage: React.FC<{
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isSystemAdmin = isSuperAdmin || currentUser?.role === 'admin';
   const dbAccessRole = stats?.database?.access_role;
-  const isOwner = isSuperAdmin || (Boolean(currentUser?.userId) && stats?.database?.owner_id === currentUser?.userId) || dbAccessRole === 'owner';
-  const canAdmin = isSystemAdmin || dbAccessRole === 'owner' || dbAccessRole === 'admin';
-  const canEdit = canAdmin || dbAccessRole === 'editor';
-  const canManageTokens = canAdmin;
-  const canManageMembers = canAdmin;
+  // useMemo: permission booleans derived from stats — avoids recomputing on every render
+  const { isOwner, canAdmin, canEdit, canManageTokens, canManageMembers } = useMemo(() => {
+    const _isOwner = isSuperAdmin || (Boolean(currentUser?.userId) && stats?.database?.owner_id === currentUser?.userId) || dbAccessRole === 'owner';
+    const _canAdmin = isSystemAdmin || dbAccessRole === 'owner' || dbAccessRole === 'admin';
+    const _canEdit = _canAdmin || dbAccessRole === 'editor';
+    return { isOwner: _isOwner, canAdmin: _canAdmin, canEdit: _canEdit, canManageTokens: _canAdmin, canManageMembers: _canAdmin };
+  }, [isSuperAdmin, isSystemAdmin, currentUser?.userId, stats?.database?.owner_id, stats?.database?.access_role, dbAccessRole]);
 
   const { data: tokens = [], isLoading: isTokensLoading, refetch: refetchTokens } = useQuery<ApiTokenRecord[]>({
     queryKey: ['dbTokens', databaseId],
@@ -552,9 +554,12 @@ export const DatabaseDetailPage: React.FC<{
     enabled: !!selectedTable && activeTab === 'tables',
   });
 
-  // Current table schema detail
-  const currentTableSchema = schema.find((s) => s.name === selectedTable);
-  const primaryKeyCol = currentTableSchema?.columns.find((c) => c.pk === 1)?.name || tableRows?.columns?.[0] || 'id';
+  // Current table schema detail — memoized to avoid O(n) scan on every render
+  const currentTableSchema = useMemo(() => schema.find((s) => s.name === selectedTable), [schema, selectedTable]);
+  const primaryKeyCol = useMemo(
+    () => currentTableSchema?.columns.find((c) => c.pk === 1)?.name || tableRows?.columns?.[0] || 'id',
+    [currentTableSchema, tableRows]
+  );
 
   // Table mutations
   const deleteBulkMutation = useMutation({
@@ -700,7 +705,7 @@ export const DatabaseDetailPage: React.FC<{
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const sqlEditorRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const handleExecuteSql = async () => {
+  const handleExecuteSql = useCallback(async () => {
     if (!sqlText.trim()) return;
     setIsExecuting(true);
     setQueryError(null);
@@ -734,7 +739,7 @@ export const DatabaseDetailPage: React.FC<{
     } finally {
       setIsExecuting(false);
     }
-  };
+  }, [sqlText, databaseId, refetchSchema, refetchStats]);
 
   const handleExplainQuery = async () => {
     if (!sqlText.trim()) return;
