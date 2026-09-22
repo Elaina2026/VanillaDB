@@ -1,0 +1,52 @@
+name: Hardcore Security & Data Leak Pentest Workflow
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    # Run daily at midnight to ensure continuous vulnerability defense
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  security-leak-audit:
+    name: OWASP & Data Leakage Pentest
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Static Code Secret & Token Scanning
+      run: |
+        echo "Scanning codebase for hardcoded tokens and secrets..."
+        # Block commits with live prefix tokens or secrets checked into source
+        if grep -rnw "src/" -e "vdb_live_" -e "whsec_" -e "xoxb-" -e "ghp_" --exclude-dir={node_modules,dist}; then
+          echo "SECURITY VIOLATION: Hardcoded live secrets detected in src/ directory!"
+          exit 1
+        fi
+        echo "Clean: No plain secrets detected in source code."
+
+    - name: Run Dedicated Data Leak & Security Pentest Suite
+      run: npm run test:security
+
+    - name: Run Full Vitest Platform Suite
+      run: npm test
+
+    - name: Build Web & Server
+      run: npm run build

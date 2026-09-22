@@ -21,11 +21,13 @@ import { webhookService } from './services/webhook.js';
 import { backupScheduler } from './services/backupScheduler.js';
 import { jobSchedulerService } from './services/jobScheduler.js';
 import { maintenanceWorker } from './services/maintenanceWorker.js';
+import { clusterService } from './services/cluster.js';
 
 import { authRoutes } from './api/auth.js';
 import { adminRoutes } from './api/admin.js';
 import { dataRoutes } from './api/data.js';
 import { systemRoutes } from './api/system.js';
+import { clusterRoutes } from './api/cluster.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -280,9 +282,13 @@ export async function buildApp() {
     // Detect client-initiated disconnects or aborted sockets (ECONNRESET, premature close, etc.)
     const isClientAbort =
       error.code === 'ECONNRESET' ||
+      error.code === 'ECONNABORTED' ||
       error.code === 'ERR_STREAM_PREMATURE_CLOSE' ||
       error.code === 'FST_ERR_CTP_ABORTED' ||
+      error.code === 'EPIPE' ||
+      error.name === 'AbortError' ||
       error.message === 'aborted' ||
+      (typeof error.message === 'string' && error.message.toLowerCase().includes('aborted')) ||
       Boolean((req.raw as any).aborted) ||
       Boolean(req.raw.destroyed) ||
       Boolean(reply.raw.destroyed);
@@ -294,20 +300,16 @@ export async function buildApp() {
         url: req.url,
         code: error.code || 'ECONNRESET',
       }, `Client connection aborted: ${req.method} ${req.url}`);
-
-      // Socket is closed or destroyed by client; do not attempt to write response to a dead connection
-      if (reply.raw.destroyed || reply.raw.writableEnded) {
-        return;
-      }
-    } else {
-      logger.error({
-        err: error,
-        reqId: req.id,
-        method: req.method,
-        url: req.url,
-        statusCode,
-      }, `API Request error: ${error.message}`);
+      return;
     }
+
+    logger.error({
+      err: error,
+      reqId: req.id,
+      method: req.method,
+      url: req.url,
+      statusCode,
+    }, `API Request error: ${error.message}`);
 
     if (reply.raw.destroyed || reply.raw.writableEnded) {
       return;
@@ -345,6 +347,7 @@ export async function buildApp() {
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(adminRoutes, { prefix: '/api/admin' });
   await app.register(systemRoutes, { prefix: '/api/system' });
+  await app.register(clusterRoutes, { prefix: '/api' });
 
   // Data Plane APIs (v1 public database endpoints)
   await app.register(dataRoutes, { prefix: '/v1' });
@@ -398,17 +401,19 @@ export async function startServer() {
   // Ensure metadata database is initialized
   getMetadataDb();
 
-  // Initialize Webhook listener, Scheduled Backups and Auto-Maintenance
+  // Initialize Webhook listener, Scheduled Backups, Auto-Maintenance, and Multi-Node Cluster
   webhookService.init();
   backupScheduler.start();
   jobSchedulerService.start();
   maintenanceWorker.start();
+  clusterService.start();
 
   const app = await buildApp();
 
   const handleShutdown = async (signal: string) => {
     logger.info({ signal }, 'Graceful shutdown initiated');
     try {
+      clusterService.stop();
       maintenanceWorker.stop();
       jobSchedulerService.stop();
       backupScheduler.stop();

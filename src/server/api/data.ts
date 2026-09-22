@@ -9,6 +9,8 @@ import { authService } from '../services/auth.js';
 import { activityService } from '../services/activity.js';
 import { storageService } from '../services/storage.js';
 import { realtimeService } from '../services/realtime.js';
+import { clusterService } from '../services/cluster.js';
+import { getMetadataDb } from '../db/metadata.js';
 import { requireTokenPermission } from '../middleware/auth.js';
 import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
 
@@ -112,6 +114,22 @@ export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, fileP
 }
 
 export const dataRoutes: FastifyPluginAsync = async (fastify) => {
+  // Transparently proxy requests to remote worker nodes if database resides on another host
+  fastify.addHook('preHandler', async (req, reply) => {
+    const databaseId = (req.params as any)?.databaseId || req.databaseId;
+    if (!databaseId) return;
+
+    try {
+      const metaDb = getMetadataDb();
+      const row = metaDb.prepare('SELECT node_id FROM databases WHERE id = ?').get(databaseId) as { node_id?: string } | undefined;
+      if (row && row.node_id && row.node_id !== 'local' && row.node_id !== config.nodeId) {
+        await clusterService.proxyToNode(row.node_id, req, reply);
+      }
+    } catch {
+      // Fallback to local execution on lookup failure
+    }
+  });
+
   // Raw SQL Query API
   fastify.post('/databases/:databaseId/query', {
     preHandler: [requireTokenPermission('database:read')],

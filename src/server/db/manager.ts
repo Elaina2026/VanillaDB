@@ -481,7 +481,7 @@ export class DatabaseManager {
 
     if (options?.deniedTables && options.deniedTables.length > 0) {
       for (const table of options.deniedTables) {
-        const regex = new RegExp(`\\b${table}\\b`, 'i');
+        const regex = new RegExp(`(?:\\b|["\`\\[])${table}(?:\\b|["\`\\]])`, 'i');
         if (regex.test(stripped)) {
           throw new Error(`Access to table "${table}" is denied for this token.`);
         }
@@ -490,13 +490,32 @@ export class DatabaseManager {
 
     if (options?.allowedTables && options.allowedTables.length > 0) {
       const allowedSet = new Set(options.allowedTables.map(t => t.toLowerCase()));
-      const tableMatches = stripped.matchAll(/\b(?:FROM|JOIN|INTO|UPDATE|TABLE)(?:\s+|(?=["`[]))(?:["`[]?([a-zA-Z0-9_]+)["`\]]?)/gi);
-      for (const match of tableMatches) {
-        const table = match[1]?.toLowerCase();
-        if (table && !['sqlite_master', 'sqlite_schema', 'sqlite_temp_master', 'sqlite_temp_schema'].includes(table)) {
+      const candidates = new Set<string>();
+
+      // Catch direct table references with optional schema prefix (e.g. main.table)
+      const directMatches = stripped.matchAll(/\b(?:FROM|JOIN|INTO|UPDATE|TABLE)(?:\s+|(?=["`[]))(?:(?:["`[]?[a-zA-Z0-9_]+["`\]]?\.)?["`[]?([a-zA-Z0-9_]+)["`\]]?)/gi);
+      for (const dm of directMatches) {
+        if (dm[1]) candidates.add(dm[1]);
+      }
+
+      // Catch comma-separated multi-table FROM clauses (e.g. FROM t1, t2, main.t3)
+      const fromClauseMatches = stripped.matchAll(/\bFROM\s+([^;]+?)(?=\s+(?:WHERE|GROUP|HAVING|ORDER|LIMIT|JOIN|LEFT|RIGHT|INNER|UNION|EXCEPT|INTERSECT)|\s*;|\s*$)/gi);
+      for (const clause of fromClauseMatches) {
+        const tablesList = clause[1].split(',');
+        for (const tbl of tablesList) {
+          const m = tbl.trim().match(/^(?:["`[]?[a-zA-Z0-9_]+["`\]]?\.)?["`[]?([a-zA-Z0-9_]+)["`\]]?/);
+          if (m && m[1]) {
+            candidates.add(m[1]);
+          }
+        }
+      }
+
+      for (const rawTable of candidates) {
+        const table = rawTable.toLowerCase();
+        if (table && !['sqlite_master', 'sqlite_schema', 'sqlite_temp_master', 'sqlite_temp_schema', 'main', 'temp'].includes(table)) {
           const cteDefinition = new RegExp(`\\b${table}\\s+AS\\s*\\(`, 'i');
           if (!cteDefinition.test(stripped) && !allowedSet.has(table)) {
-            throw new Error(`Access to table "${match[1]}" is not permitted for this token.`);
+            throw new Error(`Access to table "${rawTable}" is not permitted for this token.`);
           }
         }
       }

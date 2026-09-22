@@ -15,6 +15,8 @@
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node --no-warnings dist/src/server/index.js",
     "test": "vitest run --fileParallelism=false",
+    "test:security": "vitest run tests/dataLeakSecurity.test.ts tests/security.test.ts tests/zeroDay.test.ts --fileParallelism=false",
+    "test:zeroday": "vitest run tests/zeroDay.test.ts --fileParallelism=false",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "admin:reset": "node --no-warnings dist/src/server/cli.js",
     "benchmark": "tsx src/server/benchmark.ts"

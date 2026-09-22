@@ -67,6 +67,21 @@ if (isProduction && insecureSecrets.includes(sessionSecret.toLowerCase())) {
   throw new Error(`Insecure VDB_SESSION_SECRET configured: "${sessionSecret}". Please provide a secure random secret.`);
 }
 
+function parseTrustProxy(val: string | undefined): boolean | string | string[] {
+  if (!val || val.trim() === '' || val.toLowerCase() === 'false' || val === '0') {
+    return false;
+  }
+  const trimmed = val.trim();
+  if (trimmed.toLowerCase() === 'true' || trimmed === '1') {
+    // Default safe reverse proxy CIDRs (loopback and RFC 1918 private subnets)
+    return ['127.0.0.1', '::1', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'];
+  }
+  if (trimmed.includes(',')) {
+    return trimmed.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  return trimmed;
+}
+
 export const config = {
   env: appEnv,
   isProduction,
@@ -81,7 +96,7 @@ export const config = {
   sessionSecret,
   masterKey,
   derivedEncryptionKey,
-  trustProxy: getEnvBool('VDB_TRUST_PROXY', false),
+  trustProxy: parseTrustProxy(process.env.VDB_TRUST_PROXY),
   corsOrigins: process.env.VDB_CORS_ORIGINS ? process.env.VDB_CORS_ORIGINS.split(',').map(s => s.trim()) : [],
   sqlBusyTimeoutMs: getEnvInt('VDB_SQL_BUSY_TIMEOUT_MS', 5000),
   maxOpenHandles: getEnvInt('VDB_MAX_OPEN_HANDLES', 100),
@@ -93,4 +108,6 @@ export const config = {
   logSql: getEnvBool('VDB_LOG_SQL', false),
   bootstrapAdminUsername: process.env.VDB_ADMIN_USERNAME || null,
   bootstrapAdminPassword: process.env.VDB_ADMIN_PASSWORD || null,
+  nodeId: process.env.VDB_NODE_ID || 'local',
+  clusterSecret: process.env.VDB_CLUSTER_SECRET || sessionSecret,
 };

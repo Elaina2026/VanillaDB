@@ -321,34 +321,7 @@ export class AuthService {
         return null;
       }
 
-      // Legacy 5-part cookie fallback [userId, username, role, expiresAt, signature]
-      if (parts.length === 5) {
-        const [userId, username, role, expiresAtStr, signature] = parts;
-        const expiresAt = parseInt(expiresAtStr, 10);
-        if (isNaN(expiresAt) || Date.now() > expiresAt) return null;
-
-        const legacyPayload = `${userId}:${username}:${role}:${expiresAt}`;
-        const legacySignature = crypto.createHmac('sha256', secret).update(legacyPayload).digest('hex');
-        if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(legacySignature))) {
-          return { userId, username, role: role as UserRole, tokenVersion: 1 };
-        }
-        return null;
-      }
-
-      if (parts.length === 4) {
-        // Old 4-part cookie fallback [userId, username, expiresAt, signature]
-        const [userId, username, expiresAtStr, signature] = parts;
-        const expiresAt = parseInt(expiresAtStr, 10);
-        if (isNaN(expiresAt) || Date.now() > expiresAt) return null;
-
-        const expectedSignature = crypto.createHmac('sha256', secret).update(`${userId}:${username}:${expiresAt}`).digest('hex');
-        if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
-          const user = this.getUserById(userId);
-          return { userId, username, role: user?.role || 'super_admin', tokenVersion: 1 };
-        }
-        return null;
-      }
-
+      // Format must be strict 6-part bound to tokenVersion (VDB-SEC-01)
       return null;
     } catch {
       return null;

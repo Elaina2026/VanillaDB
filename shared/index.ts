@@ -45,6 +45,7 @@ export interface DatabaseRecord {
   access_role?: MemberRole;
   is_shared?: boolean;
   member_count?: number;
+  node_id?: string | null;
   created_at: number;
   updated_at: number;
   last_accessed_at: number | null;
@@ -527,6 +528,58 @@ export interface UserInboxResponse {
   invites: UserInboxInvite[];
   announcements: SystemAnnouncement[];
   unreadCount: number;
+}
+
+export type StorageNodeStatus = 'healthy' | 'unhealthy' | 'offline' | 'draining';
+
+export interface StorageNodeRecord {
+  id: string;
+  name: string;
+  base_url: string;
+  auth_token?: string | null;
+  status: StorageNodeStatus;
+  last_heartbeat_at: number | null;
+  created_at: number;
+  updated_at: number;
+  disk_total_bytes: number;
+  disk_free_bytes: number;
+  disk_available_bytes: number;
+  disk_used_percent: number;
+  cpu_percent: number;
+  ram_percent: number;
+  network_rate_bps: number;
+  database_count: number;
+  is_local?: boolean;
+}
+
+export interface NodeMetrics {
+  nodeId: string;
+  status: StorageNodeStatus;
+  cpuPercent: number;
+  ramPercent: number;
+  ramUsedBytes: number;
+  ramTotalBytes: number;
+  diskTotalBytes: number;
+  diskFreeBytes: number;
+  diskAvailableBytes: number;
+  diskUsedPercent: number;
+  networkInRateBps: number;
+  networkOutRateBps: number;
+  totalNetworkRateBps: number;
+  databaseCount: number;
+  uptimeSeconds: number;
+  timestamp: number;
+}
+
+export interface ClusterStatus {
+  totalNodes: number;
+  healthyNodes: number;
+  totalClusterDiskBytes: number;
+  freeClusterDiskBytes: number;
+  usedClusterDiskPercent: number;
+  localNodeFull: boolean;
+  spilloverActive: boolean;
+  nodes: StorageNodeRecord[];
 }
 
 

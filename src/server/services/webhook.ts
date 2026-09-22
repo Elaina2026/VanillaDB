@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import net from 'net';
+import dns from 'dns';
 import { nanoid } from 'nanoid';
 import { getMetadataDb } from '../db/metadata.js';
 import { logger } from '../utils/logger.js';
@@ -44,6 +45,34 @@ function isPrivateOrLoopbackIp(ip: string): boolean {
     return false;
   }
   return false;
+}
+
+function normalizeIpCandidate(host: string): string {
+  // If host is pure decimal integer IP representation (e.g. 2130706433 = 127.0.0.1)
+  if (/^\d+$/.test(host)) {
+    const num = Number(host);
+    if (!isNaN(num) && num >= 0 && num <= 0xffffffff) {
+      return [
+        (num >>> 24) & 255,
+        (num >>> 16) & 255,
+        (num >>> 8) & 255,
+        num & 255,
+      ].join('.');
+    }
+  }
+  // Hex format (e.g. 0x7f000001)
+  if (/^0x[0-9a-fA-F]+$/i.test(host)) {
+    const num = parseInt(host, 16);
+    if (!isNaN(num) && num >= 0 && num <= 0xffffffff) {
+      return [
+        (num >>> 24) & 255,
+        (num >>> 16) & 255,
+        (num >>> 8) & 255,
+        num & 255,
+      ].join('.');
+    }
+  }
+  return host;
 }
 
 export class WebhookService {
@@ -100,7 +129,8 @@ export class WebhookService {
         return { safe: false, reason: 'Webhook URL must use HTTP or HTTPS protocol' };
       }
       const rawHost = u.hostname.toLowerCase();
-      const host = rawHost.replace(/^\[|\]$/g, '');
+      let host = rawHost.replace(/^\[|\]$/g, '');
+      host = normalizeIpCandidate(host);
 
       // 1. Block known cloud metadata endpoints & local hostname aliases
       if (
@@ -128,6 +158,29 @@ export class WebhookService {
     }
   }
 
+  public static async verifyResolvedHostIsSafe(hostname: string): Promise<{ safe: boolean; reason?: string }> {
+    try {
+      const cleanHost = hostname.replace(/^\[|\]$/g, '');
+      const normalized = normalizeIpCandidate(cleanHost);
+      if (net.isIP(normalized)) {
+        if (isPrivateOrLoopbackIp(normalized)) {
+          return { safe: false, reason: `Resolved IP ${normalized} is private or loopback` };
+        }
+        return { safe: true };
+      }
+
+      const records = await dns.promises.lookup(cleanHost, { all: true });
+      for (const rec of records) {
+        if (isPrivateOrLoopbackIp(rec.address)) {
+          return { safe: false, reason: `Hostname resolved to forbidden private IP: ${rec.address}` };
+        }
+      }
+      return { safe: true };
+    } catch (err: any) {
+      return { safe: false, reason: `DNS resolution failed: ${err.message}` };
+    }
+  }
+
   private async executePost(
     hookId: string,
     url: string,
@@ -141,6 +194,19 @@ export class WebhookService {
     const safety = WebhookService.isSafeWebhookUrl(url);
     if (!safety.safe) {
       logger.warn({ url, reason: safety.reason }, 'SSRF prevention: blocked webhook URL');
+      metaDb.prepare('UPDATE webhooks SET failure_count = failure_count + 1 WHERE id = ?').run(hookId);
+      return false;
+    }
+
+    try {
+      const parsedUrl = new URL(url);
+      const dnsCheck = await WebhookService.verifyResolvedHostIsSafe(parsedUrl.hostname);
+      if (!dnsCheck.safe) {
+        logger.warn({ url, reason: dnsCheck.reason }, 'SSRF prevention: blocked by DNS rebinding protection');
+        metaDb.prepare('UPDATE webhooks SET failure_count = failure_count + 1 WHERE id = ?').run(hookId);
+        return false;
+      }
+    } catch {
       metaDb.prepare('UPDATE webhooks SET failure_count = failure_count + 1 WHERE id = ?').run(hookId);
       return false;
     }
@@ -161,6 +227,7 @@ export class WebhookService {
           'User-Agent': 'VanillaDatabase-Webhook/1.3',
         },
         body,
+        redirect: 'error',
         signal: controller.signal,
       });
 

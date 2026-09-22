@@ -1056,7 +1056,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     metaDb.prepare(`
       UPDATE users
-      SET password_hash = ?, totp_backup_codes = ?, last_totp_step = COALESCE(?, last_totp_step), updated_at = ?
+      SET password_hash = ?, totp_backup_codes = ?, token_version = token_version + 1, last_totp_step = COALESCE(?, last_totp_step), updated_at = ?
       WHERE id = ?
     `).run(newPasswordHash, updatedCodesJson, matchedTotpStep ?? null, Date.now(), userRow.id);
 
@@ -1067,6 +1067,18 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       result: 'success',
       requestId: req.id,
     });
+
+    const updatedUser = authService.getUserById(userRow.id);
+    if (updatedUser) {
+      const { cookieValue, expires } = authService.generateSessionCookie(updatedUser, config.sessionSecret);
+      reply.setCookie('vdb_session', cookieValue, {
+        path: '/',
+        httpOnly: true,
+        secure: isSecureCookie(req),
+        sameSite: 'lax',
+        expires,
+      });
+    }
 
     return reply.send({
       success: true,

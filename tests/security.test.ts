@@ -343,7 +343,7 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
           password: 'InitialPassword123!',
         },
       });
-      const cookie = `vdb_session=${reg.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+      let cookie = `vdb_session=${reg.cookies.find((c: any) => c.name === 'vdb_session').value}`;
 
       // 2. Setup 2FA
       const setup = await app.inject({
@@ -432,6 +432,11 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
       });
       expect(totpRecovery.statusCode).toBe(200);
       expect(totpRecovery.json().data.method).toBe('totp');
+
+      const recoverySessionCookie = totpRecovery.cookies.find((c: any) => c.name === 'vdb_session');
+      if (recoverySessionCookie) {
+        cookie = `vdb_session=${recoverySessionCookie.value}`;
+      }
 
       // 9. Verify backup codes query endpoint (used vs unused status)
       const listCodesRes = await app.inject({

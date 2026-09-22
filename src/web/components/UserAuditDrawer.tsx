@@ -18,7 +18,7 @@ import {
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatDate } from '../lib/utils.js';
 import { useI18n } from '../hooks/useI18n.js';
-import type { UserSummaryResponse, UserRecord } from '../../shared/index.js';
+import type { UserSummaryResponse, UserRecord } from '../../../shared/index.js';
 
 interface UserAuditDrawerProps {
   userId: string | null;
@@ -233,7 +233,7 @@ export const UserAuditDrawer: React.FC<UserAuditDrawerProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {summary.databases.map((db) => (
+                    {summary.databases.map((db: any) => (
                       <div
                         key={db.id}
                         className="p-3 rounded-lg border border-border bg-card hover:border-primary/40 transition-colors flex items-center justify-between gap-3"
@@ -276,7 +276,7 @@ export const UserAuditDrawer: React.FC<UserAuditDrawerProps> = ({
                   </div>
                 ) : (
                   <div className="divide-y divide-border border border-border rounded-xl bg-card overflow-hidden">
-                    {summary.recentAuditEvents.map((evt, idx) => (
+                    {summary.recentAuditEvents.map((evt: any, idx: number) => (
                       <div key={evt.id || idx} className="p-3 text-xs flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="font-semibold text-foreground flex items-center gap-1.5">

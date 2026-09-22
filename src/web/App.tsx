@@ -7,6 +7,7 @@ import { OverviewPage } from './pages/OverviewPage.js';
 import { UserDashboardPage } from './pages/UserDashboardPage.js';
 import { TelemetryPage } from './pages/TelemetryPage.js';
 import { UsersPage } from './pages/UsersPage.js';
+import { ClusterPage } from './pages/ClusterPage.js';
 import { DatabasesPage } from './pages/DatabasesPage.js';
 import { DatabaseDetailPage } from './pages/DatabaseDetailPage.js';
 import { ActivityPage } from './pages/ActivityPage.js';
@@ -75,7 +76,7 @@ export const App: React.FC = () => {
   }, [authenticated, route.authSubRoute]);
 
   const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
-  const adminOnlyTabs = ['telemetry', 'users'];
+  const adminOnlyTabs = ['telemetry', 'users', 'cluster'];
 
   // Guard admin-only routes against unprivileged users
   useEffect(() => {
@@ -260,7 +261,7 @@ export const App: React.FC = () => {
     );
   }
 
-  const validTabs = ['overview', 'telemetry', 'users', 'databases', 'activity', 'settings', 'shortcuts', 'inbox'];
+  const validTabs = ['overview', 'telemetry', 'users', 'cluster', 'databases', 'activity', 'settings', 'shortcuts', 'inbox'];
   const isUnauthorizedTab = !isAdmin && adminOnlyTabs.includes(route.tab);
   const isInvalidTab = (!route.databaseId && !validTabs.includes(route.tab)) || isUnauthorizedTab;
 
@@ -313,6 +314,8 @@ export const App: React.FC = () => {
         <TelemetryPage />
       ) : route.tab === 'users' ? (
         <UsersPage />
+      ) : route.tab === 'cluster' ? (
+        <ClusterPage />
       ) : route.tab === 'databases' ? (
         <DatabasesPage
           onSelectDatabase={(id) => navigateTo('databases', id)}

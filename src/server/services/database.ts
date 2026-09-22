@@ -7,6 +7,7 @@ import { getMetadataDb } from '../db/metadata.js';
 import { dbManager } from '../db/manager.js';
 import { logger } from '../utils/logger.js';
 import { storageService } from './storage.js';
+import { clusterService } from './cluster.js';
 import type { DatabaseRecord, DatabaseOverviewStats, BackupRecord, DatabaseStorageStats, DatabaseMetricsStats } from '../../../shared/index.js';
 
 export class DatabaseService {
@@ -41,11 +42,15 @@ export class DatabaseService {
       throw new Error(`File already exists for database: ${filename}`);
     }
 
+    // Determine storage node: if local disk is full, auto-spillover to healthy worker node
+    const placement = clusterService.selectPlacementNode();
+    const assignedNodeId = placement.nodeId;
+
     const now = Date.now();
     metaDb.prepare(`
-      INSERT INTO databases (id, name, slug, description, filename, max_size_mb, owner_id, created_at, updated_at, last_accessed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, name, slug, description || null, filename, maxSizeMb || null, ownerId || null, now, now, now);
+      INSERT INTO databases (id, name, slug, description, filename, max_size_mb, owner_id, node_id, created_at, updated_at, last_accessed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, name, slug, description || null, filename, maxSizeMb || null, ownerId || null, assignedNodeId, now, now, now);
 
     // Initialize the SQLite database file with WAL and Pragmas
     const db = dbManager.get(id);
@@ -57,6 +62,34 @@ export class DatabaseService {
       INSERT OR REPLACE INTO _vdb_meta (key, value) VALUES ('created_at', '${new Date().toISOString()}');
     `);
 
+    // If assigned to a remote worker node, transfer the initialized file and remove local copy
+    if (assignedNodeId !== 'local' && assignedNodeId !== config.nodeId) {
+      dbManager.close(id);
+      try {
+        const workerNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(assignedNodeId) as any;
+        if (workerNode) {
+          const fileData = fs.readFileSync(dbPath);
+          fetch(`${workerNode.base_url}/api/internal/node/databases/${id}/receive`, {
+            method: 'POST',
+            headers: {
+              'x-cluster-secret': workerNode.auth_token || config.clusterSecret,
+              'content-type': 'application/octet-stream',
+            },
+            body: fileData,
+          }).catch(err => {
+            logger.error({ err, assignedNodeId }, 'Failed to initialize database on remote worker node');
+          });
+
+          // Unlink local placeholder
+          if (fs.existsSync(dbPath)) try { fs.unlinkSync(dbPath); } catch {}
+          if (fs.existsSync(`${dbPath}-wal`)) try { fs.unlinkSync(`${dbPath}-wal`); } catch {}
+          if (fs.existsSync(`${dbPath}-shm`)) try { fs.unlinkSync(`${dbPath}-shm`); } catch {}
+        }
+      } catch (err) {
+        logger.error({ err, assignedNodeId }, 'Error transferring new database to worker node');
+      }
+    }
+
     return {
       id,
       name,
@@ -65,6 +98,7 @@ export class DatabaseService {
       filename,
       max_size_mb: maxSizeMb || null,
       owner_id: ownerId || null,
+      node_id: assignedNodeId,
       created_at: now,
       updated_at: now,
       last_accessed_at: now,
@@ -75,7 +109,7 @@ export class DatabaseService {
     const metaDb = getMetadataDb();
     if (userId && role === 'user') {
       const rows = metaDb.prepare(`
-        SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
+        SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.node_id, d.created_at, d.updated_at, d.last_accessed_at,
                d.backup_schedule,
                u.username as owner_username,
                u.avatar_url as owner_avatar_url,
@@ -94,6 +128,7 @@ export class DatabaseService {
 
       return rows.map(r => ({
         ...r,
+        node_id: r.node_id || 'local',
         is_shared: Boolean(r.is_shared),
         access_role: r.access_role || 'viewer',
         member_count: Number(r.member_count || 0),
@@ -103,7 +138,7 @@ export class DatabaseService {
     }
 
     const rows = metaDb.prepare(`
-      SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
+      SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.node_id, d.created_at, d.updated_at, d.last_accessed_at,
              d.backup_schedule,
              u.username as owner_username,
              u.avatar_url as owner_avatar_url,
@@ -117,6 +152,7 @@ export class DatabaseService {
 
     return rows.map(r => ({
       ...r,
+      node_id: r.node_id || 'local',
       is_shared: false,
       access_role: 'owner',
       member_count: Number(r.member_count || 0),
@@ -128,7 +164,7 @@ export class DatabaseService {
   public getDatabase(databaseId: string): DatabaseRecord | null {
     const metaDb = getMetadataDb();
     const row = metaDb.prepare(`
-      SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.created_at, d.updated_at, d.last_accessed_at,
+      SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.node_id, d.created_at, d.updated_at, d.last_accessed_at,
              d.backup_schedule,
              u.username as owner_username,
              u.avatar_url as owner_avatar_url
@@ -139,6 +175,7 @@ export class DatabaseService {
     if (!row) return null;
     return {
       ...row,
+      node_id: row.node_id || 'local',
       backup_schedule: row.backup_schedule || null,
       owner_avatar_url: row.owner_avatar_url || null,
     };
@@ -214,6 +251,25 @@ export class DatabaseService {
 
     // Delete media/file storage for this database
     storageService.deleteDatabaseFiles(databaseId);
+
+    // If hosted on a remote worker node, instruct worker to delete database files
+    if (current.node_id && current.node_id !== 'local' && current.node_id !== config.nodeId) {
+      try {
+        const workerNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(current.node_id) as any;
+        if (workerNode) {
+          fetch(`${workerNode.base_url}/api/internal/node/databases/${databaseId}`, {
+            method: 'DELETE',
+            headers: {
+              'x-cluster-secret': workerNode.auth_token || config.clusterSecret,
+            },
+          }).catch(err => {
+            logger.warn({ err, nodeId: current.node_id }, 'Failed to delete database on worker node');
+          });
+        }
+      } catch (err) {
+        logger.warn({ err }, 'Error notifying worker node of database deletion');
+      }
+    }
 
     // Delete metadata
     metaDb.prepare('DELETE FROM databases WHERE id = ?').run(databaseId);

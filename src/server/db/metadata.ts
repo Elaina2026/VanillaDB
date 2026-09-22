@@ -355,6 +355,33 @@ function runMigrations(db: DatabaseSync): void {
         ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 1;
         ALTER TABLE users ADD COLUMN last_totp_step INTEGER NOT NULL DEFAULT -1;
       `
+    },
+    {
+      version: 15,
+      name: 'add_storage_nodes_and_database_node_id',
+      sql: `
+        ALTER TABLE databases ADD COLUMN node_id TEXT DEFAULT 'local';
+        CREATE INDEX IF NOT EXISTS idx_databases_node_id ON databases(node_id);
+
+        CREATE TABLE IF NOT EXISTS storage_nodes (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          base_url TEXT NOT NULL UNIQUE,
+          auth_token TEXT,
+          status TEXT NOT NULL DEFAULT 'healthy',
+          last_heartbeat_at INTEGER,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          disk_total_bytes INTEGER DEFAULT 0,
+          disk_free_bytes INTEGER DEFAULT 0,
+          disk_available_bytes INTEGER DEFAULT 0,
+          cpu_percent REAL DEFAULT 0,
+          ram_percent REAL DEFAULT 0,
+          network_rate_bps INTEGER DEFAULT 0,
+          database_count INTEGER DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_storage_nodes_status ON storage_nodes(status);
+      `
     }
   ];
 
