@@ -119,4 +119,40 @@ describe('Cluster & Multi-Node Storage Spillover Test Suite', () => {
     // Reset to 0 (auto-detect)
     systemService.updateSettings({ host_disk_total_gb: 0 });
   });
+
+  it('should accept application/octet-stream database snapshot uploads', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const path = await import('path');
+    const fs = await import('fs');
+
+    const dummyPath = path.resolve(config.tempDir, 'dummy_test_snap.sqlite');
+    const db = new DatabaseSync(dummyPath);
+    db.exec('CREATE TABLE test_sync (id INTEGER PRIMARY KEY, msg TEXT);');
+    db.exec("INSERT INTO test_sync VALUES (1, 'hello');");
+    db.close();
+
+    const fileBuf = fs.readFileSync(dummyPath);
+    fs.unlinkSync(dummyPath);
+
+    const testTargetId = 'db_test_migration_receive';
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/internal/node/databases/${testTargetId}/receive`,
+      headers: {
+        'x-cluster-secret': config.clusterSecret,
+        'content-type': 'application/octet-stream',
+      },
+      payload: fileBuf,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const json = JSON.parse(res.payload);
+    expect(json.success).toBe(true);
+    expect(json.data.databaseId).toBe(testTargetId);
+
+    const targetFile = path.resolve(config.databasesDir, `${testTargetId}.sqlite`);
+    if (fs.existsSync(targetFile)) {
+      fs.unlinkSync(targetFile);
+    }
+  });
 });

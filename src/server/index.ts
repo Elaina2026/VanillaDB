@@ -106,6 +106,15 @@ export async function buildApp() {
     }
   });
 
+  // Support binary streams (application/octet-stream, SQLite snapshot migrations)
+  app.addContentTypeParser(
+    ['application/octet-stream', 'application/x-sqlite3', 'application/vnd.sqlite3', 'binary/octet-stream'],
+    { parseAs: 'buffer' },
+    (req, body: Buffer, done) => {
+      done(null, body);
+    }
+  );
+
   // Security headers (Helmet) - OWASP compliant with strict CSP and Monaco CDN whitelist
   await app.register(helmet, {
     contentSecurityPolicy: {

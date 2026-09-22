@@ -54,7 +54,9 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Receive a migrated SQLite file from another node
-  fastify.post('/internal/node/databases/:id/receive', async (req, reply) => {
+  fastify.post('/internal/node/databases/:id/receive', {
+    bodyLimit: config.maxImportMb * 1024 * 1024,
+  }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '');
     if (!safeId) {
