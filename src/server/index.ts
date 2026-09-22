@@ -367,21 +367,37 @@ export async function buildApp() {
       root: clientDist,
       prefix: '/',
       wildcard: false,
+      setHeaders: (res, pathName) => {
+        if (pathName.includes('assets/') || pathName.includes('assets\\')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else if (pathName.endsWith('.html') || pathName.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        }
+      },
     });
 
-    app.get('/*', async (req, reply) => {
-      if (req.url.startsWith('/api') || req.url.startsWith('/v1')) {
+    const serveSpaHtml = (req: any, reply: any) => {
+      const cleanPath = (req.url || '').split('?')[0];
+      if (cleanPath.startsWith('/api') || cleanPath.startsWith('/v1')) {
         return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'API endpoint not found' } });
       }
+      // Never return index.html for static asset requests (CSS, JS, source maps, fonts, media)
+      if (
+        cleanPath.startsWith('/assets/') ||
+        /\.(css|js|map|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json|webp|avif)$/i.test(cleanPath)
+      ) {
+        return reply.status(404).type('text/plain').send('Asset not found');
+      }
+      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+      reply.header('Pragma', 'no-cache');
+      reply.header('Expires', '0');
       return reply.sendFile('index.html');
-    });
+    };
 
-    app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api') || req.url.startsWith('/v1')) {
-        return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'API endpoint not found' } });
-      }
-      return reply.sendFile('index.html');
-    });
+    app.get('/*', async (req, reply) => serveSpaHtml(req, reply));
+    app.setNotFoundHandler((req, reply) => serveSpaHtml(req, reply));
   } else {
     logger.warn('Frontend client dist folder not found. Web UI will return 404.');
   }
