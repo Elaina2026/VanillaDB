@@ -1,24 +1,32 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth.js';
 import { AuthPage } from './pages/AuthPage.js';
 import { ErrorPage } from './pages/ErrorPage.js';
 import { DashboardLayout } from './layouts/DashboardLayout.js';
 import { OverviewPage } from './pages/OverviewPage.js';
 import { UserDashboardPage } from './pages/UserDashboardPage.js';
-import { TelemetryPage } from './pages/TelemetryPage.js';
-import { UsersPage } from './pages/UsersPage.js';
-import { ClusterPage } from './pages/ClusterPage.js';
 import { DatabasesPage } from './pages/DatabasesPage.js';
-import { DatabaseDetailPage } from './pages/DatabaseDetailPage.js';
-import { ActivityPage } from './pages/ActivityPage.js';
-import { SettingsPage } from './pages/SettingsPage.js';
-import { ShortcutsPage } from './pages/ShortcutsPage.js';
-import { InboxPage } from './pages/InboxPage.js';
 import { CreateDatabaseModal } from './components/CreateDatabaseModal.js';
 import { CreateTokenModal } from './components/CreateTokenModal.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { useI18n } from './hooks/useI18n.js';
 import { useTheme } from './hooks/useTheme.js';
+
+// Heavy pages lazy-loaded to reduce initial bundle parse time
+const TelemetryPage = lazy(() => import('./pages/TelemetryPage.js').then(m => ({ default: m.TelemetryPage })));
+const UsersPage = lazy(() => import('./pages/UsersPage.js').then(m => ({ default: m.UsersPage })));
+const ClusterPage = lazy(() => import('./pages/ClusterPage.js').then(m => ({ default: m.ClusterPage })));
+const DatabaseDetailPage = lazy(() => import('./pages/DatabaseDetailPage.js').then(m => ({ default: m.DatabaseDetailPage })));
+const ActivityPage = lazy(() => import('./pages/ActivityPage.js').then(m => ({ default: m.ActivityPage })));
+const SettingsPage = lazy(() => import('./pages/SettingsPage.js').then(m => ({ default: m.SettingsPage })));
+const ShortcutsPage = lazy(() => import('./pages/ShortcutsPage.js').then(m => ({ default: m.ShortcutsPage })));
+const InboxPage = lazy(() => import('./pages/InboxPage.js').then(m => ({ default: m.InboxPage })));
+
+const PageSpinner: React.FC = () => (
+  <div className="flex-1 flex items-center justify-center text-muted-foreground text-xs font-mono">
+    Loading...
+  </div>
+);
 
 export const App: React.FC = () => {
   const { authenticated, isLoading, isOffline, refetchStatus, user } = useAuth();
@@ -288,15 +296,19 @@ export const App: React.FC = () => {
       }
     >
       {route.databaseId ? (
-        <DatabaseDetailPage
-          databaseId={route.databaseId}
-          initialTab={route.dbTab as any}
-          onTabChange={(newTab) => navigateTo('databases', route.databaseId, newTab)}
-          onBack={() => navigateTo('databases')}
-          onOpenCreateToken={(dbId) => setCreateTokenDbId(dbId)}
-        />
+        <Suspense fallback={<PageSpinner />}>
+          <DatabaseDetailPage
+            databaseId={route.databaseId}
+            initialTab={route.dbTab as any}
+            onTabChange={(newTab) => navigateTo('databases', route.databaseId, newTab)}
+            onBack={() => navigateTo('databases')}
+            onOpenCreateToken={(dbId) => setCreateTokenDbId(dbId)}
+          />
+        </Suspense>
       ) : route.tab === 'inbox' ? (
-        <InboxPage onSelectDatabase={(id) => navigateTo('databases', id)} />
+        <Suspense fallback={<PageSpinner />}>
+          <InboxPage onSelectDatabase={(id) => navigateTo('databases', id)} />
+        </Suspense>
       ) : route.tab === 'overview' ? (
         user?.role === 'user' ? (
           <UserDashboardPage
@@ -311,26 +323,38 @@ export const App: React.FC = () => {
           />
         )
       ) : route.tab === 'telemetry' ? (
-        <TelemetryPage />
+        <Suspense fallback={<PageSpinner />}>
+          <TelemetryPage />
+        </Suspense>
       ) : route.tab === 'users' ? (
-        <UsersPage />
+        <Suspense fallback={<PageSpinner />}>
+          <UsersPage />
+        </Suspense>
       ) : route.tab === 'cluster' ? (
-        <ClusterPage />
+        <Suspense fallback={<PageSpinner />}>
+          <ClusterPage />
+        </Suspense>
       ) : route.tab === 'databases' ? (
         <DatabasesPage
           onSelectDatabase={(id) => navigateTo('databases', id)}
           onOpenCreateModal={() => setIsCreateDbOpen(true)}
         />
       ) : route.tab === 'activity' ? (
-        <ActivityPage />
+        <Suspense fallback={<PageSpinner />}>
+          <ActivityPage />
+        </Suspense>
       ) : route.tab === 'settings' ? (
-        <SettingsPage />
+        <Suspense fallback={<PageSpinner />}>
+          <SettingsPage />
+        </Suspense>
       ) : route.tab === 'shortcuts' ? (
-        <ShortcutsPage
-          onNavigate={(t, id) => navigateTo(t, id)}
-          onOpenCreateDb={() => setIsCreateDbOpen(true)}
-          onOpenSearch={() => setIsCommandPaletteOpen(true)}
-        />
+        <Suspense fallback={<PageSpinner />}>
+          <ShortcutsPage
+            onNavigate={(t, id) => navigateTo(t, id)}
+            onOpenCreateDb={() => setIsCreateDbOpen(true)}
+            onOpenSearch={() => setIsCommandPaletteOpen(true)}
+          />
+        </Suspense>
       ) : (
         user?.role === 'user' ? (
           <UserDashboardPage

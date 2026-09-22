@@ -43,18 +43,21 @@ export const DatabasesPage: React.FC<{
   const { data: databases = [], isLoading } = useQuery<DatabaseRecord[]>({
     queryKey: ['databases'],
     queryFn: () => apiRequest('/api/admin/databases'),
+    staleTime: 30000,
   });
 
   const { data: userStats } = useQuery<UserDashboardStats>({
     queryKey: ['userDashboardStats'],
     queryFn: () => apiRequest('/api/admin/user/dashboard'),
-    refetchInterval: 15000,
+    refetchInterval: 30000,
+    staleTime: 25000,
   });
 
   const { data: inbox } = useQuery<UserInboxResponse>({
     queryKey: ['userInbox'],
     queryFn: () => apiRequest('/api/admin/inbox'),
-    refetchInterval: 15000,
+    refetchInterval: 30000,
+    staleTime: 25000,
   });
   const pendingInvitesCount = inbox?.invites?.length || 0;
 

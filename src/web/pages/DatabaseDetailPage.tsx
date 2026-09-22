@@ -109,25 +109,29 @@ export const DatabaseDetailPage: React.FC<{
   const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useQuery<DatabaseOverviewStats>({
     queryKey: ['dbStats', databaseId],
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}`),
+    staleTime: 30000,
   });
 
   const { data: storageStats, isLoading: isStorageLoading, refetch: refetchStorageStats } = useQuery<DatabaseStorageStats>({
     queryKey: ['dbStorageStats', databaseId],
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/storage-stats`),
     enabled: activeTab === 'analytics' || activeTab === 'overview',
-    refetchInterval: 15000,
+    refetchInterval: 30000,
+    staleTime: 25000,
   });
 
   const { data: metricsStats, isLoading: isMetricsLoading, refetch: refetchMetrics } = useQuery<DatabaseMetricsStats>({
     queryKey: ['dbMetricsStats', databaseId],
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/metrics`),
     enabled: activeTab === 'analytics',
-    refetchInterval: 10000,
+    refetchInterval: 30000,
+    staleTime: 25000,
   });
 
   const { data: schema = [], isLoading: isSchemaLoading, refetch: refetchSchema } = useQuery<TableSchemaDetail[]>({
     queryKey: ['dbSchema', databaseId],
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/schema`),
+    staleTime: 60000,
   });
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -176,7 +180,8 @@ export const DatabaseDetailPage: React.FC<{
   const { data: userStats } = useQuery<UserDashboardStats>({
     queryKey: ['userDashboardStats'],
     queryFn: () => apiRequest('/api/admin/user/dashboard'),
-    refetchInterval: 15000,
+    refetchInterval: 30000,
+    staleTime: 25000,
   });
   const dbRateWarning = userStats?.rateLimitWarnings?.find((w) => w.databaseId === databaseId);
 

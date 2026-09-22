@@ -81,7 +81,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const { data: inbox } = useQuery<UserInboxResponse>({
     queryKey: ['userInbox'],
     queryFn: () => apiRequest('/api/admin/inbox'),
-    refetchInterval: 15000,
+    refetchInterval: 30000,
+    staleTime: 25000,
     enabled: !!user,
   });
   const unreadCount = inbox?.unreadCount || 0;

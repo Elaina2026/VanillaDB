@@ -32,12 +32,14 @@ export const OverviewPage: React.FC<{
   const { data: status, isLoading: isStatusLoading, refetch: refetchStatus } = useQuery<SystemStatus>({
     queryKey: ['systemStatus'],
     queryFn: () => apiRequest('/api/system/status'),
-    refetchInterval: 10000,
+    refetchInterval: 30000,
+    staleTime: 20000,
   });
 
   const { data: databases = [] } = useQuery<DatabaseRecord[]>({
     queryKey: ['databases'],
     queryFn: () => apiRequest('/api/admin/databases'),
+    staleTime: 60000,
   });
 
   const totalStorage =

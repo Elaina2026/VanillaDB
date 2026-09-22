@@ -20,14 +20,16 @@ export const ActivityPage: React.FC = () => {
     queryKey: ['activityLogs'],
     queryFn: () => apiRequest('/api/admin/activity?limit=500'),
     enabled: activeTab === 'activity',
-    refetchInterval: 10000,
+    refetchInterval: 30000,
+    staleTime: 20000,
   });
 
   const { data: auditData, isLoading: isAuditLoading, refetch: refetchAudit, isFetching: isAuditFetching } = useQuery<{ items: AuditRecord[]; total: number }>({
     queryKey: ['auditLogs'],
     queryFn: () => apiRequest('/api/admin/audit?limit=500'),
     enabled: activeTab === 'audit' && isSuperAdminOrAdmin,
-    refetchInterval: 10000,
+    refetchInterval: 30000,
+    staleTime: 20000,
   });
 
   const filteredActivity = (activityData?.items || []).filter((item) => {
