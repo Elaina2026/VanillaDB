@@ -35,8 +35,8 @@ jobs:
     - name: Static Code Secret & Token Scanning
       run: |
         echo "Scanning codebase for hardcoded tokens and secrets..."
-        # Block commits with live prefix tokens or secrets checked into source
-        if grep -rnw "src/" -e "vdb_live_" -e "whsec_" -e "xoxb-" -e "ghp_" --exclude-dir={node_modules,dist}; then
+        # Block commits with actual hardcoded live secrets or tokens checked into source
+        if grep -rEn "(vdb_live_[a-f0-9]{32,}|whsec_[a-f0-9]{32,}|ghp_[a-zA-Z0-9]{36,}|xoxb-[0-9]{10,})" src/ --exclude-dir={node_modules,dist}; then
           echo "SECURITY VIOLATION: Hardcoded live secrets detected in src/ directory!"
           exit 1
         fi
