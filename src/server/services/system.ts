@@ -98,6 +98,28 @@ export class SystemService {
           availableBytes: bsize * Number(stat.bavail),
         };
       }
+
+      // Container/hosting quota override when physical partition reports full host disk
+      let effectiveTotalGb = config.hostDiskGb || 0;
+      try {
+        const row = metaDb.prepare("SELECT value FROM settings WHERE key = 'host_disk_total_gb'").get() as { value: string } | undefined;
+        if (row && row.value) {
+          const parsed = parseInt(row.value, 10);
+          if (!isNaN(parsed) && parsed > 0) effectiveTotalGb = parsed;
+        }
+      } catch {
+        // Ignore if settings table unready
+      }
+
+      if (effectiveTotalGb > 0) {
+        const totalBytes = effectiveTotalGb * 1024 * 1024 * 1024;
+        const availableBytes = Math.max(0, totalBytes - totalStorageBytes);
+        this.cachedDiskSpace = {
+          totalBytes,
+          freeBytes: availableBytes,
+          availableBytes,
+        };
+      }
     } catch (err) {
       logger.warn({ err }, 'Failed to refresh storage cache');
     }
@@ -322,6 +344,7 @@ export class SystemService {
       alert_webhook_url: '',
       alert_cpu_threshold: 85,
       alert_ram_threshold: 85,
+      host_disk_total_gb: config.hostDiskGb || 0,
     };
 
     try {
@@ -365,6 +388,7 @@ export class SystemService {
         alert_webhook_url: map.alert_webhook_url || defaultSettings.alert_webhook_url,
         alert_cpu_threshold: map.alert_cpu_threshold ? parseInt(map.alert_cpu_threshold, 10) : defaultSettings.alert_cpu_threshold,
         alert_ram_threshold: map.alert_ram_threshold ? parseInt(map.alert_ram_threshold, 10) : defaultSettings.alert_ram_threshold,
+        host_disk_total_gb: map.host_disk_total_gb ? parseInt(map.host_disk_total_gb, 10) : (config.hostDiskGb || defaultSettings.host_disk_total_gb),
       };
     } catch {
       return defaultSettings;
@@ -388,6 +412,8 @@ export class SystemService {
       metaDb.exec('ROLLBACK;');
       throw err;
     }
+
+    this.refreshStorageCache();
 
     const updated = this.getSettings();
 
@@ -432,19 +458,9 @@ export class SystemService {
     // Host disk storage via cached fs.statfsSync (or fallback on startup)
     // ponytail: native fs.statfsSync; add OS-specific WMI/df fallback when running on virtualized network mounts without statfs support.
     let diskSpace = this.cachedDiskSpace;
-    if (!diskSpace && typeof fs.statfsSync === 'function') {
-      try {
-        const stat = fs.statfsSync(config.dataDir);
-        const bsize = Number(stat.bsize);
-        diskSpace = {
-          totalBytes: bsize * Number(stat.blocks),
-          freeBytes: bsize * Number(stat.bfree),
-          availableBytes: bsize * Number(stat.bavail),
-        };
-        this.cachedDiskSpace = diskSpace;
-      } catch {
-        // Ignore if statfsSync fails
-      }
+    if (!diskSpace) {
+      this.refreshStorageCache();
+      diskSpace = this.cachedDiskSpace;
     }
 
     return {

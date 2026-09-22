@@ -370,6 +370,7 @@ export const SettingsPage: React.FC = () => {
     alert_webhook_url: '',
     alert_cpu_threshold: 85,
     alert_ram_threshold: 85,
+    host_disk_total_gb: 0,
     ...settings,
     ...form,
   };
@@ -996,6 +997,22 @@ export const SettingsPage: React.FC = () => {
               />
               <span className="text-[10px] text-muted-foreground mt-1 block">
                 {t('settings.maxUploadSizeDesc', 'Maximum file size allowed for storage uploads and dump imports.')}
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.hostDiskQuota', 'Host / Container Disk Quota (GB)')}</label>
+              <input
+                type="number"
+                min={0}
+                max={100000}
+                disabled={!isSuperAdminOrAdmin}
+                value={current.host_disk_total_gb ?? 0}
+                onChange={(e) => setForm({ ...form, host_disk_total_gb: parseInt(e.target.value, 10) || 0 })}
+                className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
+              />
+              <span className="text-[10px] text-muted-foreground mt-1 block">
+                {t('settings.hostDiskQuotaDesc', 'Override physical partition size when running on a container or shared host (e.g. 20 for 20 GB). 0 = auto-detect via filesystem.')}
               </span>
             </div>
           </div>

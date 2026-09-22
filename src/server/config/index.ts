@@ -110,4 +110,5 @@ export const config = {
   bootstrapAdminPassword: process.env.VDB_ADMIN_PASSWORD || null,
   nodeId: process.env.VDB_NODE_ID || 'local',
   clusterSecret: process.env.VDB_CLUSTER_SECRET || sessionSecret,
+  hostDiskGb: getEnvInt('VDB_HOST_DISK_GB', getEnvInt('VDB_MAX_DISK_GB', 0)),
 };

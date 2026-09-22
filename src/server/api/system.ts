@@ -34,6 +34,11 @@ export const systemRoutes: FastifyPluginAsync = async (fastify) => {
       enable_cors_all: z.boolean().optional(),
       enable_stack_traces: z.boolean().optional(),
       log_retention_days: z.number().int().min(1).max(365).optional(),
+      enable_system_alerts: z.boolean().optional(),
+      alert_webhook_url: z.string().optional(),
+      alert_cpu_threshold: z.number().int().min(1).max(100).optional(),
+      alert_ram_threshold: z.number().int().min(1).max(100).optional(),
+      host_disk_total_gb: z.number().int().min(0).optional(),
     });
 
     const parsed = Schema.safeParse(req.body);

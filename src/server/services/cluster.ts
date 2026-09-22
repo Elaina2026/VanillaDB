@@ -91,6 +91,29 @@ export class ClusterService {
       diskAvailable = diskFree;
     }
 
+    // When container/hosting quota is explicitly configured, cap physical partition size
+    let effectiveTotalGb = config.hostDiskGb || 0;
+    try {
+      const settings = systemService.getSettings();
+      if (settings.host_disk_total_gb) {
+        effectiveTotalGb = settings.host_disk_total_gb;
+      }
+    } catch {
+      // Ignore if systemService not ready
+    }
+
+    if (effectiveTotalGb > 0) {
+      diskTotal = effectiveTotalGb * 1024 * 1024 * 1024;
+      let used = 0;
+      try {
+        used = systemService.getMetricsHistory().current?.totalStorageBytes || 0;
+      } catch {
+        used = 0;
+      }
+      diskAvailable = Math.max(0, diskTotal - used);
+      diskFree = diskAvailable;
+    }
+
     const diskUsed = Math.max(0, diskTotal - diskAvailable);
     const diskUsedPercent = diskTotal > 0 ? Math.round((diskUsed / diskTotal) * 1000) / 10 : 0;
 

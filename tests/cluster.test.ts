@@ -101,4 +101,22 @@ describe('Cluster & Multi-Node Storage Spillover Test Suite', () => {
     const fetched = databaseService.getDatabase(db.id);
     expect(fetched?.node_id).toBe('local');
   });
+
+  it('should override physical disk space when host_disk_total_gb is configured', async () => {
+    const { systemService } = await import('../src/server/services/system.js');
+
+    // Set 20 GB quota
+    systemService.updateSettings({ host_disk_total_gb: 20 });
+
+    const status = systemService.getSystemStatus();
+    expect(status.diskSpace).toBeDefined();
+    expect(status.diskSpace?.totalBytes).toBe(20 * 1024 * 1024 * 1024);
+    expect(status.diskSpace?.availableBytes).toBeLessThanOrEqual(20 * 1024 * 1024 * 1024);
+
+    const localMetrics = clusterService.getLocalMetrics();
+    expect(localMetrics.diskTotalBytes).toBe(20 * 1024 * 1024 * 1024);
+
+    // Reset to 0 (auto-detect)
+    systemService.updateSettings({ host_disk_total_gb: 0 });
+  });
 });

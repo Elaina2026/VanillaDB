@@ -320,6 +320,7 @@ export interface SystemSettings {
   alert_webhook_url?: string;
   alert_cpu_threshold?: number;
   alert_ram_threshold?: number;
+  host_disk_total_gb?: number;
 }
 
 export interface SystemStatus {
