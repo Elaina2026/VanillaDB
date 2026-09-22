@@ -45,7 +45,7 @@ export const ClusterPage: React.FC = () => {
   const { data: clusterStatus, isLoading, isFetching, refetch } = useQuery<ClusterStatus>({
     queryKey: ['clusterStatus'],
     queryFn: () => apiRequest('/api/admin/cluster/status'),
-    refetchInterval: 8000,
+    refetchInterval: 15000,
   });
 
   // 2. Fetch Databases list for migration dropdown

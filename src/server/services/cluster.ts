@@ -375,54 +375,55 @@ export class ClusterService {
     const metaDb = getMetadataDb();
     const nodes = metaDb.prepare('SELECT * FROM storage_nodes').all() as any[];
 
-    for (const node of nodes) {
-      try {
-        const res = await fetch(`${node.base_url}/api/internal/node/stats`, {
-          method: 'GET',
-          headers: {
-            'x-cluster-secret': node.auth_token || config.clusterSecret,
-          },
-          signal: AbortSignal.timeout(5000),
-        });
+    await Promise.allSettled(
+      nodes.map(async (node) => {
+        try {
+          const res = await fetch(`${node.base_url}/api/internal/node/stats`, {
+            method: 'GET',
+            headers: {
+              'x-cluster-secret': node.auth_token || config.clusterSecret,
+            },
+            signal: AbortSignal.timeout(3000),
+          });
 
-        if (res.ok) {
-          const json = await res.json() as any;
-          if (json.success && json.data) {
-            const data: NodeMetrics = json.data;
-            metaDb.prepare(`
-              UPDATE storage_nodes
-              SET status = 'healthy',
-                  last_heartbeat_at = ?,
-                  updated_at = ?,
-                  disk_total_bytes = ?,
-                  disk_free_bytes = ?,
-                  disk_available_bytes = ?,
-                  cpu_percent = ?,
-                  ram_percent = ?,
-                  network_rate_bps = ?,
-                  database_count = ?
-              WHERE id = ?
-            `).run(
-              Date.now(),
-              Date.now(),
-              data.diskTotalBytes || 0,
-              data.diskFreeBytes || 0,
-              data.diskAvailableBytes || 0,
-              data.cpuPercent || 0,
-              data.ramPercent || 0,
-              data.totalNetworkRateBps || 0,
-              data.databaseCount || 0,
-              node.id
-            );
-            continue;
+          if (res.ok) {
+            const json = (await res.json()) as any;
+            if (json.success && json.data) {
+              const data: NodeMetrics = json.data;
+              metaDb.prepare(`
+                UPDATE storage_nodes
+                SET status = 'healthy',
+                    last_heartbeat_at = ?,
+                    updated_at = ?,
+                    disk_total_bytes = ?,
+                    disk_free_bytes = ?,
+                    disk_available_bytes = ?,
+                    cpu_percent = ?,
+                    ram_percent = ?,
+                    network_rate_bps = ?,
+                    database_count = ?
+                WHERE id = ?
+              `).run(
+                Date.now(),
+                Date.now(),
+                data.diskTotalBytes || 0,
+                data.diskFreeBytes || 0,
+                data.diskAvailableBytes || 0,
+                data.cpuPercent || 0,
+                data.ramPercent || 0,
+                data.totalNetworkRateBps || 0,
+                data.databaseCount || 0,
+                node.id
+              );
+              return;
+            }
           }
+          metaDb.prepare("UPDATE storage_nodes SET status = 'unhealthy', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
+        } catch {
+          metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
         }
-        // If not ok
-        metaDb.prepare("UPDATE storage_nodes SET status = 'unhealthy', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
-      } catch {
-        metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
-      }
-    }
+      })
+    );
   }
 
   /**
