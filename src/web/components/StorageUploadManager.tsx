@@ -375,7 +375,7 @@ export const StorageUploadManager: React.FC<StorageUploadManagerProps> = ({
         </div>
       ) : (
         /* EXPANDED VIEW */
-        <div className="w-80 sm:w-96 bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-md animate-in slide-in-from-bottom-2 duration-200">
+        <div className="w-[calc(100vw-2rem)] max-w-sm sm:max-w-96 bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-md animate-in slide-in-from-bottom-2 duration-200">
           {/* Header */}
           <div className="px-4 py-3 bg-muted/60 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-2">

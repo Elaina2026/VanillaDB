@@ -78,7 +78,7 @@ export const ActivityPage: React.FC = () => {
             {t('activity.desc', 'Real-time API executions, SQL queries, and administrative audit trails.')}
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           {isSuperAdminOrAdmin ? (
             <div className="flex bg-muted p-0.5 rounded-md border border-border">
               <button
@@ -246,7 +246,7 @@ export const ActivityPage: React.FC = () => {
         </div>
 
         {/* Pagination Bar */}
-        <div className="p-3 border-t border-border bg-card flex items-center justify-between text-xs text-muted-foreground shrink-0">
+        <div className="p-3 border-t border-border bg-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-muted-foreground shrink-0">
           <div>
             Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, currentList.length)} of {currentList.length}
           </div>

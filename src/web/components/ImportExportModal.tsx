@@ -141,7 +141,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 {t('importExport.exportFormat', 'Export Format')}
               </label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
                   { id: 'sql', label: t('importExport.sqlDump', 'SQL Dump (.sql)') },
                   { id: 'sqlite', label: t('importExport.sqliteBinary', 'SQLite Binary (.db)') },

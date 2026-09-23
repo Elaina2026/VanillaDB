@@ -1420,7 +1420,7 @@ export const SettingsPage: React.FC = () => {
 
           {/* Two-Factor Authentication (2FA TOTP) Card */}
           <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-border">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-border">
               <div>
                 <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-500" />
@@ -1958,7 +1958,7 @@ export const SettingsPage: React.FC = () => {
 
           {/* WebAuthn / Passkey Hardware Device Management */}
           <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-border">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-border">
               <div>
                 <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
                   <Fingerprint className="w-4 h-4 text-emerald-500" />

@@ -21,6 +21,7 @@ const ActivityPage = lazy(() => import('./pages/ActivityPage.js').then(m => ({ d
 const SettingsPage = lazy(() => import('./pages/SettingsPage.js').then(m => ({ default: m.SettingsPage })));
 const ShortcutsPage = lazy(() => import('./pages/ShortcutsPage.js').then(m => ({ default: m.ShortcutsPage })));
 const InboxPage = lazy(() => import('./pages/InboxPage.js').then(m => ({ default: m.InboxPage })));
+const LandingPage = lazy(() => import('./pages/LandingPage.js').then(m => ({ default: m.LandingPage })));
 
 const PageSpinner: React.FC = () => (
   <div className="flex-1 flex items-center justify-center text-muted-foreground text-xs font-mono">
@@ -59,7 +60,7 @@ export const App: React.FC = () => {
     }
 
     return {
-      tab: first || 'overview',
+      tab: first || '',
       databaseId: null,
       dbTab: 'overview',
       authSubRoute: null,
@@ -76,12 +77,12 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  // When authenticated, if URL hash is still #/login, #/register, or #/reset-password, redirect to #/overview
+  // When authenticated, if URL hash is still #/, #/login, #/register, or #/reset-password, redirect to #/overview
   useEffect(() => {
-    if (authenticated && route.authSubRoute) {
+    if (authenticated && (route.authSubRoute || route.tab === '')) {
       window.location.hash = '/overview';
     }
-  }, [authenticated, route.authSubRoute]);
+  }, [authenticated, route.authSubRoute, route.tab]);
 
   const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
   const adminOnlyTabs = ['telemetry', 'users', 'cluster'];
@@ -261,6 +262,17 @@ export const App: React.FC = () => {
   }
 
   if (!authenticated) {
+    // Show landing page when visiting root URL (no hash or #/) without an auth sub-route
+    if (!route.authSubRoute) {
+      return (
+        <Suspense fallback={<PageSpinner />}>
+          <LandingPage
+            onGetStarted={() => navigateTo('login')}
+            onNavigate={(target) => navigateTo(target)}
+          />
+        </Suspense>
+      );
+    }
     return (
       <AuthPage
         initialMode={route.authSubRoute === 'reset-password' ? 'reset-password' : route.authSubRoute === 'register' ? 'register' : 'login'}
@@ -269,7 +281,7 @@ export const App: React.FC = () => {
     );
   }
 
-  const validTabs = ['overview', 'telemetry', 'users', 'cluster', 'databases', 'activity', 'settings', 'shortcuts', 'inbox'];
+  const validTabs = ['overview', 'telemetry', 'users', 'cluster', 'databases', 'activity', 'settings', 'shortcuts', 'inbox', ''];
   const isUnauthorizedTab = !isAdmin && adminOnlyTabs.includes(route.tab);
   const isInvalidTab = (!route.databaseId && !validTabs.includes(route.tab)) || isUnauthorizedTab;
 

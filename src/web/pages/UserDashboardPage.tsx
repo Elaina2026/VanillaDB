@@ -376,7 +376,7 @@ export const UserDashboardPage: React.FC<{
                   className="p-4 hover:bg-accent/40 transition-colors flex items-center justify-between cursor-pointer group"
                 >
                   <div className="min-w-0 flex-1 pr-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-bold text-foreground group-hover:text-purple-500 transition-colors truncate">
                         {db.name}
                       </span>

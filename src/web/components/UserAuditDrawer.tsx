@@ -125,7 +125,7 @@ export const UserAuditDrawer: React.FC<UserAuditDrawerProps> = ({
                   <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3 pt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4">
                 <div className="h-20 bg-muted/50 animate-pulse rounded-lg" />
                 <div className="h-20 bg-muted/50 animate-pulse rounded-lg" />
                 <div className="h-20 bg-muted/50 animate-pulse rounded-lg" />
@@ -186,7 +186,7 @@ export const UserAuditDrawer: React.FC<UserAuditDrawerProps> = ({
               </div>
 
               {/* 3 Metrics Cards */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3.5 rounded-xl border border-border bg-card shadow-xs flex flex-col">
                   <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
                     <Globe className="w-3.5 h-3.5 text-blue-500" />

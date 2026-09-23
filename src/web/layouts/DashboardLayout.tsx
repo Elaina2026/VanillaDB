@@ -109,7 +109,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     <div
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className="flex h-screen w-screen overflow-hidden bg-background text-foreground flex-col md:flex-row"
+      className="flex h-screen w-full overflow-hidden bg-background text-foreground flex-col md:flex-row"
     >
       {/* Mobile Top Navigation Bar */}
       <header className="md:hidden h-14 border-b border-border bg-card px-4 flex items-center justify-between shrink-0 z-30">

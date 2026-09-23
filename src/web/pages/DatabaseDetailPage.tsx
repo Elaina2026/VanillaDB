@@ -1364,8 +1364,8 @@ export const DatabaseDetailPage: React.FC<{
                   {t('db.noTables', 'No tables created in this database yet.')}
                 </div>
               ) : (
-                <div className="border border-border rounded-lg overflow-hidden">
-                  <table className="w-full text-left text-xs font-mono">
+                <div className="border border-border rounded-lg overflow-x-auto">
+                  <table className="w-full text-left text-xs font-mono min-w-[480px]">
                     <thead className="bg-muted/50 border-b border-border text-muted-foreground">
                       <tr>
                         <th className="py-2 px-3">{t('db.tableName', 'Table Name')}</th>
@@ -1475,11 +1475,7 @@ export const DatabaseDetailPage: React.FC<{
                     {t('db.requestOpsTimelineDesc', 'Real-time distribution of SELECT, INSERT, UPDATE, DELETE, and DDL operations.')}
                   </p>
                 </div>
-                <div className="flex items-center gap-3 text-xs">
-                  <div className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                    <span className="text-muted-foreground">SELECT</span>
-                  </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs">
                   <div className="flex items-center gap-1">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                     <span className="text-muted-foreground">INSERT</span>
@@ -1643,8 +1639,8 @@ export const DatabaseDetailPage: React.FC<{
                 <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   {t('db.tableIndexStorageDist', 'Table & Index Storage Distribution')}
                 </h4>
-                <div className="border border-border rounded-lg overflow-hidden">
-                  <table className="w-full text-left text-xs font-mono">
+                <div className="border border-border rounded-lg overflow-x-auto">
+                  <table className="w-full text-left text-xs font-mono min-w-[400px]">
                     <thead className="bg-muted/50 border-b border-border text-muted-foreground">
                       <tr>
                         <th className="py-2 px-3">{t('db.entityName', 'Entity Name')}</th>
@@ -1677,7 +1673,7 @@ export const DatabaseDetailPage: React.FC<{
 
         {/* TABLES BROWSER TAB */}
         {activeTab === 'tables' && (
-          <div className="h-full flex flex-col md:flex-row gap-4 overflow-hidden -m-6 p-4 md:p-6">
+          <div className="h-full flex flex-col md:flex-row gap-4 overflow-hidden -m-4 md:-m-6 p-4 md:p-6">
             {/* Table Sidebar */}
             <div className="w-full md:w-56 bg-card border border-border rounded-lg flex flex-col shrink-0 overflow-hidden shadow-sm max-h-48 md:max-h-none">
               <div className="p-3 border-b border-border font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center justify-between">
@@ -2123,7 +2119,7 @@ export const DatabaseDetailPage: React.FC<{
             className={
               isZenMode
                 ? 'fixed inset-0 z-50 bg-background p-4 md:p-6 flex flex-col space-y-3 overflow-hidden animate-in fade-in duration-150'
-                : 'h-full flex flex-col space-y-3 -m-6 p-4 md:p-6 overflow-hidden'
+                : 'h-full flex flex-col space-y-3 -m-4 md:-m-6 p-4 md:p-6 overflow-hidden'
             }
           >
             {/* Editor Console Header */}
@@ -2261,7 +2257,7 @@ export const DatabaseDetailPage: React.FC<{
               </div>
 
               {queryResult && (
-                <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground font-mono">
                   <span>
                     {queryResult.durationMs} ms
                     {'rowCount' in queryResult ? ` • ${queryResult.rowCount} ${t('common.rows', 'rows')}` : ` • ${queryResult.changes} ${t('editor.changes', 'changes')}`}
@@ -2771,7 +2767,7 @@ export const DatabaseDetailPage: React.FC<{
         {activeTab === 'storage' && (
           <div className="max-w-6xl mx-auto space-y-6">
             {/* Header with Upload Action Button */}
-            <div className="flex items-center justify-between pb-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2">
               <div>
                 <h3 className="text-sm font-bold text-foreground">{t('storage.title', 'Media & File Storage')}</h3>
                 <p className="text-xs text-muted-foreground">{t('storage.desc', 'Database-scoped binary media files with range-streaming support.')}</p>
@@ -3049,7 +3045,7 @@ export const DatabaseDetailPage: React.FC<{
         {/* REALTIME EVENT STREAM TAB */}
         {activeTab === 'realtime' && (
           <div className="max-w-6xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                   <Radio className="w-5 h-5 text-blue-500" />
@@ -3060,7 +3056,7 @@ export const DatabaseDetailPage: React.FC<{
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <input
                   type="text"
                   placeholder={t('realtime.filterTablePlaceholder', 'Filter by table name...')}
@@ -3148,7 +3144,7 @@ export const DatabaseDetailPage: React.FC<{
         {/* WEBHOOKS MANAGEMENT TAB */}
         {activeTab === 'webhooks' && (
           <div className="max-w-6xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                   <WebhookIcon className="w-5 h-5 text-purple-500" />
@@ -3408,12 +3404,12 @@ export const DatabaseDetailPage: React.FC<{
         {/* SCHEMA VIEWER TAB */}
         {activeTab === 'schema' && (
           <div className="max-w-5xl mx-auto space-y-4">
-            <div className="flex items-center justify-between pb-1">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-1">
               <div>
                 <h3 className="text-sm font-bold text-foreground">{t('schema.browserTitle', 'Schema Browser')}</h3>
                 <p className="text-xs text-muted-foreground">{t('schema.browserDesc', 'Inspect tables, columns, indexes, foreign keys, and full-text search indexes.')}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {/* View Mode Toggle: Cards vs ERD */}
                 <div className="flex items-center bg-muted/60 p-0.5 rounded-md border border-border text-xs">
                   <button
@@ -3517,8 +3513,8 @@ export const DatabaseDetailPage: React.FC<{
                     {/* Columns */}
                     <div>
                       <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Columns ({item.columns.length})</h4>
-                      <div className="border border-border rounded overflow-hidden">
-                        <table className="w-full text-left text-xs font-mono">
+                      <div className="border border-border rounded overflow-x-auto">
+                        <table className="w-full text-left text-xs font-mono min-w-[360px]">
                           <thead className="bg-muted/40 text-muted-foreground border-b border-border">
                             <tr>
                               <th className="py-1.5 px-3">Name</th>
@@ -3547,8 +3543,8 @@ export const DatabaseDetailPage: React.FC<{
                     {item.indexes && item.indexes.length > 0 && (
                       <div>
                         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Indexes ({item.indexes.length})</h4>
-                        <div className="border border-border rounded overflow-hidden">
-                          <table className="w-full text-left text-xs font-mono">
+                        <div className="border border-border rounded overflow-x-auto">
+                          <table className="w-full text-left text-xs font-mono min-w-[280px]">
                             <thead className="bg-muted/40 text-muted-foreground border-b border-border">
                               <tr>
                                 <th className="py-1.5 px-3">Index Name</th>
@@ -3574,8 +3570,8 @@ export const DatabaseDetailPage: React.FC<{
                     {item.foreignKeys && item.foreignKeys.length > 0 && (
                       <div>
                         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Foreign Keys ({item.foreignKeys.length})</h4>
-                        <div className="border border-border rounded overflow-hidden">
-                          <table className="w-full text-left text-xs font-mono">
+                        <div className="border border-border rounded overflow-x-auto">
+                          <table className="w-full text-left text-xs font-mono min-w-[340px]">
                             <thead className="bg-muted/40 text-muted-foreground border-b border-border">
                               <tr>
                                 <th className="py-1.5 px-3">From Column</th>
@@ -3818,7 +3814,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between pb-2">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2">
                   <div>
                     <h3 className="text-sm font-bold text-foreground">{t('tokens.title', 'API Tokens')}</h3>
                     <p className="text-xs text-muted-foreground">{t('tokens.desc', 'Unlimited tokens for external bots and services.')}</p>
@@ -3847,7 +3843,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                             <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded font-medium">{t('common.active', 'Active')}</span>
                           )}
                         </div>
-                        <div className="text-[11px] text-muted-foreground flex items-center gap-3 mt-1.5">
+                        <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-2 mt-1.5">
                           <span>{t('tokens.permissions', 'Permissions')}: <strong className="text-foreground">{tok.permissions.join(', ')}</strong></span>
                           <span>•</span>
                           <span>{t('tokens.lastUsed', 'Last used')}: {formatTimeAgo(tok.last_used_at, language)}</span>
@@ -3884,7 +3880,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
         {/* SCHEDULED JOBS TAB */}
         {activeTab === 'jobs' && (
           <div className="max-w-5xl mx-auto space-y-4">
-            <div className="flex items-center justify-between pb-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2">
               <div>
                 <h3 className="text-sm font-bold text-foreground">{t('jobs.title', 'Scheduled SQL Jobs (Cron)')}</h3>
                 <p className="text-xs text-muted-foreground">{t('jobs.desc', 'Automated database routines, log purges, and maintenance tasks.')}</p>
@@ -4070,7 +4066,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
               </div>
             </div>
 
-            <div className="flex items-center justify-between pb-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2">
               <div>
                 <h3 className="text-sm font-bold text-foreground">{t('backups.title', 'Database Backups & Snapshots')}</h3>
                 <p className="text-xs text-muted-foreground">{t('backups.desc', 'Safe WAL-consistent backup and restore points.')}</p>
@@ -4092,7 +4088,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 </div>
               ) : (
                 backups.map((bkp) => (
-                  <div key={bkp.id} className="bg-card border border-border rounded-lg p-4 flex items-center justify-between shadow-sm">
+                  <div key={bkp.id} className="bg-card border border-border rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
                     <div>
                       <div className="flex items-center gap-2">
                         <Archive className="w-4 h-4 text-purple-500" />
@@ -4101,7 +4097,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                           {bkp.backup_type}
                         </span>
                       </div>
-                      <div className="text-[11px] text-muted-foreground flex items-center gap-3 mt-1.5">
+                      <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-2 mt-1.5">
                         <span>Size: {formatBytes(bkp.size_bytes)}</span>
                         <span>•</span>
                         <span>SHA256: {bkp.checksum.substring(0, 8)}...</span>
@@ -4516,8 +4512,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   </div>
                 ) : (
                   membersData?.members?.map((member) => (
-                    <div key={member.id} className="p-4 flex items-center justify-between hover:bg-accent/20 transition-colors">
-                      <div className="flex items-center gap-3">
+                    <div key={member.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-accent/20 transition-colors">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div className="w-9 h-9 rounded-full overflow-hidden border border-border bg-muted flex items-center justify-center font-bold text-xs shrink-0">
                           {member.avatar_url ? (
                             <img src={member.avatar_url} alt={member.username} className="w-full h-full object-cover" />

@@ -238,7 +238,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
   };
 
   return (
-    <div className="min-h-screen w-screen flex items-center justify-center bg-background p-4 select-none">
+    <div className="min-h-screen w-full flex items-center justify-center bg-background p-4 select-none">
       <div className="w-full max-w-sm bg-card border border-border rounded-xl shadow-lg p-6 space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-1.5">

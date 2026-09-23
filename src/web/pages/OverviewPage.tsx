@@ -260,7 +260,7 @@ export const OverviewPage: React.FC<{
 
       {/* Quick Launch Databases Grid */}
       <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
               <Layers className="w-4 h-4 text-blue-500" />

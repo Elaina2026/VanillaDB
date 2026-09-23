@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Key, ZoomIn, ZoomOut, RotateCcw, Table as TableIcon } from 'lucide-react';
 import type { TableSchemaDetail } from '#shared/index.js';
 
@@ -46,8 +46,26 @@ export const ErdCanvas: React.FC<{
 
   const handleMouseUp = () => setIsDragging(false);
 
+  // Touch events for mobile/tablet panning
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    setIsDragging(true);
+    dragStartRef.current = { x: e.touches[0].clientX - pan.x, y: e.touches[0].clientY - pan.y };
+  }, [pan]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isDragging || e.touches.length !== 1) return;
+    e.preventDefault();
+    setPan({
+      x: e.touches[0].clientX - dragStartRef.current.x,
+      y: e.touches[0].clientY - dragStartRef.current.y,
+    });
+  }, [isDragging]);
+
+  const handleTouchEnd = useCallback(() => setIsDragging(false), []);
+
   return (
-    <div className="relative w-full h-[600px] bg-card border border-border rounded-xl overflow-hidden select-none">
+    <div className="relative w-full min-h-[400px] h-[min(600px,80vh)] bg-card border border-border rounded-xl overflow-hidden select-none">
       {/* Zoom / Pan Controls Toolbar */}
       <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-card/90 border border-border backdrop-blur-md rounded-lg p-1.5 shadow-xl">
         <button
@@ -80,11 +98,14 @@ export const ErdCanvas: React.FC<{
       </div>
 
       <svg
-        className="w-full h-full cursor-grab active:cursor-grabbing"
+        className="w-full h-full cursor-grab active:cursor-grabbing touch-none"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <defs>
           <marker

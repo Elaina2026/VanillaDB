@@ -609,7 +609,7 @@ export const UsersPage: React.FC = () => {
 
       {/* Floating Bulk Actions Toolbar */}
       {isSuperAdmin && selectedUserIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-card/95 backdrop-blur-md border border-primary/40 rounded-xl px-4 py-2.5 shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-card/95 backdrop-blur-md border border-primary/40 rounded-xl px-4 py-2.5 shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200 max-w-[calc(100vw-2rem)] overflow-x-auto">
           <div className="text-xs font-bold text-foreground flex items-center gap-2 pr-3 border-r border-border">
             <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px]">
               {selectedUserIds.size}

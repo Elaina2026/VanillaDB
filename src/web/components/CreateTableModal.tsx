@@ -141,7 +141,7 @@ export const CreateTableModal: React.FC<{
 
             <div className="space-y-2">
               {columns.map((col, idx) => (
-                <div key={idx} className="flex items-center gap-2 bg-muted/30 p-2 border border-border rounded-md text-xs">
+                <div key={idx} className="flex flex-wrap items-center gap-2 bg-muted/30 p-2 border border-border rounded-md text-xs overflow-x-auto">
                   <input
                     type="text"
                     required

@@ -171,7 +171,7 @@ export const ClusterPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => pollMutation.mutate()}
             disabled={pollMutation.isPending || isFetching}
@@ -235,7 +235,7 @@ export const ClusterPage: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="p-3.5 rounded-xl border border-border bg-card/60 flex items-center justify-between gap-3">
+        <div className="p-3.5 rounded-xl border border-border bg-card/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
             <span className="text-xs text-muted-foreground">

@@ -165,7 +165,7 @@ export const DatabasesPage: React.FC<{
         </div>
 
         {/* Filter Pills */}
-        <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg border border-border shrink-0 self-start sm:self-auto text-xs">
+        <div className="flex flex-wrap items-center gap-1 bg-muted/50 p-1 rounded-lg border border-border shrink-0 self-start sm:self-auto text-xs">
           <button
             onClick={() => setFilterType('all')}
             className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
@@ -208,7 +208,7 @@ export const DatabasesPage: React.FC<{
 
       {/* Pending Invites Banner */}
       {pendingInvitesCount > 0 && (
-        <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3.5 flex items-center justify-between gap-3 text-xs mb-4">
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs mb-4">
           <div className="flex items-center gap-2.5 text-blue-500">
             <Mail className="w-4 h-4 shrink-0" />
             <span>
