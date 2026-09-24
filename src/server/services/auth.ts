@@ -359,18 +359,22 @@ export class AuthService {
   }
 
   public createTemp2faChallenge(userId: string, secret: string): string {
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes validity
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes validity
     const sig = crypto.createHmac('sha256', secret).update(`2fa:${userId}:${expiresAt}`).digest('hex');
     return `${userId}.${expiresAt}.${sig}`;
   }
 
   public verifyTemp2faChallenge(token: string, secret: string): string | null {
     try {
-      const [userId, expiresAtStr, sig] = token.split('.');
+      if (!token || typeof token !== 'string') return null;
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const [userId, expiresAtStr, sig] = parts;
       const expiresAt = parseInt(expiresAtStr, 10);
       if (isNaN(expiresAt) || Date.now() > expiresAt) return null;
 
       const expected = crypto.createHmac('sha256', secret).update(`2fa:${userId}:${expiresAt}`).digest('hex');
+      if (sig.length !== expected.length) return null;
       if (crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
         return userId;
       }

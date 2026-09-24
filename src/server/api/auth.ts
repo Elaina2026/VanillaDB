@@ -264,15 +264,22 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Check if 2FA (TOTP) is enabled on user's account
     if (user.totp_enabled) {
-      const tempToken = authService.createTemp2faChallenge(user.id, config.sessionSecret);
-      return reply.send({
-        success: true,
-        data: {
-          require2fa: true,
-          tempToken,
-          username: user.username,
-        },
-      });
+      const totpInfo = authService.getTotpSecretInternal(user.id);
+      if (!totpInfo?.totp_secret) {
+        // Self-healing guard: if totp_enabled is marked but no secret exists, heal state and proceed with normal login
+        const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+        metaDb.prepare('UPDATE users SET totp_enabled = 0 WHERE id = ?').run(user.id);
+      } else {
+        const tempToken = authService.createTemp2faChallenge(user.id, config.sessionSecret);
+        return reply.send({
+          success: true,
+          data: {
+            require2fa: true,
+            tempToken,
+            username: user.username,
+          },
+        });
+      }
     }
 
     const { cookieValue, expires } = authService.generateSessionCookie(user, config.sessionSecret);
@@ -332,26 +339,32 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
     }
 
-    const cleanCode = parsed.data.code.trim();
+    const rawCode = String(parsed.data.code || '');
+    const cleanDigits = rawCode.replace(/\D/g, '');
+    const cleanCode = rawCode.replace(/[\s-]+/g, '').trim();
+
     let isSuccess = false;
     let loginMethod = 'totp';
+    let isReplay = false;
 
     // 1. Try TOTP code first if 6 digits and not explicitly set as backup code
-    const isSixDigit = /^\d{6}$/.test(cleanCode);
+    const isSixDigit = cleanDigits.length === 6;
     const totpInfo = authService.getTotpSecretInternal(userId);
     let matchedTotpStep: number | undefined;
     if (isSixDigit && !parsed.data.isBackupCode && totpInfo?.totp_secret) {
       const lastStep = userWithSecret.last_totp_step ?? -1;
-      const totpRes = verifyTotpCode(totpInfo.totp_secret, cleanCode, 30000, Date.now(), lastStep);
+      const totpRes = verifyTotpCode(totpInfo.totp_secret, cleanDigits, 30000, Date.now(), lastStep, 2);
       if (totpRes.valid) {
         isSuccess = true;
         loginMethod = 'totp';
         matchedTotpStep = totpRes.step;
+      } else if (totpRes.isReplay) {
+        isReplay = true;
       }
     }
 
     // 2. If not validated via TOTP, verify as Backup Recovery Code
-    if (!isSuccess) {
+    if (!isSuccess && !isReplay) {
       const metaDb = (await import('../db/metadata.js')).getMetadataDb();
       const userRow = metaDb.prepare('SELECT totp_backup_codes FROM users WHERE id = ?').get(userId) as
         | { totp_backup_codes: string | null }
@@ -407,6 +420,16 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
           loginMethod = 'backup_code';
         }
       }
+    }
+
+    if (isReplay) {
+      return reply.status(401).send({
+        success: false,
+        error: {
+          code: 'REPLAYED_TOTP_CODE',
+          message: 'Mã xác thực 2FA này vừa mới được sử dụng. Vui lòng đợi mã kế tiếp trên ứng dụng Authenticator (tối đa 30 giây).',
+        },
+      });
     }
 
     if (!isSuccess) {

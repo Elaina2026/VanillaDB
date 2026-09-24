@@ -88,7 +88,7 @@ export function generateTotpCode(secret: string, timeStepMs = 30000, timestamp =
 }
 
 /**
- * Verify a user-supplied 6-digit code with +/- 1 time step tolerance (30 seconds drift).
+ * Verify a user-supplied 6-digit code with +/- 2 time step tolerance (+/- 60 seconds drift).
  * Enforces RFC 6238 Section 5.2 replay protection by verifying that candidateStep > lastUsedStep.
  */
 export function verifyTotpCode(
@@ -96,21 +96,28 @@ export function verifyTotpCode(
   code: string,
   timeStepMs = 30000,
   timestamp = Date.now(),
-  lastUsedStep = -1
-): { valid: boolean; step?: number } {
-  if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) return { valid: false };
+  lastUsedStep = -1,
+  window = 2
+): { valid: boolean; step?: number; isReplay?: boolean } {
+  const clean = String(code || '').replace(/[\s-]+/g, '').trim();
+  if (!clean || clean.length !== 6 || !/^\d{6}$/.test(clean)) return { valid: false };
 
   const currentStep = Math.floor(timestamp / timeStepMs);
-  for (let step = -1; step <= 1; step++) {
+  let matchedReplay = false;
+
+  for (let step = -window; step <= window; step++) {
     const candidateStep = currentStep + step;
-    if (candidateStep <= lastUsedStep) continue;
     const candidate = generateTotpCode(secret, timeStepMs, candidateStep * timeStepMs);
-    if (crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(code))) {
+    if (crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(clean))) {
+      if (candidateStep <= lastUsedStep) {
+        matchedReplay = true;
+        continue;
+      }
       return { valid: true, step: candidateStep };
     }
   }
 
-  return { valid: false };
+  return { valid: false, isReplay: matchedReplay };
 }
 
 /**

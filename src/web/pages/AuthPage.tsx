@@ -118,7 +118,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login', onNav
       });
       refetchStatus();
     } catch (err: any) {
-      setError(err.message || t('auth.invalid2fa', 'Mã 2FA không chính xác'));
+      if (err.code === 'EXPIRED_2FA_CHALLENGE') {
+        setError(t('auth.session2faExpired', 'Phiên 2FA đã hết hạn. Vui lòng đăng nhập lại mật khẩu.'));
+        setRequire2fa(false);
+        setTempToken('');
+        setTotpCode('');
+        setBackupCodeInput('');
+      } else {
+        setError(err.message || t('auth.invalid2fa', 'Mã 2FA không chính xác'));
+      }
     } finally {
       setLoading(false);
     }

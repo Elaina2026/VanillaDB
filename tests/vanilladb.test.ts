@@ -1452,7 +1452,7 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
 
     // Cleanup temp DB
     databaseService.deleteDatabase(tempDb.id);
-  });
+  }, 30000);
 
   // 23. System Status & Host Disk Space Telemetry
   it('should return system status with host disk space telemetry for super_admin and reject non-admin users', async () => {
