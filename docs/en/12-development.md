@@ -29,7 +29,7 @@ The development environment boots Fastify and Vite simultaneously, with client h
 ```bash
 npm test
 ```
-The test suite executes 133 integration tests verifying:
+The test suite executes 134 integration tests verifying:
 - Authentication, setup, and admin bootstrap.
 - Parameterized SQL execution and query safety sandbox.
 - Scoped API tokens, rate limiting, and table allow/denylists.
@@ -61,7 +61,7 @@ Evaluates concurrency, throughput, and latency profiles (p50, p95, p99) for sing
 ## 3. Contribution Guidelines & Pull Request Standards
 
 Before submitting a Pull Request:
-1. Ensure all 133 Vitest tests pass without regressions.
+1. Ensure all 134 Vitest tests pass without regressions.
 2. Confirm `npm run build` exits with zero TypeScript errors.
 3. Adhere to coding conventions: Fastify route schemas, Zod request validation, and Pino logging.
 4. Maintain bilingual documentation across both `docs/en/` and `docs/vi/`.

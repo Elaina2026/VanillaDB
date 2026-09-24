@@ -457,9 +457,21 @@ export class ClusterService {
       let body: any = undefined;
       if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
         if (req.body) {
-          body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-          if (!headers['content-type']) {
-            headers['content-type'] = 'application/json';
+          if (Buffer.isBuffer(req.body)) {
+            body = req.body;
+            if (!headers['content-type']) {
+              headers['content-type'] = 'application/octet-stream';
+            }
+          } else if (typeof req.body === 'string') {
+            body = req.body;
+            if (!headers['content-type']) {
+              headers['content-type'] = 'application/json';
+            }
+          } else {
+            body = JSON.stringify(req.body);
+            if (!headers['content-type']) {
+              headers['content-type'] = 'application/json';
+            }
           }
         }
       }
@@ -581,8 +593,37 @@ export class ClusterService {
     let targetNode: any = null;
     if (targetNodeId === 'local') {
       const destPath = path.resolve(config.databasesDir, dbRow.filename || `${databaseId}.sqlite`);
+      if (!fs.existsSync(config.tempDir)) {
+        fs.mkdirSync(config.tempDir, { recursive: true });
+      }
+      const tempDest = path.resolve(config.tempDir, `${databaseId}_recv_local_${Date.now()}.sqlite`);
+      fs.writeFileSync(tempDest, snapshotBuffer);
+
+      // Verify SQLite file integrity before placing into databases directory
+      const testDb = new DatabaseSync(tempDest);
+      const check = testDb.prepare('PRAGMA quick_check;').get() as any;
+      testDb.close();
+
+      if (!check || (check.quick_check !== 'ok' && Object.values(check)[0] !== 'ok')) {
+        if (fs.existsSync(tempDest)) fs.unlinkSync(tempDest);
+        throw new Error('Downloaded database snapshot failed SQLite quick_check integrity test');
+      }
+
       dbManager.close(databaseId);
-      fs.writeFileSync(destPath, snapshotBuffer);
+      if (fs.existsSync(destPath)) {
+        try { fs.unlinkSync(destPath); } catch {}
+      }
+      if (fs.existsSync(`${destPath}-wal`)) {
+        try { fs.unlinkSync(`${destPath}-wal`); } catch {}
+      }
+      if (fs.existsSync(`${destPath}-shm`)) {
+        try { fs.unlinkSync(`${destPath}-shm`); } catch {}
+      }
+      if (fs.existsSync(`${destPath}-journal`)) {
+        try { fs.unlinkSync(`${destPath}-journal`); } catch {}
+      }
+      fs.copyFileSync(tempDest, destPath);
+      fs.unlinkSync(tempDest);
     } else {
       targetNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(targetNodeId) as any;
       if (!targetNode || targetNode.status !== 'healthy') {
@@ -622,6 +663,9 @@ export class ClusterService {
       }
       if (fs.existsSync(`${localDbPath}-shm`)) {
         try { fs.unlinkSync(`${localDbPath}-shm`); } catch {}
+      }
+      if (fs.existsSync(`${localDbPath}-journal`)) {
+        try { fs.unlinkSync(`${localDbPath}-journal`); } catch {}
       }
     } else if (sourceNode) {
       await fetch(`${sourceNode.base_url}/api/internal/node/databases/${databaseId}`, {

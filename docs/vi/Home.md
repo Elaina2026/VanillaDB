@@ -60,7 +60,7 @@ Chào mừng bạn đến với hệ thống tài liệu kỹ thuật chi tiết
 
 ### [CHUYÊN ĐỀ 12] Hướng dẫn Phát triển Mã nguồn & Đóng góp
 - Tệp: [12-development.md](12-development.md)
-- Nội dung: Thiết lập môi trường lập trình local, chạy kiểm thử Vitest (133/133 passed), kiểm tra biên dịch, quy chuẩn code và quy trình mở PR.
+- Nội dung: Thiết lập môi trường lập trình local, chạy kiểm thử Vitest (134/134 passed), kiểm tra biên dịch, quy chuẩn code và quy trình mở PR.
 
 ---
 

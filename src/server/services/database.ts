@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { nanoid } from 'nanoid';
 import { config } from '../config/index.js';
 import { getMetadataDb } from '../db/metadata.js';
@@ -47,10 +48,11 @@ export class DatabaseService {
     const assignedNodeId = placement.nodeId;
 
     const now = Date.now();
+    // Temporarily insert with node_id = 'local' so local initialization completes safely
     metaDb.prepare(`
       INSERT INTO databases (id, name, slug, description, filename, max_size_mb, owner_id, node_id, created_at, updated_at, last_accessed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, name, slug, description || null, filename, maxSizeMb || null, ownerId || null, assignedNodeId, now, now, now);
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'local', ?, ?, ?)
+    `).run(id, name, slug, description || null, filename, maxSizeMb || null, ownerId || null, now, now, now);
 
     // Initialize the SQLite database file with WAL and Pragmas
     const db = dbManager.get(id);
@@ -65,6 +67,14 @@ export class DatabaseService {
     // If assigned to a remote worker node, transfer the initialized file and remove local copy
     if (assignedNodeId !== 'local' && assignedNodeId !== config.nodeId) {
       dbManager.close(id);
+
+      // Checkpoint WAL to flush _vdb_meta into main file
+      try {
+        const cp = new DatabaseSync(dbPath);
+        cp.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+        cp.close();
+      } catch {}
+
       try {
         const workerNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(assignedNodeId) as any;
         if (workerNode) {
@@ -76,14 +86,19 @@ export class DatabaseService {
               'content-type': 'application/octet-stream',
             },
             body: fileData,
+          }).then(res => {
+            if (res.ok) {
+              // Successfully transferred to remote worker, set official node_id and unlink local files
+              metaDb.prepare('UPDATE databases SET node_id = ? WHERE id = ?').run(assignedNodeId, id);
+              if (fs.existsSync(dbPath)) try { fs.unlinkSync(dbPath); } catch {}
+              if (fs.existsSync(`${dbPath}-wal`)) try { fs.unlinkSync(`${dbPath}-wal`); } catch {}
+              if (fs.existsSync(`${dbPath}-shm`)) try { fs.unlinkSync(`${dbPath}-shm`); } catch {}
+            } else {
+              logger.error({ status: res.status, assignedNodeId }, 'Failed to initialize database on remote worker node, keeping on local');
+            }
           }).catch(err => {
-            logger.error({ err, assignedNodeId }, 'Failed to initialize database on remote worker node');
+            logger.error({ err, assignedNodeId }, 'Network error transferring database to remote worker node, keeping on local');
           });
-
-          // Unlink local placeholder
-          if (fs.existsSync(dbPath)) try { fs.unlinkSync(dbPath); } catch {}
-          if (fs.existsSync(`${dbPath}-wal`)) try { fs.unlinkSync(`${dbPath}-wal`); } catch {}
-          if (fs.existsSync(`${dbPath}-shm`)) try { fs.unlinkSync(`${dbPath}-shm`); } catch {}
         }
       } catch (err) {
         logger.error({ err, assignedNodeId }, 'Error transferring new database to worker node');

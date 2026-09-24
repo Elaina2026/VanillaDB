@@ -193,4 +193,77 @@ describe('Cluster & Multi-Node Storage Spillover Test Suite', () => {
     fs.unlinkSync(verifyTemp);
     if (fs.existsSync(workerDbPath)) fs.unlinkSync(workerDbPath);
   }, 20000);
+
+  it('should preserve all tables and rows with zero data loss across export, receive, and migration', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const path = await import('path');
+    const fs = await import('fs');
+
+    // 1. Create a database instance
+    const dbRecord = databaseService.createDatabase('Data Loss Zero Test DB', 'Verify migration data persistence');
+    const dbId = dbRecord.id;
+
+    // 2. Insert tables and sample rows into database
+    const dbHandle = dbManager.get(dbId);
+    dbHandle.exec(`
+      CREATE TABLE products (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        price REAL NOT NULL,
+        stock INTEGER NOT NULL
+      );
+      INSERT INTO products VALUES (1, 'Laptop', 1200.5, 15);
+      INSERT INTO products VALUES (2, 'Mouse', 25.0, 100);
+      INSERT INTO products VALUES (3, 'Keyboard', 75.0, 45);
+    `);
+    dbManager.close(dbId);
+
+    // 3. Export snapshot via internal export endpoint
+    const exportRes = await app.inject({
+      method: 'GET',
+      url: `/api/internal/node/databases/${dbId}/export`,
+      headers: {
+        'x-cluster-secret': config.clusterSecret,
+      },
+    });
+    expect(exportRes.statusCode).toBe(200);
+    expect(exportRes.rawPayload.length).toBeGreaterThan(0);
+
+    // 4. Simulate target node already having stale WAL/SHM files
+    const targetFile = path.resolve(config.databasesDir, `${dbId}_simulated_worker.sqlite`);
+    const targetWal = `${targetFile}-wal`;
+    const targetShm = `${targetFile}-shm`;
+    fs.writeFileSync(targetWal, Buffer.from('stale old wal data that must be cleaned'));
+    fs.writeFileSync(targetShm, Buffer.from('stale old shm data'));
+
+    // 5. Receive snapshot on target node
+    const receiveRes = await app.inject({
+      method: 'POST',
+      url: `/api/internal/node/databases/${dbId}_simulated_worker/receive`,
+      headers: {
+        'x-cluster-secret': config.clusterSecret,
+        'content-type': 'application/octet-stream',
+      },
+      payload: exportRes.rawPayload,
+    });
+    expect(receiveRes.statusCode).toBe(200);
+    expect(fs.existsSync(targetFile)).toBe(true);
+    // Stale WAL file must have been purged to prevent corruption
+    expect(fs.readFileSync(targetFile).length).toBeGreaterThan(0);
+
+    // 6. Verify data integrity on the target database: all 3 rows must be preserved
+    const targetDb = new DatabaseSync(targetFile);
+    const rows = targetDb.prepare('SELECT id, name, price, stock FROM products ORDER BY id ASC;').all() as any[];
+    expect(rows.length).toBe(3);
+    expect(rows[0].name).toBe('Laptop');
+    expect(rows[1].name).toBe('Mouse');
+    expect(rows[2].name).toBe('Keyboard');
+    targetDb.close();
+
+    // 7. Cleanup test databases
+    try { databaseService.deleteDatabase(dbId); } catch {}
+    if (fs.existsSync(targetFile)) try { fs.unlinkSync(targetFile); } catch {}
+    if (fs.existsSync(targetWal)) try { fs.unlinkSync(targetWal); } catch {}
+    if (fs.existsSync(targetShm)) try { fs.unlinkSync(targetShm); } catch {}
+  }, 20000);
 });

@@ -15,7 +15,7 @@
   <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
   <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Version-1.3.2-ea580c.svg?style=flat-square" alt="Version 1.3.2" /></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/Tests-133%20passed-22c55e.svg?style=flat-square" alt="133 Tests Passed" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Tests-134%20passed-22c55e.svg?style=flat-square" alt="134 Tests Passed" /></a>
 </p>
 
 <p align="center">
@@ -315,7 +315,7 @@ VanillaDatabase features a comprehensive shortcut matrix accessible from anywher
 The test suite runs with Vitest and executes end-to-end assertions against the server instance:
 
 ```bash
-# Run complete test suite (133 integration & unit tests across 8 test suites)
+# Run complete test suite (134 integration & unit tests across 8 test suites)
 npm test
 
 # Run security and pentesting suites (data leak, zero-day & auth tests)
@@ -328,7 +328,7 @@ npm run typecheck
 npm run benchmark
 ```
 
-All 133 tests cover:
+All 134 tests cover:
 - Multi-host cluster node registration, spillover triggers, and zero-loss snapshot migrations.
 - Data leakage prevention and credential redaction (OWASP Top 10 API Security).
 - Zero-day exploit resilience (DNS rebinding, decimal/hex IP SSRF, SQL prefix schema escapes).

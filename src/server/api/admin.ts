@@ -19,6 +19,9 @@ import { requireAdminAuth, requireRole, getRateLimitWarningsForUser } from '../m
 import { SqlTranslator } from '../utils/sqlTranslator.js';
 import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
 import { stringify } from 'csv-stringify/sync';
+import { clusterService } from '../services/cluster.js';
+import { getMetadataDb } from '../db/metadata.js';
+import { logger } from '../utils/logger.js';
 import { TokenPermissionSchema, type MemberRole } from '../../../shared/index.js';
 
 const IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -28,10 +31,25 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Helper to enforce BOLA / IDOR ownership validation on tenant database routes
   const requireDatabaseAccess = (req: any, reply: any, databaseId: string, minRole: 'viewer' | 'editor' | 'admin' | 'owner' = 'viewer') => {
-    const db = databaseService.getDatabase(databaseId);
+    let db = databaseService.getDatabase(databaseId);
     if (!db) {
-      reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: `Database "${databaseId}" not found` } });
-      return null;
+      // Check if this is a worker node where tenant database file exists directly on disk without central metadata
+      const safeId = databaseId.replace(/[^a-zA-Z0-9_-]/g, '');
+      const dbPath = path.resolve(config.databasesDir, `${safeId}.sqlite`);
+      if (fs.existsSync(dbPath)) {
+        db = {
+          id: safeId,
+          name: safeId,
+          slug: safeId,
+          filename: `${safeId}.sqlite`,
+          node_id: config.nodeId,
+          created_at: 0,
+          updated_at: 0,
+        } as any;
+      } else {
+        reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: `Database "${databaseId}" not found` } });
+        return null;
+      }
     }
     const user = req.adminUser;
     if (!user) return null;
@@ -55,6 +73,33 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     return db;
   };
+
+  // Transparently proxy SQLite-backed database operations to remote worker nodes
+  fastify.addHook('preHandler', async (req, reply) => {
+    const pathname = (req.url || '').split('?')[0];
+    const match = pathname.match(/^\/api\/admin\/databases\/([a-zA-Z0-9_-]+)\/(schema|storage-stats|metrics|tables|query|exec|explain|maintenance|fts5-setup|export|import)(\/.*)?$/);
+    if (!match) return;
+
+    const databaseId = match[1];
+    try {
+      const metaDb = getMetadataDb();
+      const row = metaDb.prepare('SELECT node_id FROM databases WHERE id = ?').get(databaseId) as { node_id?: string } | undefined;
+      if (row && row.node_id && row.node_id !== 'local' && row.node_id !== config.nodeId) {
+        if (!req.adminUser) {
+          await requireAdminAuth(req, reply);
+          if (reply.sent) return reply;
+        }
+
+        const dbRecord = requireDatabaseAccess(req, reply, databaseId, 'viewer');
+        if (reply.sent || !dbRecord) return reply;
+
+        await clusterService.proxyToNode(row.node_id, req, reply);
+        return reply;
+      }
+    } catch (err: any) {
+      logger.error({ err, databaseId }, 'Error in admin cluster proxy preHandler');
+    }
+  });
 
   // Databases CRUD
   fastify.get('/databases', async (req, reply) => {

@@ -31,27 +31,41 @@ export class DatabaseManager {
     const cached = this.handles.get(databaseId);
     if (cached?.resolvedPath) return cached.resolvedPath;
 
-    // Direct disk check: on worker storage nodes, tenant databases exist without central metadata
+    // 1. Check central metadata if present (Gateway)
+    try {
+      const metaDb = getMetadataDb();
+      const row = metaDb.prepare('SELECT filename, node_id FROM databases WHERE id = ?').get(databaseId) as
+        | { filename: string; node_id?: string | null }
+        | undefined;
+
+      if (row) {
+        // If database is assigned to a remote worker node, local gateway must NOT access it directly
+        if (row.node_id && row.node_id !== 'local' && row.node_id !== config.nodeId) {
+          throw new Error(`Database "${databaseId}" is hosted on remote storage node "${row.node_id}". Operations must be routed through the cluster proxy.`);
+        }
+
+        const safeFilename = path.basename(row.filename || `${databaseId}.sqlite`);
+        const resolvedPath = path.resolve(config.databasesDir, safeFilename);
+        if (!resolvedPath.startsWith(path.resolve(config.databasesDir))) {
+          throw new Error('Security Error: Path traversal attempt detected');
+        }
+        return resolvedPath;
+      }
+    } catch (err: any) {
+      if (err.message && err.message.includes('is hosted on remote storage node')) {
+        throw err;
+      }
+      // Fall through to direct disk check
+    }
+
+    // 2. Direct disk check: on worker storage nodes, tenant databases exist without central metadata
     const directFilename = `${databaseId}.sqlite`;
     const directPath = path.resolve(config.databasesDir, directFilename);
     if (fs.existsSync(directPath)) {
       return directPath;
     }
 
-    const metaDb = getMetadataDb();
-    const row = metaDb.prepare('SELECT filename FROM databases WHERE id = ?').get(databaseId) as { filename: string } | undefined;
-    if (!row || !row.filename) {
-      throw new Error(`Database not found: ${databaseId}`);
-    }
-
-    const safeFilename = path.basename(row.filename);
-    const resolvedPath = path.resolve(config.databasesDir, safeFilename);
-
-    if (!resolvedPath.startsWith(path.resolve(config.databasesDir))) {
-      throw new Error('Security Error: Path traversal attempt detected');
-    }
-
-    return resolvedPath;
+    throw new Error(`Database not found: ${databaseId}`);
   }
 
   public get(databaseId: string): DatabaseSync {

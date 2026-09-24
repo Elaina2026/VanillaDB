@@ -30,7 +30,7 @@
 - Never wait for the user to request manual memory saving.
 
 ## Development & Test Commands
-- Run test suite: `npm test` (133 Vitest tests passing)
+- Run test suite: `npm test` (134 Vitest tests passing)
 - Run production build: `npm run build` (Vite client + TypeScript server)
 - Start development server: `npm run dev`
 - Run benchmarks: `npm run benchmark`

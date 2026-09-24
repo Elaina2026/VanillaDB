@@ -27,6 +27,24 @@ setInterval(() => {
 }, 60 * 1000).unref();
 
 export async function requireAdminAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  // Support trusted Cluster Gateway via x-cluster-secret
+  const clusterSecretHeader = request.headers['x-cluster-secret'];
+  if (clusterSecretHeader && typeof clusterSecretHeader === 'string') {
+    let isClusterMatch = false;
+    const expected = config.clusterSecret;
+    if (clusterSecretHeader.length === expected.length) {
+      isClusterMatch = crypto.timingSafeEqual(Buffer.from(clusterSecretHeader), Buffer.from(expected));
+    }
+    if (isClusterMatch) {
+      request.adminUser = {
+        userId: 'cluster_gateway',
+        username: 'cluster_gateway',
+        role: 'super_admin',
+      };
+      return;
+    }
+  }
+
   const sessionCookie = request.cookies?.vdb_session;
   if (!sessionCookie) {
     reply.status(401).send({

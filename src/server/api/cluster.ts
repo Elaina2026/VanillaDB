@@ -100,9 +100,18 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Atomic rename/move to destination
+      dbManager.close(safeId);
       if (fs.existsSync(destFile)) {
-        dbManager.close(safeId);
         try { fs.unlinkSync(destFile); } catch {}
+      }
+      if (fs.existsSync(`${destFile}-wal`)) {
+        try { fs.unlinkSync(`${destFile}-wal`); } catch {}
+      }
+      if (fs.existsSync(`${destFile}-shm`)) {
+        try { fs.unlinkSync(`${destFile}-shm`); } catch {}
+      }
+      if (fs.existsSync(`${destFile}-journal`)) {
+        try { fs.unlinkSync(`${destFile}-journal`); } catch {}
       }
       fs.copyFileSync(tempFile, destFile);
       fs.unlinkSync(tempFile);

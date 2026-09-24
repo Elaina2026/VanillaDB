@@ -15,7 +15,7 @@
   <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
   <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Phi%C3%AAn%20b%E1%BA%A3n-1.3.2-ea580c.svg?style=flat-square" alt="Phiên bản 1.3.2" /></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-133%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="133 bài kiểm thử vượt qua" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-134%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="134 bài kiểm thử vượt qua" /></a>
 </p>
 
 <p align="center">
@@ -316,7 +316,7 @@ VanillaDatabase trang bị bảng phím tắt tiện lợi hỗ trợ thao tác 
 Toàn bộ hệ thống kiểm thử vận hành tự động qua Vitest với kiểm chứng đầu-cuối:
 
 ```bash
-# Chạy toàn bộ 133 bài kiểm thử tích hợp & đơn vị trên 8 bộ test suite
+# Chạy toàn bộ 134 bài kiểm thử tích hợp & đơn vị trên 8 bộ test suite
 npm test
 
 # Chạy riêng các bộ pentest bảo mật (rò rỉ dữ liệu, zero-day & xác thực)
@@ -329,7 +329,7 @@ npm run typecheck
 npm run benchmark
 ```
 
-Toàn bộ 133 bài kiểm thử xác minh:
+Toàn bộ 134 bài kiểm thử xác minh:
 - Phân cụm đa máy chủ, tự động tràn đĩa và di chuyển database nguyên tử không downtime.
 - Chặn rò rỉ dữ liệu và che giấu thông tin nhạy cảm (OWASP Top 10 API Security).
 - Kháng tấn công zero-day (DNS rebinding, bypass IP số nguyên/hex, thoát tiền tố schema SQL).
