@@ -123,6 +123,11 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     }
     if (!databaseId) return;
 
+    // If database is currently undergoing host migration, pause briefly until transfer completes
+    if (clusterService.isMigrating(databaseId)) {
+      await clusterService.waitForMigration(databaseId);
+    }
+
     try {
       const metaDb = getMetadataDb();
       const row = metaDb.prepare('SELECT node_id FROM databases WHERE id = ?').get(databaseId) as { node_id?: string } | undefined;

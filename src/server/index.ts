@@ -232,11 +232,18 @@ export async function buildApp() {
       });
     }
 
-    // Request execution timeout safeguard (skip for live SSE streams; extend to 120s for batch/storage)
+    // Request execution timeout safeguard (skip for live SSE streams; extend to 300s for batch/storage/migration/backups)
     const isRealtime = req.url.includes('/realtime');
     if (!isRealtime) {
-      const isHeavyRoute = req.url.includes('/batch') || req.url.includes('/storage') || req.url.includes('/import');
-      const timeoutMs = isHeavyRoute ? 120_000 : 60_000;
+      const isHeavyRoute =
+        req.url.includes('/batch') ||
+        req.url.includes('/storage') ||
+        req.url.includes('/import') ||
+        req.url.includes('/migrate') ||
+        req.url.includes('/receive') ||
+        req.url.includes('/export') ||
+        req.url.includes('/backup');
+      const timeoutMs = isHeavyRoute ? 300_000 : 60_000;
 
       const timer = setTimeout(() => {
         if (!reply.sent && !reply.raw.destroyed) {

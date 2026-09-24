@@ -23,10 +23,29 @@ export class ClusterService {
   private lastCpuUsage: NodeJS.CpuUsage | null = null;
   private lastCpuSampleTime: number = Date.now();
   private cachedLocalCpuPercent: number = 0;
+  private activeMigrations = new Set<string>();
 
   constructor() {
     this.lastCpuUsage = process.cpuUsage();
     this.lastCpuSampleTime = Date.now();
+  }
+
+  public isMigrating(databaseId: string): boolean {
+    return this.activeMigrations.has(databaseId);
+  }
+
+  /**
+   * Pause incoming write/read requests if database is mid-migration (prevents data loss or race conditions)
+   */
+  public async waitForMigration(databaseId: string, maxWaitMs = 15000): Promise<void> {
+    if (!this.activeMigrations.has(databaseId)) return;
+    const start = Date.now();
+    while (this.activeMigrations.has(databaseId)) {
+      if (Date.now() - start > maxWaitMs) {
+        throw new Error(`Database "${databaseId}" is temporarily locked for host migration. Please retry in a few seconds.`);
+      }
+      await new Promise(r => setTimeout(r, 150));
+    }
   }
 
   public start(): void {
@@ -482,6 +501,7 @@ export class ClusterService {
         body,
         // @ts-ignore
         duplex: body ? 'half' : undefined,
+        signal: AbortSignal.timeout(120_000),
       });
 
       reply.status(remoteRes.status);
@@ -511,181 +531,193 @@ export class ClusterService {
    * Migrate an entire SQLite database and its media files to another host with ZERO data loss
    */
   public async migrateDatabase(databaseId: string, targetNodeId: string): Promise<{ success: boolean; message: string }> {
-    const metaDb = getMetadataDb();
-    const dbRow = metaDb.prepare('SELECT * FROM databases WHERE id = ?').get(databaseId) as any;
-    if (!dbRow) {
-      throw new Error(`Database not found: ${databaseId}`);
+    if (this.activeMigrations.has(databaseId)) {
+      throw new Error(`Database "${databaseId}" is currently undergoing host migration. Please wait for the current transfer to complete.`);
     }
+    this.activeMigrations.add(databaseId);
 
-    const currentNodeId = dbRow.node_id || 'local';
-    if (currentNodeId === targetNodeId) {
-      throw new Error(`Database is already on target node "${targetNodeId}".`);
-    }
-
-    // Step 1: Obtain consistent database snapshot buffer from source host
-    let snapshotBuffer: Buffer;
-    let sourceNode: any = null;
-
-    if (currentNodeId === 'local') {
-      const localDbPath = path.resolve(config.databasesDir, dbRow.filename || `${databaseId}.sqlite`);
-      if (!fs.existsSync(localDbPath)) {
-        throw new Error(`Local database file not found: ${localDbPath}`);
+    try {
+      const metaDb = getMetadataDb();
+      const dbRow = metaDb.prepare('SELECT * FROM databases WHERE id = ?').get(databaseId) as any;
+      if (!dbRow) {
+        throw new Error(`Database not found: ${databaseId}`);
       }
 
-      if (!fs.existsSync(config.tempDir)) {
-        fs.mkdirSync(config.tempDir, { recursive: true });
+      const currentNodeId = dbRow.node_id || 'local';
+      if (currentNodeId === targetNodeId) {
+        throw new Error(`Database is already on target node "${targetNodeId}".`);
       }
 
-      const tempSnapshot = path.resolve(config.tempDir, `${databaseId}_migrating_${Date.now()}.sqlite`);
-      try {
+      // Step 1: Obtain consistent database snapshot buffer from source host
+      let snapshotBuffer: Buffer;
+      let sourceNode: any = null;
+
+      if (currentNodeId === 'local') {
+        const localDbPath = path.resolve(config.databasesDir, dbRow.filename || `${databaseId}.sqlite`);
+        if (!fs.existsSync(localDbPath)) {
+          throw new Error(`Local database file not found: ${localDbPath}`);
+        }
+
+        if (!fs.existsSync(config.tempDir)) {
+          fs.mkdirSync(config.tempDir, { recursive: true });
+        }
+
+        const tempSnapshot = path.resolve(config.tempDir, `${databaseId}_migrating_${Date.now()}.sqlite`);
+        try {
+          dbManager.close(databaseId);
+
+          try {
+            const checkpointer = new DatabaseSync(localDbPath);
+            checkpointer.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+            checkpointer.close();
+          } catch {}
+
+          const safeTempPath = tempSnapshot.replace(/\\/g, '/').replace(/'/g, "''");
+          try {
+            const snapHandle = new DatabaseSync(localDbPath);
+            snapHandle.exec(`VACUUM INTO '${safeTempPath}';`);
+            snapHandle.close();
+            snapshotBuffer = fs.readFileSync(tempSnapshot);
+          } catch {
+            snapshotBuffer = fs.readFileSync(localDbPath);
+          }
+        } catch (err: any) {
+          throw new Error(`Failed to create consistent SQLite snapshot: ${err.message}`);
+        } finally {
+          if (fs.existsSync(tempSnapshot)) {
+            try { fs.unlinkSync(tempSnapshot); } catch {}
+          }
+        }
+      } else {
+        sourceNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(currentNodeId) as any;
+        if (!sourceNode) {
+          throw new Error(`Source worker node "${currentNodeId}" not found in cluster metadata.`);
+        }
+
+        const downloadRes = await fetch(`${sourceNode.base_url}/api/internal/node/databases/${databaseId}/export`, {
+          method: 'GET',
+          headers: {
+            'x-cluster-secret': sourceNode.auth_token || config.clusterSecret,
+          },
+          signal: AbortSignal.timeout(300_000),
+        });
+
+        if (!downloadRes.ok) {
+          let errDetail = '';
+          try {
+            const errJson = await downloadRes.json() as any;
+            errDetail = errJson.error?.message || errJson.message || '';
+          } catch {
+            errDetail = await downloadRes.text().catch(() => '');
+          }
+          throw new Error(`Failed to download database from source worker (${sourceNode.name}): HTTP ${downloadRes.status} ${errDetail}`);
+        }
+
+        snapshotBuffer = Buffer.from(await downloadRes.arrayBuffer());
+      }
+
+      // Step 2: Deliver snapshot buffer to destination host
+      let targetNode: any = null;
+      if (targetNodeId === 'local') {
+        const destPath = path.resolve(config.databasesDir, dbRow.filename || `${databaseId}.sqlite`);
+        if (!fs.existsSync(config.tempDir)) {
+          fs.mkdirSync(config.tempDir, { recursive: true });
+        }
+        const tempDest = path.resolve(config.tempDir, `${databaseId}_recv_local_${Date.now()}.sqlite`);
+        fs.writeFileSync(tempDest, snapshotBuffer);
+
+        // Verify SQLite file integrity before placing into databases directory
+        const testDb = new DatabaseSync(tempDest);
+        const check = testDb.prepare('PRAGMA quick_check;').get() as any;
+        testDb.close();
+
+        if (!check || (check.quick_check !== 'ok' && Object.values(check)[0] !== 'ok')) {
+          if (fs.existsSync(tempDest)) fs.unlinkSync(tempDest);
+          throw new Error('Downloaded database snapshot failed SQLite quick_check integrity test');
+        }
+
         dbManager.close(databaseId);
-
-        try {
-          const checkpointer = new DatabaseSync(localDbPath);
-          checkpointer.exec('PRAGMA wal_checkpoint(TRUNCATE);');
-          checkpointer.close();
-        } catch {}
-
-        const safeTempPath = tempSnapshot.replace(/\\/g, '/').replace(/'/g, "''");
-        try {
-          const snapHandle = new DatabaseSync(localDbPath);
-          snapHandle.exec(`VACUUM INTO '${safeTempPath}';`);
-          snapHandle.close();
-          snapshotBuffer = fs.readFileSync(tempSnapshot);
-        } catch {
-          snapshotBuffer = fs.readFileSync(localDbPath);
+        if (fs.existsSync(destPath)) {
+          try { fs.unlinkSync(destPath); } catch {}
         }
-      } catch (err: any) {
-        throw new Error(`Failed to create consistent SQLite snapshot: ${err.message}`);
-      } finally {
-        if (fs.existsSync(tempSnapshot)) {
-          try { fs.unlinkSync(tempSnapshot); } catch {}
+        if (fs.existsSync(`${destPath}-wal`)) {
+          try { fs.unlinkSync(`${destPath}-wal`); } catch {}
+        }
+        if (fs.existsSync(`${destPath}-shm`)) {
+          try { fs.unlinkSync(`${destPath}-shm`); } catch {}
+        }
+        if (fs.existsSync(`${destPath}-journal`)) {
+          try { fs.unlinkSync(`${destPath}-journal`); } catch {}
+        }
+        fs.copyFileSync(tempDest, destPath);
+        fs.unlinkSync(tempDest);
+      } else {
+        targetNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(targetNodeId) as any;
+        if (!targetNode || targetNode.status !== 'healthy') {
+          throw new Error(`Target node "${targetNodeId}" is offline or unhealthy.`);
+        }
+
+        const uploadRes = await fetch(`${targetNode.base_url}/api/internal/node/databases/${databaseId}/receive`, {
+          method: 'POST',
+          headers: {
+            'x-cluster-secret': targetNode.auth_token || config.clusterSecret,
+            'content-type': 'application/octet-stream',
+          },
+          body: snapshotBuffer as any,
+          signal: AbortSignal.timeout(300_000),
+        });
+
+        if (!uploadRes.ok) {
+          let errDetail = '';
+          try {
+            const errJson = await uploadRes.json() as any;
+            errDetail = errJson.error?.message || errJson.message || '';
+          } catch {
+            errDetail = await uploadRes.text().catch(() => '');
+          }
+          throw new Error(`Target worker (${targetNode.name}) rejected database snapshot: HTTP ${uploadRes.status} ${errDetail}`);
         }
       }
-    } else {
-      sourceNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(currentNodeId) as any;
-      if (!sourceNode) {
-        throw new Error(`Source worker node "${currentNodeId}" not found in cluster metadata.`);
-      }
 
-      const downloadRes = await fetch(`${sourceNode.base_url}/api/internal/node/databases/${databaseId}/export`, {
-        method: 'GET',
-        headers: {
-          'x-cluster-secret': sourceNode.auth_token || config.clusterSecret,
-        },
-      });
-
-      if (!downloadRes.ok) {
-        let errDetail = '';
-        try {
-          const errJson = await downloadRes.json() as any;
-          errDetail = errJson.error?.message || errJson.message || '';
-        } catch {
-          errDetail = await downloadRes.text().catch(() => '');
+      // Step 3: Cleanup old database files from source host
+      if (currentNodeId === 'local') {
+        dbManager.close(databaseId);
+        const localDbPath = path.resolve(config.databasesDir, dbRow.filename || `${databaseId}.sqlite`);
+        if (fs.existsSync(localDbPath)) {
+          try { fs.unlinkSync(localDbPath); } catch {}
         }
-        throw new Error(`Failed to download database from source worker (${sourceNode.name}): HTTP ${downloadRes.status} ${errDetail}`);
+        if (fs.existsSync(`${localDbPath}-wal`)) {
+          try { fs.unlinkSync(`${localDbPath}-wal`); } catch {}
+        }
+        if (fs.existsSync(`${localDbPath}-shm`)) {
+          try { fs.unlinkSync(`${localDbPath}-shm`); } catch {}
+        }
+        if (fs.existsSync(`${localDbPath}-journal`)) {
+          try { fs.unlinkSync(`${localDbPath}-journal`); } catch {}
+        }
+      } else if (sourceNode) {
+        await fetch(`${sourceNode.base_url}/api/internal/node/databases/${databaseId}`, {
+          method: 'DELETE',
+          headers: {
+            'x-cluster-secret': sourceNode.auth_token || config.clusterSecret,
+          },
+          signal: AbortSignal.timeout(10_000),
+        }).catch(() => {});
       }
 
-      snapshotBuffer = Buffer.from(await downloadRes.arrayBuffer());
+      // Step 4: Atomic update in cluster metadata database
+      metaDb.prepare('UPDATE databases SET node_id = ?, updated_at = ? WHERE id = ?').run(targetNodeId, Date.now(), databaseId);
+
+      const sourceName = currentNodeId === 'local' ? 'Primary Gateway' : sourceNode?.name || currentNodeId;
+      const targetName = targetNodeId === 'local' ? 'Primary Gateway' : targetNode?.name || targetNodeId;
+
+      return {
+        success: true,
+        message: `Database "${dbRow.name}" successfully migrated from ${sourceName} to ${targetName}.`,
+      };
+    } finally {
+      this.activeMigrations.delete(databaseId);
     }
-
-    // Step 2: Deliver snapshot buffer to destination host
-    let targetNode: any = null;
-    if (targetNodeId === 'local') {
-      const destPath = path.resolve(config.databasesDir, dbRow.filename || `${databaseId}.sqlite`);
-      if (!fs.existsSync(config.tempDir)) {
-        fs.mkdirSync(config.tempDir, { recursive: true });
-      }
-      const tempDest = path.resolve(config.tempDir, `${databaseId}_recv_local_${Date.now()}.sqlite`);
-      fs.writeFileSync(tempDest, snapshotBuffer);
-
-      // Verify SQLite file integrity before placing into databases directory
-      const testDb = new DatabaseSync(tempDest);
-      const check = testDb.prepare('PRAGMA quick_check;').get() as any;
-      testDb.close();
-
-      if (!check || (check.quick_check !== 'ok' && Object.values(check)[0] !== 'ok')) {
-        if (fs.existsSync(tempDest)) fs.unlinkSync(tempDest);
-        throw new Error('Downloaded database snapshot failed SQLite quick_check integrity test');
-      }
-
-      dbManager.close(databaseId);
-      if (fs.existsSync(destPath)) {
-        try { fs.unlinkSync(destPath); } catch {}
-      }
-      if (fs.existsSync(`${destPath}-wal`)) {
-        try { fs.unlinkSync(`${destPath}-wal`); } catch {}
-      }
-      if (fs.existsSync(`${destPath}-shm`)) {
-        try { fs.unlinkSync(`${destPath}-shm`); } catch {}
-      }
-      if (fs.existsSync(`${destPath}-journal`)) {
-        try { fs.unlinkSync(`${destPath}-journal`); } catch {}
-      }
-      fs.copyFileSync(tempDest, destPath);
-      fs.unlinkSync(tempDest);
-    } else {
-      targetNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(targetNodeId) as any;
-      if (!targetNode || targetNode.status !== 'healthy') {
-        throw new Error(`Target node "${targetNodeId}" is offline or unhealthy.`);
-      }
-
-      const uploadRes = await fetch(`${targetNode.base_url}/api/internal/node/databases/${databaseId}/receive`, {
-        method: 'POST',
-        headers: {
-          'x-cluster-secret': targetNode.auth_token || config.clusterSecret,
-          'content-type': 'application/octet-stream',
-        },
-        body: snapshotBuffer as any,
-      });
-
-      if (!uploadRes.ok) {
-        let errDetail = '';
-        try {
-          const errJson = await uploadRes.json() as any;
-          errDetail = errJson.error?.message || errJson.message || '';
-        } catch {
-          errDetail = await uploadRes.text().catch(() => '');
-        }
-        throw new Error(`Target worker (${targetNode.name}) rejected database snapshot: HTTP ${uploadRes.status} ${errDetail}`);
-      }
-    }
-
-    // Step 3: Cleanup old database files from source host
-    if (currentNodeId === 'local') {
-      dbManager.close(databaseId);
-      const localDbPath = path.resolve(config.databasesDir, dbRow.filename || `${databaseId}.sqlite`);
-      if (fs.existsSync(localDbPath)) {
-        try { fs.unlinkSync(localDbPath); } catch {}
-      }
-      if (fs.existsSync(`${localDbPath}-wal`)) {
-        try { fs.unlinkSync(`${localDbPath}-wal`); } catch {}
-      }
-      if (fs.existsSync(`${localDbPath}-shm`)) {
-        try { fs.unlinkSync(`${localDbPath}-shm`); } catch {}
-      }
-      if (fs.existsSync(`${localDbPath}-journal`)) {
-        try { fs.unlinkSync(`${localDbPath}-journal`); } catch {}
-      }
-    } else if (sourceNode) {
-      await fetch(`${sourceNode.base_url}/api/internal/node/databases/${databaseId}`, {
-        method: 'DELETE',
-        headers: {
-          'x-cluster-secret': sourceNode.auth_token || config.clusterSecret,
-        },
-      }).catch(() => {});
-    }
-
-    // Step 4: Atomic update in cluster metadata database
-    metaDb.prepare('UPDATE databases SET node_id = ?, updated_at = ? WHERE id = ?').run(targetNodeId, Date.now(), databaseId);
-
-    const sourceName = currentNodeId === 'local' ? 'Primary Gateway' : sourceNode?.name || currentNodeId;
-    const targetName = targetNodeId === 'local' ? 'Primary Gateway' : targetNode?.name || targetNodeId;
-
-    return {
-      success: true,
-      message: `Database "${dbRow.name}" successfully migrated from ${sourceName} to ${targetName}.`,
-    };
   }
 }
 
