@@ -18,17 +18,17 @@ Chào mừng bạn đến với hệ thống tài liệu kỹ thuật chi tiết
 - Tệp: [01-getting-started.md](01-getting-started.md)
 - Nội dung: Yêu cầu hệ thống, cấu hình biến môi trường, khởi tạo tài khoản Super Admin ban đầu, lệnh CLI đặt lại mật khẩu và kiểm tra trạng thái sức khỏe.
 
-### [CHUYÊN ĐỀ 02] Kiến trúc Hệ thống & Động cơ
+### [CHUYÊN ĐỀ 02] Kiến trúc Hệ thống, Phân cụm & Động cơ
 - Tệp: [02-architecture.md](02-architecture.md)
-- Nội dung: Kiến trúc SQLite đa người thuê, chế độ Write-Ahead Logging (WAL), tách biệt Control Plane và Data Plane, quản lý bộ nhớ đệm kết nối và tối ưu RAM.
+- Nội dung: Kiến trúc SQLite đa người thuê, chế độ Write-Ahead Logging (WAL), tách biệt Control Plane và Data Plane, phân cụm đa máy chủ (host sharding), tự động tràn ổ đĩa và di chuyển CSDL không downtime.
 
 ### [CHUYÊN ĐỀ 03] Quản trị Cơ sở Dữ liệu & Động cơ SQL
 - Tệp: [03-database-engine.md](03-database-engine.md)
 - Nội dung: Vòng đời tạo và quản lý database, kiểm tra cấu trúc schema, thực thi truy vấn tham số hóa, giao dịch theo lô, hàm AI vector và hàm mã hóa SQL.
 
-### [CHUYÊN ĐỀ 04] Tầng Dữ liệu & Tham chiếu REST API
+### [CHUYÊN ĐỀ 04] Tầng Dữ liệu, Tham chiếu REST & Cluster API
 - Tệp: [04-api-reference.md](04-api-reference.md)
-- Nội dung: Quy chuẩn chi tiết các endpoint `/v1/databases/:id/query`, `/exec`, `/batch`, `/tables`, `/schema`, `/realtime`, và `/storage`.
+- Nội dung: Quy chuẩn chi tiết các endpoint `/v1/databases/:id/query`, `/exec`, `/batch`, `/tables`, `/schema`, `/realtime`, `/storage` và `/api/admin/cluster/*`.
 
 ### [CHUYÊN ĐỀ 05] Xác thực, Phân quyền RBAC & Bảo mật 2FA
 - Tệp: [05-authentication-rbac-2fa.md](05-authentication-rbac-2fa.md)
@@ -60,7 +60,7 @@ Chào mừng bạn đến với hệ thống tài liệu kỹ thuật chi tiết
 
 ### [CHUYÊN ĐỀ 12] Hướng dẫn Phát triển Mã nguồn & Đóng góp
 - Tệp: [12-development.md](12-development.md)
-- Nội dung: Thiết lập môi trường lập trình local, chạy kiểm thử Vitest (94/94 passed), kiểm tra biên dịch, quy chuẩn code và quy trình mở PR.
+- Nội dung: Thiết lập môi trường lập trình local, chạy kiểm thử Vitest (133/133 passed), kiểm tra biên dịch, quy chuẩn code và quy trình mở PR.
 
 ---
 

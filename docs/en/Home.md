@@ -18,17 +18,17 @@ Welcome to the technical documentation wiki for **VanillaDatabase (VanillaDB)**.
 - File: [01-getting-started.md](01-getting-started.md)
 - Topics: System prerequisites, environment configuration, first-time Super Admin initialization, CLI admin reset commands, quick health probe.
 
-### [MODULE 02] Architecture & Engine Design
+### [MODULE 02] Architecture, Host Sharding & Engine Design
 - File: [02-architecture.md](02-architecture.md)
-- Topics: Multi-tenant SQLite architecture, Write-Ahead Logging (WAL mode), Control Plane vs Data Plane separation, handle caching, and memory footprint.
+- Topics: Multi-tenant SQLite architecture, Write-Ahead Logging (WAL mode), Control Plane vs Data Plane separation, multi-node cluster sharding, automated storage spillover, and zero-downtime migration.
 
 ### [MODULE 03] Database Management & SQL Engine
 - File: [03-database-engine.md](03-database-engine.md)
 - Topics: Database creation and lifecycle, schema inspection, parameterized query execution, batch transactions, AI vector math functions, and cryptographic SQL helpers.
 
-### [MODULE 04] Data Plane & REST API Reference
+### [MODULE 04] Data Plane, REST & Cluster API Reference
 - File: [04-api-reference.md](04-api-reference.md)
-- Topics: Detailed HTTP specifications for `/v1/databases/:id/query`, `/exec`, `/batch`, `/tables`, `/schema`, `/realtime`, and `/storage`.
+- Topics: Detailed HTTP specifications for `/v1/databases/:id/query`, `/exec`, `/batch`, `/tables`, `/schema`, `/realtime`, `/storage`, and `/api/admin/cluster/*`.
 
 ### [MODULE 05] Authentication, RBAC & 2FA Security
 - File: [05-authentication-rbac-2fa.md](05-authentication-rbac-2fa.md)
@@ -60,7 +60,7 @@ Welcome to the technical documentation wiki for **VanillaDatabase (VanillaDB)**.
 
 ### [MODULE 12] Development & Contributing Guidelines
 - File: [12-development.md](12-development.md)
-- Topics: Local environment setup, test suite execution (Vitest 94/94), build verification, architectural coding standards, and PR workflows.
+- Topics: Local environment setup, test suite execution (Vitest 133/133 passed), build verification, architectural coding standards, and PR workflows.
 
 ---
 

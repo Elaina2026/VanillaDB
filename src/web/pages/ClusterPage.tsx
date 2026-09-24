@@ -159,10 +159,10 @@ export const ClusterPage: React.FC = () => {
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-y-auto p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6 pb-24">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Server className="w-6 h-6 text-blue-500" />
-            <h1 className="text-xl font-bold tracking-tight text-foreground">
+            <Server className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500 shrink-0" />
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">
               {t('cluster.title', 'Cluster & Storage Nodes')}
             </h1>
           </div>
@@ -171,23 +171,23 @@ export const ClusterPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <button
             onClick={() => pollMutation.mutate()}
             disabled={pollMutation.isPending || isFetching}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-lg border border-border transition-colors disabled:opacity-50"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-lg border border-border transition-colors disabled:opacity-50"
             title="Poll Heartbeats"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${pollMutation.isPending || isFetching ? 'animate-spin' : ''}`} />
-            <span>{t('cluster.refresh', 'Check Heartbeats')}</span>
+            <span className="whitespace-nowrap">{t('cluster.refresh', 'Check Heartbeats')}</span>
           </button>
 
           <button
             onClick={() => setIsMigrateModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-lg border border-border transition-colors"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-lg border border-border transition-colors"
           >
             <ArrowRightLeft className="w-3.5 h-3.5 text-blue-500" />
-            <span>{t('cluster.migrateDb', 'Migrate Database')}</span>
+            <span className="whitespace-nowrap">{t('cluster.migrateDb', 'Migrate Database')}</span>
           </button>
 
           <button
@@ -195,10 +195,10 @@ export const ClusterPage: React.FC = () => {
               setAddError(null);
               setIsAddModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition-colors"
+            className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>{t('cluster.addNode', 'Add Worker Node')}</span>
+            <span className="whitespace-nowrap">{t('cluster.addNode', 'Add Worker Node')}</span>
           </button>
         </div>
       </div>
@@ -255,28 +255,28 @@ export const ClusterPage: React.FC = () => {
       )}
 
       {/* Cluster KPI Tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-xl bg-card border border-border">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5">
+        <div className="p-3.5 sm:p-4 rounded-xl bg-card border border-border">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-muted-foreground">{t('cluster.nodesTotal', 'Total Nodes')}</span>
-            <Server className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground truncate">{t('cluster.nodesTotal', 'Total Nodes')}</span>
+            <Server className="w-4 h-4 text-muted-foreground shrink-0" />
           </div>
-          <div className="text-2xl font-bold font-mono text-foreground">
+          <div className="text-xl sm:text-2xl font-bold font-mono text-foreground truncate">
             {clusterStatus?.healthyNodes} <span className="text-xs font-normal text-muted-foreground">/ {clusterStatus?.totalNodes}</span>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">
+          <p className="text-[11px] text-muted-foreground mt-1 truncate">
             {clusterStatus?.healthyNodes === clusterStatus?.totalNodes
               ? t('cluster.allNodesOnline', 'All nodes healthy')
               : `${(clusterStatus?.totalNodes || 0) - (clusterStatus?.healthyNodes || 0)} ${t('cluster.nodesOffline', 'offline / unreachable')}`}
           </p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-border">
+        <div className="p-3.5 sm:p-4 rounded-xl bg-card border border-border">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-muted-foreground">{t('cluster.clusterStorage', 'Cluster Storage')}</span>
-            <HardDrive className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground truncate">{t('cluster.clusterStorage', 'Cluster Storage')}</span>
+            <HardDrive className="w-4 h-4 text-muted-foreground shrink-0" />
           </div>
-          <div className="text-2xl font-bold font-mono text-foreground">
+          <div className="text-xl sm:text-2xl font-bold font-mono text-foreground truncate">
             {formatBytes(clusterStatus?.freeClusterDiskBytes || 0)}
           </div>
           <div className="mt-2 space-y-1">
@@ -292,35 +292,35 @@ export const ClusterPage: React.FC = () => {
                 style={{ width: `${Math.min(100, clusterStatus?.usedClusterDiskPercent || 0)}%` }}
               />
             </div>
-            <div className="flex justify-between text-[10px] text-muted-foreground">
+            <div className="flex flex-wrap justify-between text-[10px] text-muted-foreground gap-1">
               <span>{clusterStatus?.usedClusterDiskPercent}% used</span>
               <span>{formatBytes(clusterStatus?.totalClusterDiskBytes || 0)} total</span>
             </div>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-border">
+        <div className="p-3.5 sm:p-4 rounded-xl bg-card border border-border">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-muted-foreground">{t('cluster.hostedDbs', 'Databases Hosted')}</span>
-            <Database className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground truncate">{t('cluster.hostedDbs', 'Databases Hosted')}</span>
+            <Database className="w-4 h-4 text-muted-foreground shrink-0" />
           </div>
-          <div className="text-2xl font-bold font-mono text-foreground">
+          <div className="text-xl sm:text-2xl font-bold font-mono text-foreground truncate">
             {nodes.reduce((acc, n) => acc + (n.database_count || 0), 0)}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">
+          <p className="text-[11px] text-muted-foreground mt-1 truncate">
             {t('cluster.shardedAcrossNodes', 'Sharded across storage nodes')}
           </p>
         </div>
 
-        <div className="p-4 rounded-xl bg-card border border-border">
+        <div className="p-3.5 sm:p-4 rounded-xl bg-card border border-border">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-muted-foreground">{t('cluster.networkIO', 'Cluster Network')}</span>
-            <Wifi className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground truncate">{t('cluster.networkIO', 'Cluster Network')}</span>
+            <Wifi className="w-4 h-4 text-muted-foreground shrink-0" />
           </div>
-          <div className="text-2xl font-bold font-mono text-foreground">
+          <div className="text-xl sm:text-2xl font-bold font-mono text-foreground truncate">
             {formatBytes(nodes.reduce((acc, n) => acc + (n.network_rate_bps || 0), 0))}/s
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">
+          <p className="text-[11px] text-muted-foreground mt-1 truncate">
             {t('cluster.aggregateThroughput', 'Live cluster traffic')}
           </p>
         </div>
@@ -328,7 +328,7 @@ export const ClusterPage: React.FC = () => {
 
       {/* Storage Nodes List / Cards */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <Layers className="w-4 h-4 text-blue-500" />
             <span>{t('cluster.nodesTitle', 'Node Hardware & Telemetry')}</span>
@@ -338,7 +338,7 @@ export const ClusterPage: React.FC = () => {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {nodes.map((node) => {
             const isLocal = node.is_local;
             const isHealthy = node.status === 'healthy';
@@ -348,33 +348,37 @@ export const ClusterPage: React.FC = () => {
             return (
               <div
                 key={node.id}
-                className="p-5 rounded-xl bg-card border border-border hover:border-border/80 transition-shadow space-y-4 shadow-sm"
+                className="p-4 sm:p-5 rounded-xl bg-card border border-border hover:border-border/80 transition-shadow space-y-4 shadow-sm flex flex-col justify-between"
               >
                 {/* Node Header */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-foreground truncate">{node.name}</h3>
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                      <h3 className="text-sm font-bold text-foreground truncate max-w-[130px] xs:max-w-[180px] sm:max-w-[220px]" title={node.name}>
+                        {node.name}
+                      </h3>
                       {isLocal ? (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20 font-semibold">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20 font-semibold shrink-0">
                           {t('cluster.primaryGateway', 'PRIMARY GATEWAY')}
                         </span>
                       ) : (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-500 border border-purple-500/20 font-medium">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-500 border border-purple-500/20 font-medium shrink-0">
                           {t('cluster.workerStorage', 'WORKER STORAGE')}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
-                      <span>{node.base_url}</span>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground font-mono">
+                      <span className="truncate max-w-[160px] xs:max-w-[200px] sm:max-w-[240px] md:max-w-[180px] xl:max-w-[220px]" title={node.base_url}>
+                        {node.base_url}
+                      </span>
                       <span>•</span>
-                      <span>{formatTimeAgo(node.last_heartbeat_at, language)}</span>
+                      <span className="shrink-0">{formatTimeAgo(node.last_heartbeat_at, language)}</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <span
-                      className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md font-medium ${
+                      className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md font-medium shrink-0 ${
                         isHealthy
                           ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
                           : isUnhealthy
@@ -397,7 +401,7 @@ export const ClusterPage: React.FC = () => {
                             deleteNodeMutation.mutate(node.id);
                           }
                         }}
-                        className="p-1 text-muted-foreground hover:text-red-500 rounded hover:bg-red-500/10 transition-colors"
+                        className="p-1 text-muted-foreground hover:text-red-500 rounded hover:bg-red-500/10 transition-colors shrink-0"
                         title="Remove Worker Node"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -407,15 +411,15 @@ export const ClusterPage: React.FC = () => {
                 </div>
 
                 {/* Telemetry Resource Bars: CPU, RAM, Disk, Network */}
-                <div className="grid grid-cols-2 gap-3 pt-1 text-xs">
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 pt-1 text-xs">
                   {/* CPU Usage */}
-                  <div className="space-y-1.5 p-2.5 rounded-lg bg-muted/40 border border-border/50">
+                  <div className="space-y-1.5 p-2 sm:p-2.5 rounded-lg bg-muted/40 border border-border/50">
                     <div className="flex items-center justify-between text-muted-foreground">
                       <span className="flex items-center gap-1.5 text-[11px]">
-                        <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+                        <Cpu className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                         <span>CPU</span>
                       </span>
-                      <span className="font-mono font-bold text-foreground">{node.cpu_percent}%</span>
+                      <span className="font-mono font-bold text-foreground text-xs">{node.cpu_percent}%</span>
                     </div>
                     <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                       <div
@@ -428,13 +432,13 @@ export const ClusterPage: React.FC = () => {
                   </div>
 
                   {/* RAM Usage */}
-                  <div className="space-y-1.5 p-2.5 rounded-lg bg-muted/40 border border-border/50">
+                  <div className="space-y-1.5 p-2 sm:p-2.5 rounded-lg bg-muted/40 border border-border/50">
                     <div className="flex items-center justify-between text-muted-foreground">
                       <span className="flex items-center gap-1.5 text-[11px]">
-                        <Activity className="w-3.5 h-3.5 text-amber-400" />
+                        <Activity className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                         <span>RAM</span>
                       </span>
-                      <span className="font-mono font-bold text-foreground">{node.ram_percent}%</span>
+                      <span className="font-mono font-bold text-foreground text-xs">{node.ram_percent}%</span>
                     </div>
                     <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                       <div
@@ -447,13 +451,13 @@ export const ClusterPage: React.FC = () => {
                   </div>
 
                   {/* Disk Storage Capacity */}
-                  <div className="col-span-2 space-y-1.5 p-2.5 rounded-lg bg-muted/40 border border-border/50">
-                    <div className="flex items-center justify-between text-muted-foreground">
-                      <span className="flex items-center gap-1.5 text-[11px]">
-                        <HardDrive className="w-3.5 h-3.5 text-blue-400" />
+                  <div className="col-span-2 space-y-1.5 p-2 sm:p-2.5 rounded-lg bg-muted/40 border border-border/50">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-muted-foreground">
+                      <span className="flex items-center gap-1.5 text-[11px] shrink-0">
+                        <HardDrive className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                         <span>{t('cluster.diskStorage', 'Disk Storage')}</span>
                       </span>
-                      <span className="font-mono font-semibold text-foreground">
+                      <span className="font-mono font-semibold text-foreground text-[11px] sm:text-xs">
                         {formatBytes(node.disk_total_bytes - node.disk_free_bytes)} / {formatBytes(node.disk_total_bytes)}{' '}
                         <span className="text-muted-foreground">({node.disk_used_percent}%)</span>
                       </span>
@@ -470,7 +474,7 @@ export const ClusterPage: React.FC = () => {
                         style={{ width: `${Math.min(100, node.disk_used_percent)}%` }}
                       />
                     </div>
-                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-muted-foreground">
                       <span>{formatBytes(node.disk_free_bytes)} {t('cluster.freeSpace', 'free space')}</span>
                       <span>{node.database_count} {t('cluster.databases', 'databases')}</span>
                     </div>
@@ -478,10 +482,10 @@ export const ClusterPage: React.FC = () => {
                 </div>
 
                 {/* Card Footer info */}
-                <div className="flex items-center justify-between pt-1 border-t border-border/50 text-[11px] text-muted-foreground">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-border/50 text-[11px] text-muted-foreground">
                   <div className="flex items-center gap-1.5">
-                    <Wifi className="w-3 h-3 text-muted-foreground" />
-                    <span>I/O: {formatBytes(node.network_rate_bps)}/s</span>
+                    <Wifi className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <span className="truncate">I/O: {formatBytes(node.network_rate_bps)}/s</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -490,7 +494,7 @@ export const ClusterPage: React.FC = () => {
                         setTargetNodeId(node.id);
                         setIsMigrateModalOpen(true);
                       }}
-                      className="text-blue-500 hover:text-blue-400 font-medium hover:underline"
+                      className="text-blue-500 hover:text-blue-400 font-medium hover:underline text-left sm:text-right"
                     >
                       {t('cluster.migrateTarget', 'Migrate DB to here')}
                     </button>
@@ -504,18 +508,18 @@ export const ClusterPage: React.FC = () => {
 
       {/* Add Worker Node Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-card border border-border rounded-xl w-full max-w-md p-5 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4">
+          <div className="bg-card border border-border rounded-xl w-full max-w-md p-4 sm:p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <Server className="w-5 h-5 text-blue-500" />
-                <h3 className="text-sm font-bold text-foreground">
+              <div className="flex items-center gap-2 min-w-0">
+                <Server className="w-5 h-5 text-blue-500 shrink-0" />
+                <h3 className="text-sm font-bold text-foreground truncate">
                   {t('cluster.modalAddTitle', 'Connect Node.js Storage Worker')}
                 </h3>
               </div>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="text-muted-foreground hover:text-foreground p-1 rounded"
+                className="text-muted-foreground hover:text-foreground p-1 rounded shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -568,7 +572,7 @@ export const ClusterPage: React.FC = () => {
 
               <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-muted-foreground flex gap-2">
                 <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                <p>
+                <p className="leading-relaxed">
                   {t(
                     'cluster.addNote',
                     'The gateway will ping /api/internal/node/stats on the target host to verify connectivity and validate telemetry metrics before registration.'
@@ -582,18 +586,18 @@ export const ClusterPage: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground rounded-lg"
+                  className="w-full sm:w-auto px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground rounded-lg border sm:border-transparent text-center"
                 >
                   {t('common.cancel', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={addNodeMutation.isPending}
-                  className="px-4 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  className="w-full sm:w-auto px-4 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
                   {addNodeMutation.isPending && <RefreshCw className="w-3 h-3 animate-spin" />}
                   <span>{t('cluster.connectAndRegister', 'Connect & Register')}</span>
@@ -606,18 +610,18 @@ export const ClusterPage: React.FC = () => {
 
       {/* Migrate Database Modal */}
       {isMigrateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-card border border-border rounded-xl w-full max-w-md p-5 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4">
+          <div className="bg-card border border-border rounded-xl w-full max-w-md p-4 sm:p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <ArrowRightLeft className="w-5 h-5 text-blue-500" />
-                <h3 className="text-sm font-bold text-foreground">
+              <div className="flex items-center gap-2 min-w-0">
+                <ArrowRightLeft className="w-5 h-5 text-blue-500 shrink-0" />
+                <h3 className="text-sm font-bold text-foreground truncate">
                   {t('cluster.migrateModalTitle', 'Zero-Downtime Database Migration')}
                 </h3>
               </div>
               <button
                 onClick={() => setIsMigrateModalOpen(false)}
-                className="text-muted-foreground hover:text-foreground p-1 rounded"
+                className="text-muted-foreground hover:text-foreground p-1 rounded shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -665,7 +669,7 @@ export const ClusterPage: React.FC = () => {
 
               <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-muted-foreground flex gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <p>
+                <p className="leading-relaxed">
                   {t(
                     'cluster.migrateNote',
                     'Uses atomic SQLite VACUUM INTO snapshot streaming. Data integrity is cryptographically verified before removing the source copy.'
@@ -685,18 +689,18 @@ export const ClusterPage: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsMigrateModalOpen(false)}
-                  className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground rounded-lg"
+                  className="w-full sm:w-auto px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground rounded-lg border sm:border-transparent text-center"
                 >
                   {t('common.cancel', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={migrateMutation.isPending || !selectedDbId || !targetNodeId}
-                  className="px-4 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  className="w-full sm:w-auto px-4 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
                   {migrateMutation.isPending && <RefreshCw className="w-3 h-3 animate-spin" />}
                   <span>{t('cluster.executeMigration', 'Start Safe Migration')}</span>

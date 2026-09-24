@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { authService, type SessionUser } from '../services/auth.js';
 import { tokenService } from '../services/tokens.js';
@@ -208,6 +209,20 @@ export function requireTokenPermission(permission: TokenPermission) {
         error: { code: 'INVALID_DATABASE_ID', message: 'Database ID is required' },
       });
       return;
+    }
+
+    // 0. Support Trusted Cluster Gateway (x-cluster-secret)
+    const clusterSecretHeader = request.headers['x-cluster-secret'];
+    if (clusterSecretHeader && typeof clusterSecretHeader === 'string') {
+      let isClusterMatch = false;
+      const expected = config.clusterSecret;
+      if (clusterSecretHeader.length === expected.length) {
+        isClusterMatch = crypto.timingSafeEqual(Buffer.from(clusterSecretHeader), Buffer.from(expected));
+      }
+      if (isClusterMatch) {
+        request.databaseId = databaseId;
+        return;
+      }
     }
 
     // 1. Support Admin / User Session Cookie (For Web UI viewing images/videos/media)

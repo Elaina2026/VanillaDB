@@ -98,3 +98,48 @@ All public queries run through `DatabaseManager.validateSqlSafety()` before comp
 - High-performance, low-overhead public interface for application traffic.
 - Authenticated via scoped API tokens (`vdb_live_*`, `vdb_test_*`).
 - Enforces sliding-window rate limits and per-table access controls.
+
+---
+
+## 5. Multi-Node Cluster & Host Sharding
+
+VanillaDatabase supports distributed horizontal host sharding across multiple Node.js host machines:
+
+```
+                                +-----------------------------------+
+                                |     Primary Gateway / Metadata    |
+                                |  - vanilladb.sqlite (metadata)    |
+                                |  - Realtime Telemetry Monitor     |
+                                |  - Cluster Spillover Controller   |
+                                +-----------------+-----------------+
+                                                  |
+                  +-------------------------------+-------------------------------+
+                  | (Proxy / Stream)                              | (Proxy / Stream)
+                  v                                               v
+        +-------------------+                           +-------------------+
+        |  Worker Node 1    |                           |  Worker Node 2    |
+        |  node_id: node_1  |                           |  node_id: node_2  |
+        |  Free: 400 GB     |                           |  Free: 250 GB     |
+        |  /api/internal/*  |                           |  /api/internal/*  |
+        +-------------------+                           +-------------------+
+```
+
+### 5.1. Automated Storage Spillover
+1. **Capacity Monitoring**: Every 15 seconds, the Primary Gateway checks local storage metrics (`fs.statfsSync`) or the configured host quota (`VDB_HOST_DISK_GB`).
+2. **Spillover Activation**: If local disk utilization exceeds 85% OR free disk space drops below 5 GB, automatic spillover activates.
+3. **Worker Placement Selection**: New database provisioning calls `ClusterService.selectPlacementNode()`, which queries active worker nodes with `>= 5 GB` free space, ordering by `disk_free_bytes DESC LIMIT 1`. If healthy workers are available, the database record is assigned the remote `node_id`.
+
+### 5.2. Transparent Query Proxying
+When incoming Data Plane requests (`/v1/databases/:id/query`, `/exec`, `/batch`, `/storage/*`) target a database located on a remote worker node (`db.node_id !== 'local'` and `db.node_id !== config.nodeId`):
+- The Gateway intercepts the request before local handle lookup.
+- The request method, headers, and payload are proxied via Node.js native streaming to `http://${workerNode.base_url}${req.url}` with authenticated internal headers (`x-cluster-secret`).
+- Streaming responses (including chunked SQL result sets and HTTP 206 media ranges) pipe transparently back to the client with identical HTTP status and headers.
+
+### 5.3. Zero-Downtime Database Migration
+Administrators can rebalance storage across the cluster at any time via `POST /api/admin/cluster/migrate`:
+1. **Atomic Snapshot**: The source node temporarily flushes active connections and executes SQLite `VACUUM INTO` to generate a point-in-time consistent snapshot.
+2. **Encrypted Snapshot Streaming**: The snapshot file along with any associated media storage is streamed directly to the destination node's `/api/internal/node/databases/:id/receive` endpoint.
+3. **Cryptographic & Integrity Verification**: The destination node verifies SQLite file integrity (`PRAGMA quick_check;`) and confirms SHA-256 payload checksums.
+4. **Atomic Metadata Switch**: The primary gateway updates the metadata registry: `UPDATE databases SET node_id = ? WHERE id = ?`.
+5. **Source File Cleanup**: The source node unlinks its local files to immediately reclaim storage.
+

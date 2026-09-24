@@ -5,7 +5,7 @@
 <h1 align="center">VanillaDatabase (VanillaDB)</h1>
 
 <p align="center">
-  <strong>Enterprise-Grade Multi-Tenant SQLite Cloud Engine with High-Performance REST & SQL APIs, Live Server-Sent Events (SSE), Database-Scoped Media Streaming (HTTP 206), AES-256-GCM Encryption at Rest, Automated Backups, and Native Vector Mathematics.</strong>
+  <strong>Enterprise-Grade Multi-Tenant SQLite Cloud Engine with Multi-Node Host Sharding & Spillover, High-Performance REST & SQL APIs, Live Server-Sent Events (SSE), Database-Scoped Media Streaming (HTTP 206), AES-256-GCM Encryption at Rest, Automated Backups, and Native Vector Mathematics.</strong>
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
   <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
   <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Version-1.3.2-ea580c.svg?style=flat-square" alt="Version 1.3.2" /></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/Tests-94%20passed-22c55e.svg?style=flat-square" alt="94 Tests Passed" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Tests-133%20passed-22c55e.svg?style=flat-square" alt="133 Tests Passed" /></a>
 </p>
 
 <p align="center">
@@ -46,41 +46,40 @@ Rather than running monolithic database clusters for every client, project, or m
 ## <img src="https://api.iconify.design/lucide:cpu.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Architecture
 
 ```
-                       +-----------------------------------+
-                       |       HTTP / SSE Client Layer     |
-                       | (Browser Dashboard, SDKs, Scripts)|
-                       +-----------------+-----------------+
-                                         |
-                                         v
-                       +-----------------------------------+
-                       |    Fastify HTTP Server (Port 3000)|
-                       |   - Helmet Security & Strict CSP  |
-                       |   - Session HMAC & Token Auth     |
-                       |   - Rate Limiter & SSRF Firewall  |
-                       +-----------------+-----------------+
-                                         |
-         +-------------------------------+-------------------------------+
-         |                               |                               |
-         v                               v                               v
-+-----------------+             +-----------------+             +-----------------+
-|  Control Plane  |             |   Data Plane    |             |   Storage & SSE |
-|  /api/admin/*   |             |   /v1/databases |             |  /v1/databases/ |
-|  /api/auth/*    |             |   /:id/query    |             |  :id/storage    |
-+--------+--------+             +--------+--------+             +--------+--------+
-         |                               |                               |
-         v                               v                               v
-+-----------------+             +-----------------+             +-----------------+
-| System Metadata |             |  Tenant Engine  |             |  Encrypted Media|
-| (better-sqlite3)|             | (Pooled Handles)|             |  (AES-256-GCM)  |
-| - Users & Roles |             | - WAL Mode      |             | - HTTP 206      |
-| - DB Members    |             | - AI Vector Math|             | - Range Seek    |
-| - Tokens & Logs |             | - Foreign Keys  |             | - Zero-Leak     |
-+-----------------+             +-----------------+             +-----------------+
+                                  +-----------------------------------+
+                                  |       HTTP / SSE Client Layer     |
+                                  | (Browser Dashboard, SDKs, Scripts)|
+                                  +-----------------+-----------------+
+                                                    |
+                                                    v
+                                  +-----------------------------------+
+                                  |    Fastify API Gateway (Port 3000)|
+                                  |   - Strict CSP & Session HMAC     |
+                                  |   - Cluster Spillover Controller  |
+                                  |   - Inter-Node Transparent Proxy  |
+                                  +--------+-----------------+--------+
+                                           |                 |
+                    +----------------------+                 +----------------------+
+                    | (Local Storage)                                | (Proxy / Stream)
+                    v                                                v
++---------------------------------------+        +---------------------------------------+
+| Primary Host Node (Local)             |        | Worker Storage Node 1 (Remote)        |
+| - System Metadata (vanilladb.sqlite)  |        | - Isolated Tenant Databases           |
+| - Local Tenant Databases              |        | - Local AES-256 Media Files           |
+| - Realtime Hardware Telemetry (CPU/RAM)|       | - Internal Node API (/api/internal/*) |
+| - Spillover Monitor (>85% / <5GB free)|        | - Zero-Downtime Migration Receiver    |
++---------------------------------------+        +---------------------------------------+
 ```
 
 ---
 
 ## <img src="https://api.iconify.design/lucide:zap.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Key Capabilities
+
+### <img src="https://api.iconify.design/lucide:server.svg?color=%233b82f6" width="20" height="20" align="absmiddle" /> Multi-Node Cluster & Host Sharding
+- **Automated Storage Spillover:** When the primary gateway disk exceeds 85% utilization (or has under 5GB free space), new tenant databases automatically allocate to healthy registered worker nodes with the highest available storage capacity.
+- **Transparent Reverse Proxying:** The API Gateway intercepts requests (`/v1/databases/:id/*`, `/query`, `/batch`, `/exec`, `/files`) targeting databases hosted on remote worker nodes and transparently proxies traffic with zero client configuration changes.
+- **Zero-Downtime Database Migration:** Moves databases between storage hosts using atomic SQLite `VACUUM INTO` snapshot streaming over secure authenticated endpoints (`/api/admin/cluster/migrate`) with SHA-256 integrity verification.
+- **Host Disk Quota Support:** Supports containerized or VPS environments (`VDB_HOST_DISK_GB`) to enforce precise storage thresholds even on shared physical disk partitions.
 
 ### <img src="https://api.iconify.design/lucide:database.svg?color=%23003b57" width="20" height="20" align="absmiddle" /> Multi-Tenant SQLite Orchestration
 - Dynamic creation of dedicated SQLite databases identified by nanoid (`db_<nanoid>`).
@@ -115,10 +114,13 @@ Rather than running monolithic database clusters for every client, project, or m
 - Database-scoped file storage with transparent chunked encryption.
 - HTTP 206 Partial Content range requests for audio and video scrubbing.
 
-### <img src="https://api.iconify.design/lucide:layout.svg?color=%233178c6" width="20" height="20" align="absmiddle" /> Enterprise Dashboard & Bilingual Matrix
-- Modern single-page management console built with React 19, Tailwind CSS v4, Lucide icons, and Monaco SQL Editor.
-- Complete bilingual support (English & Tiếng Việt) across all pages and notifications.
-- Integrated keyboard shortcuts: Vim chords (`G+D`, `G+I`), collapsible sidebar (`Ctrl+\`), SQL console operations (`Ctrl+Enter`, `Ctrl+E`, `Ctrl+S`, `Alt+Up/Down`, `F11`), and table browser hotkeys (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).
+### <img src="https://api.iconify.design/lucide:layout.svg?color=%233178c6" width="20" height="20" align="absmiddle" /> Production Landing Page & Enterprise Dashboard
+- **Turso-Inspired Landing Page:** Production-ready public landing page with 6 architectural pillars, tabbed code switcher (per-tenant, per-agent, per-user), real-time TypeScript/SQL syntax highlighter, feature grid, and smooth navigation exit transitions.
+- **Enterprise Management Console:** Single-page dashboard built with React 19, Tailwind CSS v4, Lucide icons, and Monaco SQL Editor.
+- **Cross-Device Responsive Architecture:** Fully adaptive UI tailored for mobile (<640px), tablet (640px–1024px), laptop (1024px–1280px), and wide desktop (>1280px).
+- **Cluster Management UI:** Real-time multi-host telemetry dials (CPU, RAM, Disk, Network I/O throughput), worker node registration, and one-click database migration modal.
+- **Complete Bilingual Matrix:** Seamless one-click English & Tiếng Việt switching across all dashboard screens, landing page, and notifications.
+- **Integrated Keyboard Shortcuts:** Command palette (`Ctrl+K`), quick DB creation (`Ctrl+B`), Vim navigation chords (`G+D`, `G+I`), collapsible sidebar (`Ctrl+\`), and table browser hotkeys (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).
 
 ---
 
@@ -175,6 +177,10 @@ The web dashboard is accessible at `http://localhost:3000`.
 | `PORT` | number | `3000` | HTTP listening port |
 | `HOST` | string | `0.0.0.0` | Network binding interface |
 | `NODE_ENV` | string | `development` | Runtime environment (`development`, `production`, `test`) |
+| `VDB_NODE_ID` | string | `local` | Host identifier for cluster sharding (`local` or worker node ID) |
+| `VDB_CLUSTER_SECRET` | string | Auto-generated | Secret token for secure inter-node gateway-to-worker communication |
+| `VDB_HOST_DISK_GB` | number | `0` (Unset) | Host physical partition quota override (useful for 20GB VPS/containers) |
+| `VDB_MAX_DISK_GB` | number | `0` (Unset) | Alternative alias for host physical disk quota override |
 | `VDB_MASTER_KEY` | string | Auto-generated | 256-bit encryption key for database and media encryption |
 | `VDB_SESSION_SECRET` | string | Auto-generated | HMAC secret for session cookies and temporary tokens |
 | `VDB_CORS_ORIGINS` | string | `*` | Allowed CORS origins (comma-separated for multiple domains) |
@@ -264,6 +270,11 @@ Range: bytes=0-1048575
 | `POST` | `/api/admin/databases/:id/backups` | Admin / Owner | Trigger instant encrypted backup snapshot |
 | `POST` | `/api/admin/databases/:id/maintenance` | Admin / Owner | Execute `integrity_check`, `vacuum`, or `optimize` |
 | `GET` | `/api/system/status` | Super Admin | Realtime CPU, RAM, and host disk space telemetry |
+| `GET` | `/api/admin/cluster/status` | Admin | Multi-host cluster storage status, health & throughput |
+| `POST` | `/api/admin/cluster/nodes` | Admin | Register and connect new worker storage node |
+| `DELETE` | `/api/admin/cluster/nodes/:id` | Admin | Deregister worker storage node |
+| `POST` | `/api/admin/cluster/poll` | Admin | Trigger instantaneous cluster heartbeat poll |
+| `POST` | `/api/admin/cluster/migrate` | Admin | Execute zero-downtime database migration to target node |
 
 ---
 
@@ -304,8 +315,11 @@ VanillaDatabase features a comprehensive shortcut matrix accessible from anywher
 The test suite runs with Vitest and executes end-to-end assertions against the server instance:
 
 ```bash
-# Run complete test suite (94 integration & unit tests)
+# Run complete test suite (133 integration & unit tests across 8 test suites)
 npm test
+
+# Run security and pentesting suites (data leak, zero-day & auth tests)
+npm run test:security
 
 # Run TypeScript typecheck
 npm run typecheck
@@ -314,7 +328,10 @@ npm run typecheck
 npm run benchmark
 ```
 
-All 94 tests cover:
+All 133 tests cover:
+- Multi-host cluster node registration, spillover triggers, and zero-loss snapshot migrations.
+- Data leakage prevention and credential redaction (OWASP Top 10 API Security).
+- Zero-day exploit resilience (DNS rebinding, decimal/hex IP SSRF, SQL prefix schema escapes).
 - Multi-user RBAC, sub-account limits, and quota caps.
 - 2FA TOTP activation, backup codes lifecycle, and step-up login challenges.
 - Session revocation on credential update (VDB-SEC-01).

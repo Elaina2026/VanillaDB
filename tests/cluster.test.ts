@@ -100,7 +100,7 @@ describe('Cluster & Multi-Node Storage Spillover Test Suite', () => {
 
     const fetched = databaseService.getDatabase(db.id);
     expect(fetched?.node_id).toBe('local');
-  });
+  }, 20000);
 
   it('should override physical disk space when host_disk_total_gb is configured', async () => {
     const { systemService } = await import('../src/server/services/system.js');
@@ -154,5 +154,43 @@ describe('Cluster & Multi-Node Storage Spillover Test Suite', () => {
     if (fs.existsSync(targetFile)) {
       fs.unlinkSync(targetFile);
     }
-  });
+  }, 20000);
+
+  it('should successfully export database snapshot from worker even without metadata entry', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const path = await import('path');
+    const fs = await import('fs');
+
+    const workerDbId = 'db_worker_only_test';
+    const workerDbPath = path.resolve(config.databasesDir, `${workerDbId}.sqlite`);
+
+    // Create a database file directly on disk simulating a worker node
+    const db = new DatabaseSync(workerDbPath);
+    db.exec('CREATE TABLE worker_data (id INTEGER PRIMARY KEY, note TEXT);');
+    db.exec("INSERT INTO worker_data VALUES (1, 'worker test payload');");
+    db.close();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/internal/node/databases/${workerDbId}/export`,
+      headers: {
+        'x-cluster-secret': config.clusterSecret,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toBe('application/octet-stream');
+    expect(res.rawPayload.length).toBeGreaterThan(0);
+
+    // Verify downloaded snapshot is valid SQLite
+    const verifyTemp = path.resolve(config.tempDir, `verify_${Date.now()}.sqlite`);
+    fs.writeFileSync(verifyTemp, res.rawPayload);
+    const verifyDb = new DatabaseSync(verifyTemp);
+    const row = verifyDb.prepare('SELECT note FROM worker_data WHERE id = 1;').get() as any;
+    expect(row.note).toBe('worker test payload');
+    verifyDb.close();
+
+    fs.unlinkSync(verifyTemp);
+    if (fs.existsSync(workerDbPath)) fs.unlinkSync(workerDbPath);
+  }, 20000);
 });

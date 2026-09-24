@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import type { FastifyRequest, FastifyReply } from 'fastify';
@@ -509,45 +510,108 @@ export class ClusterService {
       throw new Error(`Database is already on target node "${targetNodeId}".`);
     }
 
-    if (targetNodeId !== 'local') {
-      const targetNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(targetNodeId) as any;
+    // Step 1: Obtain consistent database snapshot buffer from source host
+    let snapshotBuffer: Buffer;
+    let sourceNode: any = null;
+
+    if (currentNodeId === 'local') {
+      const localDbPath = path.resolve(config.databasesDir, dbRow.filename || `${databaseId}.sqlite`);
+      if (!fs.existsSync(localDbPath)) {
+        throw new Error(`Local database file not found: ${localDbPath}`);
+      }
+
+      if (!fs.existsSync(config.tempDir)) {
+        fs.mkdirSync(config.tempDir, { recursive: true });
+      }
+
+      const tempSnapshot = path.resolve(config.tempDir, `${databaseId}_migrating_${Date.now()}.sqlite`);
+      try {
+        dbManager.close(databaseId);
+
+        try {
+          const checkpointer = new DatabaseSync(localDbPath);
+          checkpointer.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+          checkpointer.close();
+        } catch {}
+
+        const safeTempPath = tempSnapshot.replace(/\\/g, '/').replace(/'/g, "''");
+        try {
+          const snapHandle = new DatabaseSync(localDbPath);
+          snapHandle.exec(`VACUUM INTO '${safeTempPath}';`);
+          snapHandle.close();
+          snapshotBuffer = fs.readFileSync(tempSnapshot);
+        } catch {
+          snapshotBuffer = fs.readFileSync(localDbPath);
+        }
+      } catch (err: any) {
+        throw new Error(`Failed to create consistent SQLite snapshot: ${err.message}`);
+      } finally {
+        if (fs.existsSync(tempSnapshot)) {
+          try { fs.unlinkSync(tempSnapshot); } catch {}
+        }
+      }
+    } else {
+      sourceNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(currentNodeId) as any;
+      if (!sourceNode) {
+        throw new Error(`Source worker node "${currentNodeId}" not found in cluster metadata.`);
+      }
+
+      const downloadRes = await fetch(`${sourceNode.base_url}/api/internal/node/databases/${databaseId}/export`, {
+        method: 'GET',
+        headers: {
+          'x-cluster-secret': sourceNode.auth_token || config.clusterSecret,
+        },
+      });
+
+      if (!downloadRes.ok) {
+        let errDetail = '';
+        try {
+          const errJson = await downloadRes.json() as any;
+          errDetail = errJson.error?.message || errJson.message || '';
+        } catch {
+          errDetail = await downloadRes.text().catch(() => '');
+        }
+        throw new Error(`Failed to download database from source worker (${sourceNode.name}): HTTP ${downloadRes.status} ${errDetail}`);
+      }
+
+      snapshotBuffer = Buffer.from(await downloadRes.arrayBuffer());
+    }
+
+    // Step 2: Deliver snapshot buffer to destination host
+    let targetNode: any = null;
+    if (targetNodeId === 'local') {
+      const destPath = path.resolve(config.databasesDir, dbRow.filename || `${databaseId}.sqlite`);
+      dbManager.close(databaseId);
+      fs.writeFileSync(destPath, snapshotBuffer);
+    } else {
+      targetNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(targetNodeId) as any;
       if (!targetNode || targetNode.status !== 'healthy') {
         throw new Error(`Target node "${targetNodeId}" is offline or unhealthy.`);
       }
 
-      // 1. Prepare temp snapshot using VACUUM INTO
-      const tempSnapshot = path.resolve(config.tempDir, `${databaseId}_migrating_${Date.now()}.sqlite`);
-      try {
-        const localHandle = dbManager.get(databaseId);
-        const safeTempPath = tempSnapshot.replace(/\\/g, '/').replace(/'/g, "''");
-        localHandle.exec(`VACUUM INTO '${safeTempPath}';`);
-      } catch (err: any) {
-        throw new Error(`Failed to create consistent SQLite snapshot: ${err.message}`);
-      }
+      const uploadRes = await fetch(`${targetNode.base_url}/api/internal/node/databases/${databaseId}/receive`, {
+        method: 'POST',
+        headers: {
+          'x-cluster-secret': targetNode.auth_token || config.clusterSecret,
+          'content-type': 'application/octet-stream',
+        },
+        body: snapshotBuffer as any,
+      });
 
-      // 2. Stream snapshot to target node
-      try {
-        const fileData = fs.readFileSync(tempSnapshot);
-        const uploadRes = await fetch(`${targetNode.base_url}/api/internal/node/databases/${databaseId}/receive`, {
-          method: 'POST',
-          headers: {
-            'x-cluster-secret': targetNode.auth_token || config.clusterSecret,
-            'content-type': 'application/octet-stream',
-          },
-          body: fileData,
-        });
-
-        if (!uploadRes.ok) {
-          const errText = await uploadRes.text();
-          throw new Error(`Target worker rejected database snapshot: ${uploadRes.status} ${errText}`);
+      if (!uploadRes.ok) {
+        let errDetail = '';
+        try {
+          const errJson = await uploadRes.json() as any;
+          errDetail = errJson.error?.message || errJson.message || '';
+        } catch {
+          errDetail = await uploadRes.text().catch(() => '');
         }
-      } finally {
-        if (fs.existsSync(tempSnapshot)) {
-          fs.unlinkSync(tempSnapshot);
-        }
+        throw new Error(`Target worker (${targetNode.name}) rejected database snapshot: HTTP ${uploadRes.status} ${errDetail}`);
       }
+    }
 
-      // 3. Close and purge local SQLite handle and files
+    // Step 3: Cleanup old database files from source host
+    if (currentNodeId === 'local') {
       dbManager.close(databaseId);
       const localDbPath = path.resolve(config.databasesDir, dbRow.filename || `${databaseId}.sqlite`);
       if (fs.existsSync(localDbPath)) {
@@ -559,51 +623,25 @@ export class ClusterService {
       if (fs.existsSync(`${localDbPath}-shm`)) {
         try { fs.unlinkSync(`${localDbPath}-shm`); } catch {}
       }
-
-      // 4. Update metadata
-      metaDb.prepare('UPDATE databases SET node_id = ?, updated_at = ? WHERE id = ?').run(targetNodeId, Date.now(), databaseId);
-
-      return {
-        success: true,
-        message: `Database "${dbRow.name}" successfully migrated to node ${targetNode.name} without data loss.`,
-      };
-    } else {
-      // Migrating from remote worker back to local host
-      const sourceNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(currentNodeId) as any;
-      if (!sourceNode) {
-        throw new Error(`Source worker node "${currentNodeId}" not found.`);
-      }
-
-      const downloadRes = await fetch(`${sourceNode.base_url}/api/internal/node/databases/${databaseId}/export`, {
-        method: 'GET',
-        headers: {
-          'x-cluster-secret': sourceNode.auth_token || config.clusterSecret,
-        },
-      });
-
-      if (!downloadRes.ok) {
-        throw new Error(`Failed to download database from source worker: HTTP ${downloadRes.status}`);
-      }
-
-      const destPath = path.resolve(config.databasesDir, dbRow.filename || `${databaseId}.sqlite`);
-      const buffer = Buffer.from(await downloadRes.arrayBuffer());
-      fs.writeFileSync(destPath, buffer);
-
-      // Clean up remote
+    } else if (sourceNode) {
       await fetch(`${sourceNode.base_url}/api/internal/node/databases/${databaseId}`, {
         method: 'DELETE',
         headers: {
           'x-cluster-secret': sourceNode.auth_token || config.clusterSecret,
         },
       }).catch(() => {});
-
-      metaDb.prepare("UPDATE databases SET node_id = 'local', updated_at = ? WHERE id = ?").run(Date.now(), databaseId);
-
-      return {
-        success: true,
-        message: `Database "${dbRow.name}" successfully migrated back to local host.`,
-      };
     }
+
+    // Step 4: Atomic update in cluster metadata database
+    metaDb.prepare('UPDATE databases SET node_id = ?, updated_at = ? WHERE id = ?').run(targetNodeId, Date.now(), databaseId);
+
+    const sourceName = currentNodeId === 'local' ? 'Primary Gateway' : sourceNode?.name || currentNodeId;
+    const targetName = targetNodeId === 'local' ? 'Primary Gateway' : targetNode?.name || targetNodeId;
+
+    return {
+      success: true,
+      message: `Database "${dbRow.name}" successfully migrated from ${sourceName} to ${targetName}.`,
+    };
   }
 }
 

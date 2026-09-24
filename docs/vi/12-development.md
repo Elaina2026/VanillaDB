@@ -29,7 +29,7 @@ Môi trường phát triển sẽ khởi động đồng thời Fastify và Vite
 ```bash
 npm test
 ```
-Toàn bộ 94 bài kiểm thử tích hợp xác thực:
+Toàn bộ 133 bài kiểm thử tích hợp xác thực:
 - Thiết lập quản trị viên ban đầu và cơ chế đăng nhập.
 - Thực thi SQL an toàn qua hộp cát và tham số hóa.
 - Phân quyền token theo phạm vi và danh sách bảng cho phép/chặn.
@@ -61,7 +61,7 @@ npm run benchmark
 ## 3. Quy chuẩn Đóng góp & Tạo Pull Request
 
 Trước khi gửi Pull Request:
-1. Đảm bảo toàn bộ 94 bài kiểm thử Vitest vượt qua mà không có lỗi hồi quy.
+1. Đảm bảo toàn bộ 133 bài kiểm thử Vitest vượt qua mà không có lỗi hồi quy.
 2. Khẳng định lệnh `npm run build` kết thúc thành công với 0 lỗi TypeScript.
 3. Tuân thủ phong cách lập trình: Fastify route schemas, Zod validation và Pino logger.
 4. Đồng bộ tài liệu song ngữ tại cả `docs/en/` và `docs/vi/`.

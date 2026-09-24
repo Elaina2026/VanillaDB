@@ -5,7 +5,7 @@
 <h1 align="center">VanillaDatabase (VanillaDB) — Tiếng Việt</h1>
 
 <p align="center">
-  <strong>Nền tảng SQLite Cloud đa người dùng cấp doanh nghiệp: API REST & SQL hiệu năng cao, Server-Sent Events (SSE) realtime, phát luồng Media theo phân đoạn (HTTP 206), mã hóa dữ liệu tĩnh AES-256-GCM, sao lưu tự động và tích hợp hàm toán học AI Vector bản địa.</strong>
+  <strong>Nền tảng SQLite Cloud đa người dùng cấp doanh nghiệp: Phân mảnh máy chủ đa node & tự động tràn dung lượng (Host Sharding & Spillover), API REST & SQL hiệu năng cao, Server-Sent Events (SSE) realtime, phát luồng Media theo phân đoạn (HTTP 206), mã hóa dữ liệu tĩnh AES-256-GCM, sao lưu tự động và tích hợp hàm toán học AI Vector bản địa.</strong>
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
   <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
   <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Phi%C3%AAn%20b%E1%BA%A3n-1.3.2-ea580c.svg?style=flat-square" alt="Phiên bản 1.3.2" /></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-94%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="94 bài kiểm thử vượt qua" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-133%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="133 bài kiểm thử vượt qua" /></a>
 </p>
 
 <p align="center">
@@ -46,41 +46,40 @@ Thay vì phải duy trì các cụm cơ sở dữ liệu cồng kềnh cho từn
 ## <img src="https://api.iconify.design/lucide:cpu.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Kiến trúc hệ thống
 
 ```
-                       +-----------------------------------+
-                       |      Tầng Khách HTTP / SSE        |
-                       |  (Bảng điều khiển, SDKs, Scripts) |
-                       +-----------------+-----------------+
-                                         |
-                                         v
-                       +-----------------------------------+
-                       |    Máy chủ Fastify (Cổng: 3000)   |
-                       |   - Lá chắn Helmet & CSP nghiêm   |
-                       |   - Xác thực Chữ ký HMAC & Token  |
-                       |   - Giới hạn tốc độ & Chặn SSRF   |
-                       +-----------------+-----------------+
-                                         |
-         +-------------------------------+-------------------------------+
-         |                               |                               |
-         v                               v                               v
-+-----------------+             +-----------------+             +-----------------+
-|   Control Plane |             |   Data Plane    |             |   Media Storage |
-|  /api/admin/*   |             |   /v1/databases |             |  /v1/databases/ |
-|  /api/auth/*    |             |   /:id/query    |             |  :id/storage    |
-+--------+--------+             +--------+--------+             +--------+--------+
-         |                               |                               |
-         v                               v                               v
-+-----------------+             +-----------------+             +-----------------+
-| System Metadata |             |  Tenant Engine  |             |  Kho Media Mã hóa|
-| (better-sqlite3)|             | (Pooled Handles)|             |  (AES-256-GCM)  |
-| - Users & Roles |             | - Chế độ WAL    |             | - HTTP 206      |
-| - Thành viên DB |             | - AI Vector Math|             | - Tua phát mượt |
-| - Tokens & Logs |             | - Khóa ngoại FK |             | - Chặn rò rỉ    |
-+-----------------+             +-----------------+             +-----------------+
+                                  +-----------------------------------+
+                                  |      Tầng Khách HTTP / SSE        |
+                                  |  (Bảng điều khiển, SDKs, Scripts) |
+                                  +-----------------+-----------------+
+                                                    |
+                                                    v
+                                  +-----------------------------------+
+                                  |   API Gateway Fastify (Cổng: 3000)|
+                                  |   - Lá chắn Helmet & CSP nghiêm   |
+                                  |   - Bộ điều phối tự động tràn ổ   |
+                                  |   - Proxy chuyển tiếp trong suốt  |
+                                  +--------+-----------------+--------+
+                                           |                 |
+                    +----------------------+                 +----------------------+
+                    | (Lưu trữ Cục bộ)                               | (Proxy / Luồng)
+                    v                                                v
++---------------------------------------+        +---------------------------------------+
+| Máy chủ Chính Gateway (Local)         |        | Máy chủ Phụ Lưu trữ 1 (Remote Worker) |
+| - Siêu dữ liệu (vanilladb.sqlite)     |        | - Các cơ sở dữ liệu tenant phân mảnh  |
+| - CSDL tenant cục bộ                  |        | - Tệp tin Media AES-256 cục bộ        |
+| - Giám sát phần cứng realtime CPU/RAM |        | - API Worker nội bộ (/api/internal/*) |
+| - Tự động tràn đĩa (>85% / <5GB trống)|        | - Nhận luồng di chuyển không downtime |
++---------------------------------------+        +---------------------------------------+
 ```
 
 ---
 
 ## <img src="https://api.iconify.design/lucide:zap.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Tính năng cốt lõi
+
+### <img src="https://api.iconify.design/lucide:server.svg?color=%233b82f6" width="20" height="20" align="absmiddle" /> Phân cụm Đa máy chủ & Tự động Tràn dung lượng (Host Sharding & Spillover)
+- **Tự động Tràn dung lượng lưu trữ (Auto-Spillover):** Khi ổ cứng của máy chủ chính vượt ngưỡng 85% dung lượng (hoặc còn dưới 5GB trống), hệ thống tự động phân bổ các cơ sở dữ liệu mới sang các máy chủ worker có dung lượng trống lớn nhất đang hoạt động khỏe mạnh.
+- **Proxy Chuyển tiếp Trong suốt (Transparent Reverse Proxy):** Tầng Gateway tự động phát hiện vị trí node lưu trữ của cơ sở dữ liệu và chuyển tiếp các truy vấn (`/v1/databases/:id/*`, `/query`, `/batch`, `/exec`, `/files`) sang worker tương ứng mà ứng dụng khách không cần thay đổi cấu hình kết nối.
+- **Di chuyển CSDL Không gián đoạn (Zero-Downtime Migration):** Chuyển cơ sở dữ liệu qua lại giữa các máy chủ lưu trữ bằng cơ chế phát luồng snapshot nguyên tử SQLite `VACUUM INTO` (`/api/admin/cluster/migrate`) với xác thực kiểm tra mã băm SHA-256 trước khi giải phóng ổ đĩa nguồn.
+- **Ghi đè Hạn mức Ổ cứng Thực tế:** Hỗ trợ cấu hình `VDB_HOST_DISK_GB` giúp các máy chủ chạy trên VPS / Container (ví dụ gói 20GB nằm trên phân vùng vật lý 315GB) hiển thị và tính toán tỷ lệ tràn đĩa chính xác 100%.
 
 ### <img src="https://api.iconify.design/lucide:database.svg?color=%23003b57" width="20" height="20" align="absmiddle" /> Điều phối Động cơ SQLite Đa người thuê
 - Tự động sinh cơ sở dữ liệu SQLite biệt lập theo định danh nanoid (`db_<nanoid>`).
@@ -115,9 +114,13 @@ Thay vì phải duy trì các cụm cơ sở dữ liệu cồng kềnh cho từn
 - Lưu trữ tệp tin theo phạm vi cơ sở dữ liệu với cơ chế mã hóa khối trong suốt.
 - Hỗ trợ tiêu đề `Range` của HTTP 206 Partial Content cho phép nghe nhạc, xem video mượt mà, hỗ trợ tua đến từng vị trí bất kỳ.
 
-### <img src="https://api.iconify.design/lucide:layout.svg?color=%233178c6" width="20" height="20" align="absmiddle" /> Bảng điều khiển Quản trị & Ma trận Phím tắt Song ngữ
-- Giao diện quản trị hiện đại, mượt mà được xây dựng bằng React 19, Tailwind CSS v4, Lucide icons và trình soạn thảo Monaco SQL Editor.
-- Hỗ trợ song ngữ toàn diện (Tiếng Việt & English) trên tất cả các trang, thông báo và modal.
+### <img src="https://api.iconify.design/lucide:layout.svg?color=%233178c6" width="20" height="20" align="absmiddle" /> Landing Page Chuẩn Turso & Giao diện Đa thiết bị
+- **Trang Giới thiệu Landing Page Hiện đại:** Lấy cảm hứng từ Turso với 6 trụ cột kiến trúc, bộ chuyển đổi code mẫu (per-tenant, per-agent, per-user), công cụ tô màu cú pháp thời gian thực (syntax highlighter), lưới 9 tính năng và hiệu ứng chuyển trang mượt mà.
+- **Bảng điều khiển Quản trị Cấp Doanh nghiệp:** Xây dựng với React 19, Tailwind CSS v4, Lucide icons và Monaco SQL Editor.
+- **Giao diện Tương thích Đa Kích thước (Responsive):** Tối ưu hóa 100% cho mobile (<640px), tablet (640px–1024px), laptop (1024px–1280px) và desktop rộng (>1280px).
+- **Trang Quản lý Cụm & Máy chủ Lưu trữ:** Đồng hồ đo thời gian thực CPU %, RAM %, dung lượng ổ đĩa, lưu lượng I/O mạng, kết nối máy chủ worker và chuyển đổi cơ sở dữ liệu chỉ với 1 cú click.
+- **Hỗ trợ Song ngữ Hoàn chỉnh:** Chuyển đổi qua lại giữa Tiếng Việt và English dễ dàng chỉ với một nút bấm trên thanh điều hướng hoặc phím tắt.
+- **Hệ thống Phím tắt Đầy đủ:** Khung tìm kiếm lệnh nhanh (`Ctrl+K`), tạo nhanh DB (`Ctrl+B`), phím điều hướng Vim (`G+D`, `G+I`), thu gọn sidebar (`Ctrl+\`), thao tác bảng (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).
 - Hệ thống phím tắt tích hợp: Vim chords (`G+D`, `G+I`), thu gọn sidebar (`Ctrl+\`), thao tác soạn thảo SQL (`Ctrl+Enter`, `Ctrl+E`, `Ctrl+S`, `Alt+Up/Down`, `F11`) và duyệt bảng dữ liệu (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).
 
 ---
@@ -175,6 +178,10 @@ Truy cập bảng điều khiển quản trị web tại địa chỉ: `http://l
 | `PORT` | số | `3000` | Cổng lắng nghe kết nối HTTP |
 | `HOST` | chuỗi | `0.0.0.0` | Địa chỉ mạng ràng buộc |
 | `NODE_ENV` | chuỗi | `development` | Môi trường thực thi (`development`, `production`, `test`) |
+| `VDB_NODE_ID` | chuỗi | `local` | Định danh node máy chủ trong cụm (`local` hoặc ID máy chủ worker) |
+| `VDB_CLUSTER_SECRET` | chuỗi | Tự sinh | Mã bí mật chứng thực kết nối nội bộ an toàn giữa Gateway và Worker |
+| `VDB_HOST_DISK_GB` | số | `0` (Không đặt) | Ghi đè dung lượng ổ cứng thực tế của VPS / Container |
+| `VDB_MAX_DISK_GB` | số | `0` (Không đặt) | Tên bí danh thay thế để ghi đè dung lượng ổ cứng tối đa |
 | `VDB_MASTER_KEY` | chuỗi | Tự sinh | Khóa 256-bit dùng cho mã hóa cơ sở dữ liệu và tệp lưu trữ |
 | `VDB_SESSION_SECRET` | chuỗi | Tự sinh | Khóa HMAC ký phiên đăng nhập và mã token tạm thời |
 | `VDB_CORS_ORIGINS` | chuỗi | `*` | Tên miền cho phép kết nối CORS (ngăn cách bằng dấu phẩy) |
@@ -264,6 +271,11 @@ Range: bytes=0-1048575
 | `POST` | `/api/admin/databases/:id/backups` | Admin / Owner | Kích hoạt tạo bản sao lưu mã hóa tức thì |
 | `POST` | `/api/admin/databases/:id/maintenance` | Admin / Owner | Thực thi `integrity_check`, `vacuum`, `optimize` |
 | `GET` | `/api/system/status` | Super Admin | Giám sát CPU, RAM và dung lượng ổ đĩa máy chủ |
+| `GET` | `/api/admin/cluster/status` | Admin | Trạng thái cụm máy chủ, sức khỏe node & băng thông |
+| `POST` | `/api/admin/cluster/nodes` | Admin | Đăng ký và kết nối máy chủ worker lưu trữ mới |
+| `DELETE` | `/api/admin/cluster/nodes/:id` | Admin | Hủy kết nối máy chủ worker lưu trữ |
+| `POST` | `/api/admin/cluster/poll` | Admin | Kích hoạt kiểm tra nhịp tim (heartbeat) toàn cụm |
+| `POST` | `/api/admin/cluster/migrate` | Admin | Di chuyển cơ sở dữ liệu không downtime sang node đích |
 
 ---
 
@@ -304,8 +316,11 @@ VanillaDatabase trang bị bảng phím tắt tiện lợi hỗ trợ thao tác 
 Toàn bộ hệ thống kiểm thử vận hành tự động qua Vitest với kiểm chứng đầu-cuối:
 
 ```bash
-# Chạy toàn bộ 94 bài kiểm thử tích hợp & đơn vị
+# Chạy toàn bộ 133 bài kiểm thử tích hợp & đơn vị trên 8 bộ test suite
 npm test
+
+# Chạy riêng các bộ pentest bảo mật (rò rỉ dữ liệu, zero-day & xác thực)
+npm run test:security
 
 # Kiểm tra kiểu dữ liệu TypeScript
 npm run typecheck
@@ -314,7 +329,10 @@ npm run typecheck
 npm run benchmark
 ```
 
-Toàn bộ 94 bài kiểm thử xác minh:
+Toàn bộ 133 bài kiểm thử xác minh:
+- Phân cụm đa máy chủ, tự động tràn đĩa và di chuyển database nguyên tử không downtime.
+- Chặn rò rỉ dữ liệu và che giấu thông tin nhạy cảm (OWASP Top 10 API Security).
+- Kháng tấn công zero-day (DNS rebinding, bypass IP số nguyên/hex, thoát tiền tố schema SQL).
 - Phân quyền RBAC đa người dùng, hạn mức tài khoản phụ và chặn vượt ngưỡng.
 - Kích hoạt 2FA TOTP, vòng đời 6 mã dự phòng và thách thức đăng nhập.
 - Thu hồi phiên làm việc tức thì khi thay đổi mật khẩu (VDB-SEC-01).

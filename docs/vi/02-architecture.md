@@ -98,3 +98,48 @@ Toàn bộ truy vấn SQL từ người dùng phải đi qua hàm kiểm duyệt
 - Giao diện hiệu năng cao phục vụ kết nối trực tiếp từ ứng dụng và client SDK.
 - Xác thực qua API Token dạng Bearer (`vdb_live_*`, `vdb_test_*`).
 - Áp dụng giới hạn tốc độ trượt và phân quyền theo danh sách bảng.
+
+---
+
+## 5. Phân cụm Đa máy chủ & Phân mảnh Lưu trữ (Host Sharding)
+
+VanillaDatabase hỗ trợ mở rộng lưu trữ theo chiều ngang (horizontal host sharding) qua nhiều máy chủ Node.js:
+
+```
+                                +-----------------------------------+
+                                |     Máy chủ Chính / Siêu dữ liệu  |
+                                |  - vanilladb.sqlite (metadata)    |
+                                |  - Giám sát phần cứng thời gian thực|
+                                |  - Bộ điều khiển tự động tràn đĩa |
+                                +-----------------+-----------------+
+                                                  |
+                  +-------------------------------+-------------------------------+
+                  | (Proxy / Luồng)                               | (Proxy / Luồng)
+                  v                                               v
+        +-------------------+                           +-------------------+
+        |  Máy chủ Worker 1 |                           |  Máy chủ Worker 2 |
+        |  node_id: node_1  |                           |  node_id: node_2  |
+        |  Trống: 400 GB    |                           |  Trống: 250 GB    |
+        |  /api/internal/*  |                           |  /api/internal/*  |
+        +-------------------+                           +-------------------+
+```
+
+### 5.1. Cơ chế Tự động Tràn Dung lượng Ổ đĩa (Auto-Spillover)
+1. **Giám sát Ngưỡng dung lượng**: Định kỳ mỗi 15 giây, máy chủ Gateway thu thập chỉ số ổ đĩa vật lý (`fs.statfsSync`) hoặc theo hạn mức cấu hình (`VDB_HOST_DISK_GB`).
+2. **Kích hoạt Tràn đĩa**: Khi ổ đĩa máy chủ chính sử dụng vượt quá 85% dung lượng HOẶC dung lượng trống khả dụng còn dưới 5 GB, chế độ Auto-Spillover tự động bật.
+3. **Lựa chọn Máy chủ Đích**: Hàm `ClusterService.selectPlacementNode()` tự động tìm kiếm các máy chủ worker đang hoạt động khỏe mạnh (`status = 'healthy'`) có dung lượng trống tối thiểu 5 GB, ưu tiên máy chủ có `disk_free_bytes` lớn nhất. Cơ sở dữ liệu mới sẽ được gán `node_id` của worker đó.
+
+### 5.2. Chuyển tiếp Yêu cầu Trong suốt (Transparent Query Proxying)
+Khi có yêu cầu gửi đến Tầng Dữ liệu Data Plane (`/v1/databases/:id/query`, `/exec`, `/batch`, `/storage/*`) nhắm vào cơ sở dữ liệu nằm trên máy chủ worker (`db.node_id !== 'local'` và `db.node_id !== config.nodeId`):
+- Gateway chặn bắt yêu cầu trước khi mở tệp SQLite cục bộ.
+- Phương thức, tiêu đề và nội dung yêu cầu được chuyển tiếp trực tiếp (stream proxy) đến `http://${workerNode.base_url}${req.url}` kèm tiêu đề chứng thực nội bộ (`x-cluster-secret`).
+- Kết quả phản hồi (bao gồm cả phân đoạn media HTTP 206) được truyền ngược về ứng dụng khách với nguyên vẹn mã trạng thái HTTP và headers.
+
+### 5.3. Di chuyển Cơ sở Dữ liệu Không gián đoạn (Zero-Downtime Migration)
+Quản trị viên có thể tái cân bằng dung lượng lưu trữ trên toàn cụm bất kỳ lúc nào qua `POST /api/admin/cluster/migrate`:
+1. **Tạo Bản chụp Nguyên tử**: Máy chủ nguồn tạm thời hoàn tất các truy vấn đang xử lý và kích hoạt lệnh SQLite `VACUUM INTO` để tạo tệp snapshot nhất quán tại thời điểm di chuyển.
+2. **Phát Luồng Dữ liệu**: Tệp snapshot và thư mục media liên kết được stream trực tiếp sang điểm cuối `/api/internal/node/databases/:id/receive` trên node đích.
+3. **Kiểm tra Toàn vẹn Dữ liệu**: Node đích tiến hành xác minh tính toàn vẹn của tệp SQLite (`PRAGMA quick_check;`) và kiểm tra mã băm SHA-256.
+4. **Cập nhật Siêu dữ liệu**: Gateway cập nhật bảng ghi hệ thống: `UPDATE databases SET node_id = ? WHERE id = ?`.
+5. **Giải phóng Ổ đĩa Nguồn**: Node nguồn xóa tệp tin cũ để giải phóng dung lượng đĩa ngay lập tức.
+

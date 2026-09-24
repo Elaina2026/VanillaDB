@@ -298,16 +298,18 @@ export const LandingPage: React.FC<{
 
         {/* ── NAVBAR ────────────────────────────────────────────────────── */}
         <nav className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
-          <div className="flex items-center justify-between px-5 sm:px-8 py-4">
+          <div className="flex items-center justify-between px-4 sm:px-8 py-3.5 sm:py-4">
 
             {/* Logo */}
-            <div className="flex items-center gap-2.5">
-              <LogoIcon className="w-7 h-7" />
-              <span className="font-bold text-sm tracking-tight text-foreground">VanillaDatabase</span>
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+              <LogoIcon className="w-6 h-6 sm:w-7 sm:h-7 shrink-0" />
+              <span className="font-bold text-sm tracking-tight text-foreground truncate max-w-[130px] xs:max-w-none">
+                VanillaDatabase
+              </span>
             </div>
 
             {/* Desktop links */}
-            <div className="hidden md:flex items-center gap-7 text-sm text-muted-foreground">
+            <div className="hidden md:flex items-center gap-6 lg:gap-7 text-sm text-muted-foreground">
               <a href="#features"    className="hover:text-foreground transition-colors duration-200">{t('landing.navFeatures')}</a>
               <a href="#security"    className="hover:text-foreground transition-colors duration-200">{t('landing.navSecurity')}</a>
               <a href="#quickstart"  className="hover:text-foreground transition-colors duration-200">{t('landing.navQuickstart')}</a>
@@ -317,11 +319,11 @@ export const LandingPage: React.FC<{
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               {/* Language toggle */}
               <button
                 onClick={toggleLanguage}
-                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-xs font-semibold tracking-wide hidden sm:flex items-center gap-1.5"
+                className="p-1.5 sm:p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-xs font-semibold tracking-wide hidden sm:flex items-center gap-1.5"
                 aria-label="Toggle language"
               >
                 <Globe className="w-4 h-4" />
@@ -330,7 +332,7 @@ export const LandingPage: React.FC<{
               {/* Theme toggle */}
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                 aria-label="Toggle theme"
               >
                 {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -345,7 +347,7 @@ export const LandingPage: React.FC<{
 
               <button
                 onClick={() => navigate('register')}
-                className="px-4 py-2 rounded-full text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 hover:-translate-y-px"
+                className="hidden sm:inline-flex px-4 py-2 rounded-full text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 hover:-translate-y-px shadow-sm"
               >
                 {t('landing.getStarted')}
               </button>
@@ -391,13 +393,13 @@ export const LandingPage: React.FC<{
         </nav>
 
         {/* ── HERO ──────────────────────────────────────────────────────── */}
-        <section className="px-5 sm:px-8 py-24 md:py-32 border-b border-border">
-          <div className="grid lg:grid-cols-2 gap-14 lg:gap-10 items-center max-w-6xl mx-auto">
+        <section className="px-4 sm:px-8 py-16 sm:py-24 md:py-32 border-b border-border">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-10 items-center max-w-6xl mx-auto">
 
             {/* Left copy */}
-            <div className="space-y-7">
+            <div className="space-y-6 sm:space-y-7">
               <div
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-blue-500/10 dark:bg-blue-500/20 border border-blue-500/25 dark:border-blue-500/30 text-blue-500 dark:text-blue-400 shadow-sm"
+                className="inline-flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold bg-blue-500/10 dark:bg-blue-500/20 border border-blue-500/25 dark:border-blue-500/30 text-blue-500 dark:text-blue-400 shadow-sm"
                 style={{ animation: 'ldFadeDown 0.55s ease both' }}
               >
                 <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
@@ -405,7 +407,7 @@ export const LandingPage: React.FC<{
               </div>
 
               <h1
-                className="text-4xl sm:text-5xl lg:text-[54px] font-extrabold leading-[1.08] tracking-tight text-foreground"
+                className="text-3xl sm:text-4xl md:text-5xl lg:text-[54px] font-extrabold leading-[1.12] sm:leading-[1.08] tracking-tight text-foreground"
                 style={{ animation: 'ldFadeDown 0.55s ease 0.09s both' }}
               >
                 {t('landing.heroTitle1')}
@@ -414,39 +416,39 @@ export const LandingPage: React.FC<{
               </h1>
 
               <p
-                className="text-base sm:text-lg leading-relaxed text-muted-foreground dark:text-slate-300 max-w-xl"
+                className="text-sm sm:text-base md:text-lg leading-relaxed text-muted-foreground dark:text-slate-300 max-w-xl"
                 style={{ animation: 'ldFadeDown 0.55s ease 0.18s both' }}
               >
                 {t('landing.heroDesc')}
               </p>
 
               <div
-                className="flex flex-wrap items-center gap-3"
+                className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3"
                 style={{ animation: 'ldFadeDown 0.55s ease 0.27s both' }}
               >
                 <button
                   onClick={() => navigate('register')}
-                  className="px-6 py-3 rounded-full text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 flex items-center gap-2 hover:-translate-y-px shadow-lg shadow-blue-600/25"
+                  className="w-full sm:w-auto px-6 py-3 rounded-full text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-px shadow-lg shadow-blue-600/25"
                 >
                   {t('landing.startFree')}
                   <ArrowRight className="w-4 h-4" />
                 </button>
                 <a
                   href="#quickstart"
-                  className="px-6 py-3 rounded-full text-sm font-semibold border border-border/80 dark:border-slate-700 text-foreground/80 dark:text-slate-200 hover:text-foreground hover:border-foreground/30 dark:hover:border-slate-500 transition-all duration-200 bg-card/40"
+                  className="w-full sm:w-auto px-6 py-3 rounded-full text-sm font-semibold border border-border/80 dark:border-slate-700 text-foreground/80 dark:text-slate-200 hover:text-foreground hover:border-foreground/30 dark:hover:border-slate-500 transition-all duration-200 bg-card/40 flex items-center justify-center text-center"
                 >
                   {t('landing.viewQuickstart')}
                 </a>
               </div>
 
               <div
-                className="flex flex-wrap items-center gap-5 text-xs text-muted-foreground dark:text-slate-300 font-medium"
+                className="flex flex-wrap items-center gap-3 sm:gap-5 text-xs text-muted-foreground dark:text-slate-300 font-medium"
                 style={{ animation: 'ldFadeDown 0.55s ease 0.36s both' }}
               >
                 {[t('landing.trustNoCc'), t('landing.trust100db'), t('landing.trustEncrypted')].map(txt => (
                   <span key={txt} className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-                    {txt}
+                    <CheckCircle2 className="w-4 h-4 text-blue-500 dark:text-blue-400 shrink-0" />
+                    <span>{txt}</span>
                   </span>
                 ))}
               </div>
@@ -461,7 +463,7 @@ export const LandingPage: React.FC<{
               }}
             >
               {/* Window chrome */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border/60 dark:border-slate-800/80 bg-slate-900/60 dark:bg-slate-950/80">
+              <div className="flex items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 border-b border-border/60 dark:border-slate-800/80 bg-slate-900/60 dark:bg-slate-950/80">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-red-500/80"   />
                   <span className="w-3 h-3 rounded-full bg-amber-500/80" />
@@ -470,7 +472,7 @@ export const LandingPage: React.FC<{
                 </div>
                 <span className="text-[10px] font-mono text-slate-500">TypeScript</span>
               </div>
-              <div className="p-5">
+              <div className="p-3.5 sm:p-5">
                 {renderHighlightedCode(HERO_CODE)}
               </div>
             </div>
@@ -478,95 +480,95 @@ export const LandingPage: React.FC<{
 
           {/* Feature pills */}
           <Reveal
-            className="flex flex-wrap items-center justify-center gap-2.5 mt-16 pt-10 border-t border-border"
+            className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 mt-12 sm:mt-16 pt-8 sm:pt-10 border-t border-border"
           >
             {PILLS.map(f => (
               <div
                 key={f.label}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium bg-card dark:bg-[#0e1422] border border-border/80 dark:border-slate-800 text-foreground/80 dark:text-slate-200 hover:text-foreground hover:border-blue-500/50 hover:bg-blue-500/5 dark:hover:bg-blue-500/10 transition-all shadow-sm"
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium bg-card dark:bg-[#0e1422] border border-border/80 dark:border-slate-800 text-foreground/80 dark:text-slate-200 hover:text-foreground hover:border-blue-500/50 hover:bg-blue-500/5 dark:hover:bg-blue-500/10 transition-all shadow-sm"
               >
-                <span className="text-blue-500 dark:text-blue-400">{f.icon}</span>
-                {f.label}
+                <span className="text-blue-500 dark:text-blue-400 shrink-0">{f.icon}</span>
+                <span className="truncate">{f.label}</span>
               </div>
             ))}
           </Reveal>
         </section>
 
         {/* ── PROBLEM / SOLUTION ────────────────────────────────────────── */}
-        <section id="features" className="px-5 sm:px-8 py-20 border-b border-border">
-          <Reveal className="max-w-4xl mx-auto text-center space-y-4 mb-14">
+        <section id="features" className="px-4 sm:px-8 py-16 sm:py-20 border-b border-border">
+          <Reveal className="max-w-4xl mx-auto text-center space-y-3 sm:space-y-4 mb-10 sm:mb-14">
             <p className="text-xs font-mono text-blue-500 dark:text-blue-400 uppercase tracking-widest font-semibold">{t('landing.problemLabel')}</p>
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight leading-tight text-foreground">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight leading-tight text-foreground">
               {t('landing.problemTitle')}
             </h2>
-            <p className="mt-4 text-base leading-relaxed text-muted-foreground dark:text-slate-300 max-w-2xl mx-auto">
+            <p className="mt-3 sm:mt-4 text-sm sm:text-base leading-relaxed text-muted-foreground dark:text-slate-300 max-w-2xl mx-auto">
               {t('landing.problemDesc')}
             </p>
           </Reveal>
 
-          <div className="grid md:grid-cols-2 gap-5 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 max-w-4xl mx-auto">
             <Reveal delay={0}>
-              <div className="rounded-2xl p-6 space-y-4 h-full bg-card dark:bg-[#0e1422] border border-red-500/30 shadow-lg shadow-red-500/5">
+              <div className="rounded-2xl p-4 sm:p-6 space-y-4 h-full bg-card dark:bg-[#0e1422] border border-red-500/30 shadow-lg shadow-red-500/5">
                 <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-500 dark:text-red-400">
                   <span className="w-2 h-2 rounded-full bg-red-500" />
                   {t('landing.centralizedLabel')}
                 </div>
-                <p className="text-sm text-foreground/80 dark:text-slate-300 leading-relaxed">{t('landing.centralizedDesc')}</p>
-                <div className="grid grid-cols-3 gap-2">
+                <p className="text-xs sm:text-sm text-foreground/80 dark:text-slate-300 leading-relaxed">{t('landing.centralizedDesc')}</p>
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                   {['A','B','C','D','E','F'].map(l => (
-                    <div key={l} className="text-xs text-center px-2 py-2 rounded-lg font-mono bg-red-500/10 border border-red-500/25 text-red-400 font-medium">
+                    <div key={l} className="text-[11px] sm:text-xs text-center px-1.5 sm:px-2 py-1.5 sm:py-2 rounded-lg font-mono bg-red-500/10 border border-red-500/25 text-red-400 font-medium">
                       Tenant {l}
                     </div>
                   ))}
                 </div>
-                <div className="text-xs text-center font-mono text-muted-foreground dark:text-slate-400 font-medium">{t('landing.sharedPostgres')}</div>
+                <div className="text-[11px] sm:text-xs text-center font-mono text-muted-foreground dark:text-slate-400 font-medium">{t('landing.sharedPostgres')}</div>
               </div>
             </Reveal>
 
             <Reveal delay={80}>
               <div
-                className="rounded-2xl p-6 space-y-4 h-full bg-card dark:bg-[#0e1422] border border-blue-500/40 shadow-xl shadow-blue-500/10 ring-1 ring-blue-500/20"
+                className="rounded-2xl p-4 sm:p-6 space-y-4 h-full bg-card dark:bg-[#0e1422] border border-blue-500/40 shadow-xl shadow-blue-500/10 ring-1 ring-blue-500/20"
               >
                 <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-500 dark:text-blue-400">
                   <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                   {t('landing.vanillaLabel')}
                 </div>
-                <p className="text-sm text-foreground/80 dark:text-slate-300 leading-relaxed">{t('landing.vanillaDesc')}</p>
-                <div className="grid grid-cols-3 gap-2">
+                <p className="text-xs sm:text-sm text-foreground/80 dark:text-slate-300 leading-relaxed">{t('landing.vanillaDesc')}</p>
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                   {['A','B','C','D','E','F'].map(l => (
-                    <div key={l} className="text-xs text-center px-2 py-2 rounded-lg font-mono bg-blue-500/15 border border-blue-500/30 text-blue-400 font-semibold shadow-sm">
+                    <div key={l} className="text-[11px] sm:text-xs text-center px-1.5 sm:px-2 py-1.5 sm:py-2 rounded-lg font-mono bg-blue-500/15 border border-blue-500/30 text-blue-400 font-semibold shadow-sm">
                       Tenant {l}<br />
-                      <span className="text-[10px] text-blue-300 font-normal">{t('landing.ownDb')}</span>
+                      <span className="text-[9px] sm:text-[10px] text-blue-300 font-normal">{t('landing.ownDb')}</span>
                     </div>
                   ))}
                 </div>
-                <div className="text-xs text-center font-mono text-blue-400 font-semibold">{t('landing.isolatedSqlite')}</div>
+                <div className="text-[11px] sm:text-xs text-center font-mono text-blue-400 font-semibold">{t('landing.isolatedSqlite')}</div>
               </div>
             </Reveal>
           </div>
         </section>
 
         {/* ── 6 PILLARS — grid, no scroll ───────────────────────────────── */}
-        <section id="security" className="px-5 sm:px-8 py-20 border-b border-border">
-          <Reveal className="max-w-5xl mx-auto text-center space-y-3 mb-14">
+        <section id="security" className="px-4 sm:px-8 py-16 sm:py-20 border-b border-border">
+          <Reveal className="max-w-5xl mx-auto text-center space-y-3 mb-10 sm:mb-14">
             <p className="text-xs font-mono text-blue-500 dark:text-blue-400 uppercase tracking-widest font-semibold">{t('landing.archLabel')}</p>
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
               {t('landing.archTitle')}
             </h2>
-            <p className="text-sm text-muted-foreground dark:text-slate-300 max-w-xl mx-auto mt-3">{t('landing.archDesc')}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground dark:text-slate-300 max-w-xl mx-auto mt-2 sm:mt-3">{t('landing.archDesc')}</p>
           </Reveal>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 max-w-5xl mx-auto">
             {PILLARS.map((p, i) => (
               <Reveal key={p.num} delay={i * 55}>
                 <div
-                  className="group rounded-2xl p-5 space-y-4 h-full bg-card dark:bg-[#0e1422] border border-border/80 dark:border-slate-800 hover:border-blue-500/50 dark:hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 hover:-translate-y-1 cursor-default"
+                  className="group rounded-2xl p-4 sm:p-5 space-y-3.5 sm:space-y-4 h-full bg-card dark:bg-[#0e1422] border border-border/80 dark:border-slate-800 hover:border-blue-500/50 dark:hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 hover:-translate-y-1 cursor-default"
                 >
                   <div className="flex items-start justify-between">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${p.iconBg} ring-1 ${p.ring} shadow-sm`}>
+                    <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center ${p.iconBg} ring-1 ${p.ring} shadow-sm shrink-0`}>
                       {p.icon}
                     </div>
-                    <span className={`font-mono text-2xl font-black ${p.numColor} opacity-50 group-hover:opacity-100 transition-opacity`}>
+                    <span className={`font-mono text-xl sm:text-2xl font-black ${p.numColor} opacity-50 group-hover:opacity-100 transition-opacity`}>
                       {p.num}
                     </span>
                   </div>
@@ -581,36 +583,36 @@ export const LandingPage: React.FC<{
         </section>
 
         {/* ── CODE SWITCHER ─────────────────────────────────────────────── */}
-        <section id="quickstart" className="px-5 sm:px-8 py-20 border-b border-border">
-          <div className="grid lg:grid-cols-[2fr,3fr] gap-12 items-start max-w-6xl mx-auto">
+        <section id="quickstart" className="px-4 sm:px-8 py-16 sm:py-20 border-b border-border">
+          <div className="grid grid-cols-1 lg:grid-cols-[2fr,3fr] gap-8 lg:gap-12 items-start max-w-6xl mx-auto">
 
             {/* Left sticky copy */}
-            <Reveal className="space-y-6 lg:sticky lg:top-24">
+            <Reveal className="space-y-5 sm:space-y-6 lg:sticky lg:top-24">
               <p className="text-xs font-mono text-blue-500 dark:text-blue-400 uppercase tracking-widest font-semibold">{t('landing.devExpLabel')}</p>
-              <h2 className="text-3xl font-extrabold tracking-tight leading-tight text-foreground">
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight text-foreground">
                 {t('landing.devExpTitle1')}<br />
                 {t('landing.devExpTitle2')}<br />
                 <span className="text-blue-500 dark:text-blue-400">{t('landing.devExpTitle3')}</span>
               </h2>
-              <p className="text-sm leading-relaxed text-muted-foreground dark:text-slate-300">{t('landing.devExpDesc')}</p>
-              <ul className="space-y-2.5">
+              <p className="text-xs sm:text-sm leading-relaxed text-muted-foreground dark:text-slate-300">{t('landing.devExpDesc')}</p>
+              <ul className="space-y-2 sm:space-y-2.5">
                 {[
                   t('landing.sdkList1'),
                   t('landing.sdkList2'),
                   t('landing.sdkList3'),
                   t('landing.sdkList4'),
                 ].map(f => (
-                  <li key={f} className="flex items-center gap-2 text-sm text-foreground/85 dark:text-slate-200">
+                  <li key={f} className="flex items-center gap-2 text-xs sm:text-sm text-foreground/85 dark:text-slate-200">
                     <ChevronRight className="w-4 h-4 text-blue-500 dark:text-blue-400 shrink-0" />
-                    {f}
+                    <span>{f}</span>
                   </li>
                 ))}
               </ul>
               <button
                 onClick={() => navigate('register')}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 hover:-translate-y-px shadow-lg shadow-blue-600/25"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 hover:-translate-y-px shadow-lg shadow-blue-600/25"
               >
-                {t('landing.startBuilding')}
+                <span>{t('landing.startBuilding')}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </Reveal>
@@ -623,12 +625,12 @@ export const LandingPage: React.FC<{
               >
                 {/* Tab bar */}
                 <div className="flex items-center justify-between border-b border-border/60 dark:border-slate-800/80 bg-slate-900/60 dark:bg-slate-950/80">
-                  <div className="flex overflow-x-auto">
+                  <div className="flex overflow-x-auto scrollbar-none">
                     {(['per-tenant', 'per-agent', 'per-user'] as CodeTab[]).map(tab => (
                       <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
-                        className={`px-4 py-3 text-[11px] font-mono font-semibold whitespace-nowrap border-b-2 transition-all duration-200 ${
+                        className={`px-3.5 sm:px-4 py-2.5 sm:py-3 text-[11px] font-mono font-semibold whitespace-nowrap border-b-2 transition-all duration-200 ${
                           activeTab === tab
                             ? 'text-blue-400 border-blue-500 bg-blue-500/10'
                             : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/40'
@@ -640,7 +642,7 @@ export const LandingPage: React.FC<{
                   </div>
                   <span className="hidden sm:inline-block pr-4 text-[10px] font-mono text-slate-500">TypeScript</span>
                 </div>
-                <div className="p-5" style={{ minHeight: '260px' }}>
+                <div className="p-3.5 sm:p-5" style={{ minHeight: '260px' }}>
                   {renderHighlightedCode(CODE_SNIPPETS[activeTab].code)}
                 </div>
               </div>
@@ -649,17 +651,17 @@ export const LandingPage: React.FC<{
         </section>
 
         {/* ── FEATURE GRID ──────────────────────────────────────────────── */}
-        <section className="px-5 sm:px-8 py-20 border-b border-border">
+        <section className="px-4 sm:px-8 py-16 sm:py-20 border-b border-border">
           <div className="max-w-5xl mx-auto">
-            <Reveal className="text-center mb-12 space-y-3">
+            <Reveal className="text-center mb-10 sm:mb-12 space-y-3">
               <p className="text-xs font-mono text-blue-500 dark:text-blue-400 uppercase tracking-widest font-semibold">{t('landing.everythingLabel')}</p>
-              <h2 className="text-3xl font-extrabold tracking-tight text-foreground">{t('landing.everythingTitle')}</h2>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">{t('landing.everythingTitle')}</h2>
             </Reveal>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
               {FEATURES.map((item, i) => (
                 <Reveal key={item.title} delay={i * 35}>
-                  <div className="group rounded-2xl p-6 space-y-3.5 h-full bg-card dark:bg-[#0e1422] border border-border/80 dark:border-slate-800 hover:border-blue-500/50 dark:hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/5 hover:-translate-y-1 transition-all duration-300">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-blue-500/10 dark:bg-blue-500/20 border border-blue-500/20 dark:border-blue-500/30 text-blue-500 dark:text-blue-400 shadow-sm group-hover:scale-105 transition-transform">
+                  <div className="group rounded-2xl p-4 sm:p-6 space-y-3.5 h-full bg-card dark:bg-[#0e1422] border border-border/80 dark:border-slate-800 hover:border-blue-500/50 dark:hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/5 hover:-translate-y-1 transition-all duration-300">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center bg-blue-500/10 dark:bg-blue-500/20 border border-blue-500/20 dark:border-blue-500/30 text-blue-500 dark:text-blue-400 shadow-sm group-hover:scale-105 transition-transform">
                       {item.icon}
                     </div>
                     <div className="font-bold text-sm text-foreground group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">{item.title}</div>
@@ -672,40 +674,40 @@ export const LandingPage: React.FC<{
         </section>
 
         {/* ── FINAL CTA ─────────────────────────────────────────────────── */}
-        <section className="relative px-5 sm:px-8 py-28 text-center border-b border-border overflow-hidden">
+        <section className="relative px-4 sm:px-8 py-20 sm:py-24 md:py-28 text-center border-b border-border overflow-hidden">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-blue-500/10 dark:from-blue-600/15 via-blue-500/5 to-transparent blur-xl" />
-          <Reveal className="relative max-w-xl mx-auto space-y-6">
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
+          <Reveal className="relative max-w-xl mx-auto space-y-5 sm:space-y-6">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
               {t('landing.ctaTitle1')}<br /><span className="text-blue-500 dark:text-blue-400">{t('landing.ctaTitle2')}</span>
             </h2>
-            <p className="text-sm text-muted-foreground dark:text-slate-300 leading-relaxed">{t('landing.ctaDesc')}</p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <p className="text-xs sm:text-sm text-muted-foreground dark:text-slate-300 leading-relaxed">{t('landing.ctaDesc')}</p>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
               <button
                 onClick={() => navigate('register')}
-                className="w-full sm:w-auto px-8 py-3.5 rounded-full text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-px shadow-lg shadow-blue-600/25"
+                className="w-full sm:w-auto px-7 sm:px-8 py-3 sm:py-3.5 rounded-full text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-px shadow-lg shadow-blue-600/25"
               >
-                {t('landing.tryFree')}
+                <span>{t('landing.tryFree')}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
               <a
                 href="https://github.com/Elaina2026/VanillaDB"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full sm:w-auto px-8 py-3.5 rounded-full text-sm font-semibold border border-border/80 dark:border-slate-700 text-foreground/80 dark:text-slate-200 hover:text-foreground hover:border-border dark:hover:border-slate-500 transition-all duration-200 flex items-center justify-center gap-2 bg-card/50 dark:bg-card/30"
+                className="w-full sm:w-auto px-7 sm:px-8 py-3 sm:py-3.5 rounded-full text-sm font-semibold border border-border/80 dark:border-slate-700 text-foreground/80 dark:text-slate-200 hover:text-foreground hover:border-border dark:hover:border-slate-500 transition-all duration-200 flex items-center justify-center gap-2 bg-card/50 dark:bg-card/30"
               >
                 <GitBranch className="w-4 h-4" />
-                {t('landing.viewGitHub')}
+                <span>{t('landing.viewGitHub')}</span>
               </a>
             </div>
           </Reveal>
         </section>
 
         {/* ── FOOTER ────────────────────────────────────────────────────── */}
-        <footer className="px-5 sm:px-8 pt-14 pb-10 border-t border-border">
+        <footer className="px-4 sm:px-8 pt-12 sm:pt-14 pb-8 sm:pb-10 border-t border-border">
           {/* Top row: brand + nav columns */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-10">
             {/* Brand */}
-            <div className="col-span-2 sm:col-span-1 space-y-4">
+            <div className="col-span-1 sm:col-span-2 lg:col-span-1 space-y-4">
               <div className="flex items-center gap-2">
                 <LogoIcon className="w-6 h-6" />
                 <span className="text-sm font-bold text-foreground">VanillaDatabase</span>

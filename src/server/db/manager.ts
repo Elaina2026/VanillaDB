@@ -31,6 +31,13 @@ export class DatabaseManager {
     const cached = this.handles.get(databaseId);
     if (cached?.resolvedPath) return cached.resolvedPath;
 
+    // Direct disk check: on worker storage nodes, tenant databases exist without central metadata
+    const directFilename = `${databaseId}.sqlite`;
+    const directPath = path.resolve(config.databasesDir, directFilename);
+    if (fs.existsSync(directPath)) {
+      return directPath;
+    }
+
     const metaDb = getMetadataDb();
     const row = metaDb.prepare('SELECT filename FROM databases WHERE id = ?').get(databaseId) as { filename: string } | undefined;
     if (!row || !row.filename) {

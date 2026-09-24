@@ -19,9 +19,9 @@ Trung tâm tài liệu kỹ thuật và cẩm nang vận hành chính thức c�
 | Module | Title (English) | Chuyên đề (Tiếng Việt) | English | Tiếng Việt |
 | :---: | :--- | :--- | :---: | :---: |
 | **01** | Getting Started | Khởi động & Cài đặt | [EN](en/01-getting-started.md) | [VI](vi/01-getting-started.md) |
-| **02** | Architecture & Engine | Kiến trúc & Động cơ | [EN](en/02-architecture.md) | [VI](vi/02-architecture.md) |
+| **02** | Architecture & Host Sharding | Kiến trúc & Phân cụm Máy chủ | [EN](en/02-architecture.md) | [VI](vi/02-architecture.md) |
 | **03** | Database Engine & SQL | Quản trị Database & SQL | [EN](en/03-database-engine.md) | [VI](vi/03-database-engine.md) |
-| **04** | Data Plane & REST API | Tham chiếu REST & SQL API | [EN](en/04-api-reference.md) | [VI](vi/04-api-reference.md) |
+| **04** | Data Plane, REST & Cluster API | Tham chiếu REST, SQL & Cụm API | [EN](en/04-api-reference.md) | [VI](vi/04-api-reference.md) |
 | **05** | Authentication, RBAC & 2FA | Xác thực, Phân quyền & 2FA | [EN](en/05-authentication-rbac-2fa.md) | [VI](vi/05-authentication-rbac-2fa.md) |
 | **06** | Realtime SSE & Webhooks | Sự kiện Realtime & Webhooks | [EN](en/06-realtime-and-webhooks.md) | [VI](vi/06-realtime-and-webhooks.md) |
 | **07** | Storage & HTTP 206 Streaming | Lưu trữ Media & Phát luồng | [EN](en/07-storage-and-streaming.md) | [VI](vi/07-storage-and-streaming.md) |

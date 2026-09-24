@@ -147,3 +147,74 @@ Mã lỗi phổ biến:
 - `RATE_LIMIT_EXCEEDED`: Vượt quá số lượng yêu cầu cho phép trong cửa sổ trượt (HTTP 429).
 - `SQLITE_ERROR`: Sai cú pháp SQL, không tìm thấy bảng hoặc vi phạm ràng buộc dữ liệu.
 - `PAYLOAD_TOO_LARGE`: Dung lượng gói tin vượt quá ngưỡng MB cấu hình (HTTP 413).
+
+---
+
+## 4. Điểm cuối Quản trị Cụm & Máy chủ Lưu trữ (Cluster Endpoints)
+
+Tất cả các điểm cuối quản trị cụm yêu cầu phiên làm việc có vai trò `super_admin` hoặc `admin`.
+
+### 4.1. Giám sát Sức khỏe & Thông số Phần cứng Cụm
+- **GET** `/api/admin/cluster/status`
+
+**Dữ liệu phản hồi:**
+```json
+{
+  "success": true,
+  "data": {
+    "totalNodes": 3,
+    "healthyNodes": 3,
+    "totalClusterDiskBytes": 1073741824000,
+    "freeClusterDiskBytes": 644245094400,
+    "usedClusterDiskPercent": 40,
+    "spilloverActive": false,
+    "localNodeFull": false,
+    "nodes": [
+      {
+        "id": "local",
+        "name": "Primary Gateway",
+        "base_url": "http://127.0.0.1:3000",
+        "status": "healthy",
+        "is_local": true,
+        "cpu_percent": 12,
+        "ram_percent": 34,
+        "disk_total_bytes": 21474836480,
+        "disk_free_bytes": 16106127360,
+        "disk_used_percent": 25,
+        "network_rate_bps": 45020,
+        "database_count": 8,
+        "last_heartbeat_at": 1788854400000
+      }
+    ]
+  }
+}
+```
+
+### 4.2. Đăng ký Máy chủ Worker Lưu trữ Mới
+- **POST** `/api/admin/cluster/nodes`
+
+```json
+{
+  "name": "Storage-Node-Frankfurt-01",
+  "baseUrl": "http://192.168.1.102:3000",
+  "authToken": "optional_custom_secret_key"
+}
+```
+
+### 4.3. Kiểm tra Nhịp tim Toàn cụm
+- **POST** `/api/admin/cluster/poll`
+
+Gửi yêu cầu kiểm tra song song (`Promise.allSettled`) đến tất cả các node để cập nhật thông số CPU, RAM, Disk và Network I/O vào bộ nhớ đệm hệ thống.
+
+### 4.4. Di chuyển Cơ sở Dữ liệu Không Gián đoạn
+- **POST** `/api/admin/cluster/migrate`
+
+```json
+{
+  "databaseId": "db_BIcZhxUYK83SMS2r",
+  "targetNodeId": "node_frankfurt_01"
+}
+```
+
+Tạo snapshot nhất quán tức thì bằng `VACUUM INTO`, phát luồng dữ liệu sang node đích, kiểm tra toàn vẹn mã băm và cập nhật bản ghi điều phối trong cơ sở dữ liệu hệ thống.
+

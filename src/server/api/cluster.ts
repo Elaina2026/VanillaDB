@@ -28,7 +28,8 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
   // Protected by x-cluster-secret header
   // ==========================================
   fastify.addHook('preHandler', async (req, reply) => {
-    if (req.url.startsWith('/api/internal/node')) {
+    const pathname = (req.url || '').split('?')[0];
+    if (pathname.startsWith('/api/internal/node') || pathname.startsWith('/internal/node')) {
       const secretHeader = req.headers['x-cluster-secret'];
       const secretStr = typeof secretHeader === 'string' ? secretHeader : '';
       const expectedStr = config.clusterSecret;
@@ -61,6 +62,10 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
     const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '');
     if (!safeId) {
       return reply.status(400).send({ success: false, error: { message: 'Invalid database ID' } });
+    }
+
+    if (!fs.existsSync(config.tempDir)) {
+      fs.mkdirSync(config.tempDir, { recursive: true });
     }
 
     const destFile = path.resolve(config.databasesDir, `${safeId}.sqlite`);
@@ -114,24 +119,46 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // Export a local database snapshot for migration back to gateway
+  // Export a local database snapshot for migration back to gateway or peer worker
   fastify.get('/internal/node/databases/:id/export', async (req, reply) => {
     const { id } = req.params as { id: string };
     const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '');
     const dbPath = path.resolve(config.databasesDir, `${safeId}.sqlite`);
 
     if (!fs.existsSync(dbPath)) {
-      return reply.status(404).send({ success: false, error: { message: 'Database file not found on worker' } });
+      return reply.status(404).send({ success: false, error: { message: `Database file not found: ${safeId}.sqlite` } });
+    }
+
+    if (!fs.existsSync(config.tempDir)) {
+      fs.mkdirSync(config.tempDir, { recursive: true });
     }
 
     const tempExport = path.resolve(config.tempDir, `${safeId}_exp_${Date.now()}.sqlite`);
     try {
-      const handle = dbManager.get(safeId);
-      const safeTemp = tempExport.replace(/\\/g, '/').replace(/'/g, "''");
-      handle.exec(`VACUUM INTO '${safeTemp}';`);
+      // 1. Close cached handle to avoid locking
+      try {
+        dbManager.close(safeId);
+      } catch {}
 
-      const fileData = fs.readFileSync(tempExport);
-      fs.unlinkSync(tempExport);
+      // 2. Checkpoint WAL into main database file
+      try {
+        const checkpointer = new DatabaseSync(dbPath);
+        checkpointer.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+        checkpointer.close();
+      } catch {}
+
+      // 3. Snapshot with VACUUM INTO, with fallback to direct read
+      let fileData: Buffer;
+      const safeTemp = tempExport.replace(/\\/g, '/').replace(/'/g, "''");
+      try {
+        const snapHandle = new DatabaseSync(dbPath);
+        snapHandle.exec(`VACUUM INTO '${safeTemp}';`);
+        snapHandle.close();
+        fileData = fs.readFileSync(tempExport);
+        try { fs.unlinkSync(tempExport); } catch {}
+      } catch {
+        fileData = fs.readFileSync(dbPath);
+      }
 
       reply.header('content-type', 'application/octet-stream');
       return reply.send(fileData);
