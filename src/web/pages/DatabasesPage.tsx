@@ -19,7 +19,11 @@ import {
   SlidersHorizontal,
   AlertTriangle,
   Mail,
-  UserMinus
+  UserMinus,
+  Server,
+  LayoutList,
+  LayoutGrid,
+  ChevronRight
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatTimeAgo } from '../lib/utils.js';
@@ -36,6 +40,9 @@ export const DatabasesPage: React.FC<{
   const { language, t } = useI18n();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'mine' | 'shared'>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+    return (localStorage.getItem('vdb_databases_view_mode') as 'list' | 'grid') || 'list';
+  });
   const [deletingDb, setDeletingDb] = useState<DatabaseRecord | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -45,6 +52,19 @@ export const DatabasesPage: React.FC<{
     queryFn: () => apiRequest('/api/admin/databases'),
     staleTime: 30000,
   });
+
+  const { data: clusterStatus } = useQuery<{ nodes: Array<{ id: string; name: string }> }>({
+    queryKey: ['clusterStatusSummary'],
+    queryFn: () => apiRequest('/api/admin/cluster/status'),
+    enabled: currentUser?.role === 'super_admin' || currentUser?.role === 'admin',
+    staleTime: 60000,
+  });
+
+  const getNodeDisplayName = (nodeId?: string | null) => {
+    if (!nodeId || nodeId === 'local') return t('databases.primaryGateway', 'Primary Gateway');
+    const matched = clusterStatus?.nodes?.find(n => n.id === nodeId);
+    return matched ? matched.name : `Worker (${nodeId})`;
+  };
 
   const { data: userStats } = useQuery<UserDashboardStats>({
     queryKey: ['userDashboardStats'],
@@ -142,7 +162,7 @@ export const DatabasesPage: React.FC<{
         </button>
       </div>
 
-      {/* Filter & Search Bar */}
+      {/* Filter, Search & View Mode Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-3.5 top-2.5 text-muted-foreground pointer-events-none" />
@@ -164,45 +184,79 @@ export const DatabasesPage: React.FC<{
           )}
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex flex-wrap items-center gap-1 bg-muted/50 p-1 rounded-lg border border-border shrink-0 self-start sm:self-auto text-xs">
-          <button
-            onClick={() => setFilterType('all')}
-            className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
-              filterType === 'all'
-                ? 'bg-card text-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {t('common.all', 'All')} ({databases.length})
-          </button>
-          <button
-            onClick={() => setFilterType('mine')}
-            className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
-              filterType === 'mine'
-                ? 'bg-card text-blue-500 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {t('common.mine', 'Created by me')}
-          </button>
-          {(databases.some((d: any) => Boolean(d.is_shared) || (d.owner_id && d.owner_id !== currentUser?.userId)) || pendingInvitesCount > 0) && (
+        <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+          {/* Filter Pills */}
+          <div className="flex flex-wrap items-center gap-1 bg-muted/50 p-1 rounded-lg border border-border text-xs">
             <button
-              onClick={() => setFilterType('shared')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
-                filterType === 'shared'
-                  ? 'bg-card text-purple-500 shadow-xs'
+              onClick={() => setFilterType('all')}
+              className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                filterType === 'all'
+                  ? 'bg-card text-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <span>{t('databases.filterShared', 'Shared with me')}</span>
-              {pendingInvitesCount > 0 && (
-                <span className="px-1.5 py-0.2 text-[9px] font-bold bg-blue-500 text-white rounded-full">
-                  {pendingInvitesCount}
-                </span>
-              )}
+              {t('common.all', 'All')} ({databases.length})
             </button>
-          )}
+            <button
+              onClick={() => setFilterType('mine')}
+              className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                filterType === 'mine'
+                  ? 'bg-card text-blue-500 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t('common.mine', 'Created by me')}
+            </button>
+            {(databases.some((d: any) => Boolean(d.is_shared) || (d.owner_id && d.owner_id !== currentUser?.userId)) || pendingInvitesCount > 0) && (
+              <button
+                onClick={() => setFilterType('shared')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                  filterType === 'shared'
+                    ? 'bg-card text-purple-500 shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <span>{t('databases.filterShared', 'Shared with me')}</span>
+                {pendingInvitesCount > 0 && (
+                  <span className="px-1.5 py-0.2 text-[9px] font-bold bg-blue-500 text-white rounded-full">
+                    {pendingInvitesCount}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* View Mode Toggle (Horizontal List vs Grid) */}
+          <div className="flex items-center bg-muted/50 p-1 rounded-lg border border-border text-xs">
+            <button
+              onClick={() => {
+                setViewMode('list');
+                try { localStorage.setItem('vdb_databases_view_mode', 'list'); } catch {}
+              }}
+              className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                viewMode === 'list'
+                  ? 'bg-card text-blue-500 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title={t('databases.viewList', 'Horizontal List View')}
+            >
+              <LayoutList className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => {
+                setViewMode('grid');
+                try { localStorage.setItem('vdb_databases_view_mode', 'grid'); } catch {}
+              }}
+              className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-card text-blue-500 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title={t('databases.viewGrid', 'Grid Cards View')}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -225,28 +279,53 @@ export const DatabasesPage: React.FC<{
         </div>
       )}
 
-      {/* Database Grid */}
+      {/* Databases Display */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {[1, 2, 3, 4, 5, 6].map((n) => (
-            <div
-              key={n}
-              className="h-48 bg-card/60 border border-border rounded-xl p-5 animate-pulse flex flex-col justify-between"
-            >
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-muted" />
-                  <div className="space-y-1.5 flex-1">
-                    <div className="h-4 bg-muted rounded w-2/3" />
-                    <div className="h-3 bg-muted rounded w-1/3" />
+        viewMode === 'list' ? (
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <div
+                key={n}
+                className="h-20 bg-card/60 border border-border rounded-xl p-4 animate-pulse flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-muted" />
+                  <div className="space-y-2">
+                    <div className="h-4 bg-muted rounded w-44" />
+                    <div className="h-3 bg-muted rounded w-24" />
                   </div>
                 </div>
-                <div className="h-3 bg-muted rounded w-full" />
+                <div className="hidden lg:flex items-center gap-8">
+                  <div className="h-8 bg-muted rounded w-24" />
+                  <div className="h-8 bg-muted rounded w-24" />
+                  <div className="h-8 bg-muted rounded w-24" />
+                </div>
+                <div className="h-8 bg-muted rounded w-20" />
               </div>
-              <div className="h-8 bg-muted rounded w-full" />
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <div
+                key={n}
+                className="h-48 bg-card/60 border border-border rounded-xl p-5 animate-pulse flex flex-col justify-between"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-muted" />
+                    <div className="space-y-1.5 flex-1">
+                      <div className="h-4 bg-muted rounded w-2/3" />
+                      <div className="h-3 bg-muted rounded w-1/3" />
+                    </div>
+                  </div>
+                  <div className="h-3 bg-muted rounded w-full" />
+                </div>
+                <div className="h-8 bg-muted rounded w-full" />
+              </div>
+            ))}
+          </div>
+        )
       ) : filtered.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center p-12 text-center border border-dashed border-border rounded-2xl bg-card/40 my-6">
           <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-3 text-blue-500 shadow-inner">
@@ -295,7 +374,219 @@ export const DatabasesPage: React.FC<{
             </button>
           )}
         </div>
+      ) : viewMode === 'list' ? (
+        /* ========================================================
+           HORIZONTAL LIST VIEW (Sleek horizontal row panel style)
+           ======================================================== */
+        <div className="space-y-3">
+          {filtered.map((db) => {
+            const isOwner = db.owner_id === currentUser?.userId || db.owner_username === currentUser?.username;
+            const isShared = Boolean(db.is_shared);
+
+            return (
+              <div
+                key={db.id}
+                onClick={() => onSelectDatabase(db.id)}
+                className="group relative bg-card hover:bg-card/90 border border-border hover:border-blue-500/40 rounded-xl p-3.5 sm:p-4.5 cursor-pointer transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 overflow-hidden"
+              >
+                {/* Right Accent Status Stripe */}
+                <div
+                  className={`absolute right-0 top-0 bottom-0 w-1 sm:w-1.5 transition-all duration-200 group-hover:w-2 ${
+                    userStats?.rateLimitWarnings?.some((w) => w.databaseId === db.id)
+                      ? 'bg-amber-500 shadow-sm shadow-amber-500/40'
+                      : isShared
+                      ? 'bg-purple-500 shadow-sm shadow-purple-500/40'
+                      : 'bg-emerald-500 shadow-sm shadow-emerald-500/40'
+                  }`}
+                />
+
+                {/* Left Section: Icon & Identity */}
+                <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-blue-500/15 to-indigo-500/15 border border-blue-500/25 flex items-center justify-center text-blue-500 shrink-0 group-hover:scale-105 group-hover:border-blue-500/40 transition-all shadow-xs">
+                    <Database className="w-5 h-5" />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm sm:text-base font-bold tracking-tight text-foreground group-hover:text-blue-500 transition-colors truncate">
+                        {db.name}
+                      </h3>
+
+                      {db.owner_username ? (
+                        <span
+                          className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md font-medium border ${
+                            isOwner
+                              ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+                              : 'bg-muted text-muted-foreground border-border'
+                          }`}
+                        >
+                          <User className="w-3 h-3" />
+                          <span>{isOwner ? `${t('common.you', 'You')}` : db.owner_username}</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-muted text-muted-foreground border border-border rounded-md font-medium">
+                          {t('common.system', 'System')}
+                        </span>
+                      )}
+
+                      {isShared && (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-500 border border-purple-500/20 rounded-md font-medium">
+                          <Share2 className="w-3 h-3" />
+                          <span>{t('common.shared', 'Shared')}</span>
+                        </span>
+                      )}
+
+                      {userStats?.rateLimitWarnings?.some((w) => w.databaseId === db.id) && (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-md font-semibold">
+                          <AlertTriangle className="w-2.5 h-2.5" />
+                          <span>{t('databases.rateLimitWarning', 'Rate limit')}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                      <button
+                        onClick={(e) => handleCopyId(e, db.id)}
+                        className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/80 px-1.5 py-0.5 rounded transition-colors border border-border/40"
+                        title={t('databases.copyId', 'Copy Database ID')}
+                      >
+                        {copiedId === db.id ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-500" />
+                            <span className="text-emerald-500 font-semibold">{t('common.copied', 'Copied')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>{db.id}</span>
+                          </>
+                        )}
+                      </button>
+
+                      {db.description && (
+                        <>
+                          <span className="hidden md:inline text-muted-foreground/30">•</span>
+                          <span className="hidden md:inline truncate max-w-xs xl:max-w-md text-muted-foreground/75 text-[11px]">
+                            {db.description}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Middle Section: Metrics Columns */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 items-center shrink-0 border-t lg:border-t-0 pt-3 lg:pt-0 border-border/50">
+                  {/* Host Node */}
+                  <div className="flex items-center gap-2.5 min-w-[125px]">
+                    <div className="w-8 h-8 rounded-lg bg-muted/60 flex items-center justify-center text-muted-foreground shrink-0 border border-border/50">
+                      <Server className="w-4 h-4 text-blue-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-mono text-xs font-semibold text-foreground truncate max-w-[110px]" title={getNodeDisplayName(db.node_id)}>
+                        {getNodeDisplayName(db.node_id)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                        {t('databases.hostNode', 'Host Node')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Disk Quota */}
+                  <div className="flex items-center gap-2.5 min-w-[115px]">
+                    <div className="w-8 h-8 rounded-lg bg-muted/60 flex items-center justify-center text-muted-foreground shrink-0 border border-border/50">
+                      <HardDrive className="w-4 h-4 text-indigo-500" />
+                    </div>
+                    <div>
+                      <div className="font-mono text-xs font-semibold text-foreground">
+                        {db.max_size_mb ? `${db.max_size_mb} MB` : t('databases.unlimited', 'Unlimited')}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                        {t('databases.quota', 'Disk Quota')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Last Activity */}
+                  <div className="flex items-center gap-2.5 min-w-[115px]">
+                    <div className="w-8 h-8 rounded-lg bg-muted/60 flex items-center justify-center text-muted-foreground shrink-0 border border-border/50">
+                      <Clock className="w-4 h-4 text-emerald-500" />
+                    </div>
+                    <div>
+                      <div className="font-mono text-xs font-semibold text-foreground">
+                        {formatTimeAgo(db.last_accessed_at || db.created_at, language)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                        {t('databases.lastActive', 'Last Active')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Role Status (Desktop wide) */}
+                  <div className="hidden xl:flex items-center gap-2.5 min-w-[100px]">
+                    <div className="w-8 h-8 rounded-lg bg-muted/60 flex items-center justify-center text-muted-foreground shrink-0 border border-border/50">
+                      <ShieldAlert className="w-4 h-4 text-amber-500" />
+                    </div>
+                    <div>
+                      <div className="font-mono text-xs font-semibold text-foreground capitalize">
+                        {isOwner ? 'Owner' : (db.access_role || 'Member')}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                        {t('databases.role', 'Role')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Action Section */}
+                <div className="flex items-center justify-end gap-2 shrink-0 pr-1">
+                  {canDeleteDb(db) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingDb(db);
+                      }}
+                      className="p-2 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all cursor-pointer"
+                      title={t('databases.deleteDatabase', 'Delete Database')}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {!canDeleteDb(db) && (Boolean(db.is_shared) || (db.owner_id && db.owner_id !== currentUser?.userId)) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(t('members.leaveConfirm', 'Are you sure you want to leave this shared database?'))) {
+                          leaveDbMutation.mutate(db.id);
+                        }
+                      }}
+                      className="p-2 rounded-lg text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 transition-all cursor-pointer"
+                      title={t('members.leave', 'Leave Database')}
+                    >
+                      <UserMinus className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectDatabase(db.id);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600/10 hover:bg-blue-600 text-blue-600 hover:text-white rounded-lg text-xs font-semibold transition-all cursor-pointer border border-blue-500/20 hover:border-blue-600 shadow-2xs group/btn"
+                  >
+                    <span>{t('common.open', 'Open')}</span>
+                    <ChevronRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
+        /* ========================================================
+           GRID CARDS VIEW (Classic 3-column cards view)
+           ======================================================== */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((db) => {
             const isOwner = db.owner_id === currentUser?.userId || db.owner_username === currentUser?.username;

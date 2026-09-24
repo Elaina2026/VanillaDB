@@ -150,6 +150,13 @@ const translations: Record<Language, Record<string, string>> = {
     'databases.quota': 'Disk Quota',
     'databases.queries': 'Queries',
     'databases.files': 'Media Files',
+    'databases.viewList': 'Horizontal List View',
+    'databases.viewGrid': 'Grid Cards View',
+    'databases.hostNode': 'Host Node',
+    'databases.lastActive': 'Last Active',
+    'databases.role': 'Role',
+    'databases.unlimited': 'Unlimited',
+    'databases.primaryGateway': 'Primary Gateway',
 
     // Database Detail Workspace Tabs
     'db.overview': 'Overview & Stats',
@@ -1516,6 +1523,13 @@ const translations: Record<Language, Record<string, string>> = {
     'databases.quota': 'Hạn mức ổ đĩa',
     'databases.queries': 'Truy vấn',
     'databases.files': 'Tập tin media',
+    'databases.viewList': 'Danh sách nằm ngang',
+    'databases.viewGrid': 'Lưới thẻ ô vuông',
+    'databases.hostNode': 'Máy chủ lưu trữ',
+    'databases.lastActive': 'Hoạt động gần nhất',
+    'databases.role': 'Quyền hạn',
+    'databases.unlimited': 'Không giới hạn',
+    'databases.primaryGateway': 'Gateway chính',
 
     // Database Detail Workspace Tabs
     'db.overview': 'Tổng quan & Thống kê',
