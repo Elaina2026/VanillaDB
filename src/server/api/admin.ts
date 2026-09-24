@@ -77,7 +77,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Transparently proxy SQLite-backed database operations to remote worker nodes
   fastify.addHook('preHandler', async (req, reply) => {
     const pathname = (req.url || '').split('?')[0];
-    const match = pathname.match(/^\/api\/admin\/databases\/([a-zA-Z0-9_-]+)\/(schema|storage-stats|metrics|tables|query|exec|explain|maintenance|fts5-setup|export|import)(\/.*)?$/);
+    const match = pathname.match(/^\/api\/admin\/databases\/([a-zA-Z0-9_-]+)\/(schema|storage-stats|tables|query|exec|explain|maintenance|fts5-setup|export|import)(\/.*)?$/);
     if (!match) return;
 
     const databaseId = match[1];
@@ -174,7 +174,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = req.params as { id: string };
     const db = requireDatabaseAccess(req, reply, id);
     if (!db) return;
-    const stats = databaseService.getDatabaseOverviewStats(id, req.adminUser?.userId, req.adminUser?.role);
+    const stats = await databaseService.getDatabaseOverviewStats(id, req.adminUser?.userId, req.adminUser?.role);
     return reply.send({ success: true, data: stats });
   });
 

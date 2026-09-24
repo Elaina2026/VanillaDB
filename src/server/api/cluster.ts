@@ -54,6 +54,76 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true, data: metrics });
   });
 
+  // Return SQLite overview stats for a tenant database on this storage node
+  fastify.get('/internal/node/databases/:id/overview-stats', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '');
+    const dbPath = path.resolve(config.databasesDir, `${safeId}.sqlite`);
+    if (!fs.existsSync(dbPath)) {
+      return reply.status(404).send({ success: false, error: { message: `Database file "${safeId}.sqlite" not found on node` } });
+    }
+
+    try {
+      const db = dbManager.get(safeId);
+      let fileSizeBytes = 0;
+      let walSizeBytes = 0;
+      try {
+        fileSizeBytes = fs.statSync(dbPath).size;
+        const walPath = `${dbPath}-wal`;
+        if (fs.existsSync(walPath)) {
+          walSizeBytes = fs.statSync(walPath).size;
+        }
+      } catch {}
+
+      const sqliteVersionRow = db.prepare('SELECT sqlite_version() as version').get() as { version: string } | undefined;
+      const pageCountRow = db.prepare('PRAGMA page_count;').get() as { page_count: number } | undefined;
+      const pageSizeRow = db.prepare('PRAGMA page_size;').get() as { page_size: number } | undefined;
+      const freelistRow = db.prepare('PRAGMA freelist_count;').get() as { freelist_count: number } | undefined;
+      const journalModeRow = db.prepare('PRAGMA journal_mode;').get() as { journal_mode: string } | undefined;
+      const synchronousRow = db.prepare('PRAGMA synchronous;').get() as { synchronous: number | string } | undefined;
+      const busyTimeoutRow = db.prepare('PRAGMA busy_timeout;').get() as { timeout: number } | undefined;
+
+      const schemaObjects = db.prepare(`
+        SELECT type, count(*) as count
+        FROM sqlite_schema
+        WHERE name NOT LIKE 'sqlite_%'
+        GROUP BY type
+      `).all() as Array<{ type: string; count: number }>;
+
+      let tableCount = 0;
+      let indexCount = 0;
+      let viewCount = 0;
+      let triggerCount = 0;
+      for (const row of schemaObjects) {
+        if (row.type === 'table') tableCount = row.count;
+        if (row.type === 'index') indexCount = row.count;
+        if (row.type === 'view') viewCount = row.count;
+        if (row.type === 'trigger') triggerCount = row.count;
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          sqliteVersion: sqliteVersionRow?.version || '3.x',
+          fileSizeBytes,
+          walSizeBytes,
+          tableCount,
+          indexCount,
+          viewCount,
+          triggerCount,
+          pageCount: pageCountRow?.page_count || 0,
+          pageSize: pageSizeRow?.page_size || 4096,
+          freelistCount: freelistRow?.freelist_count || 0,
+          journalMode: journalModeRow?.journal_mode || 'wal',
+          synchronous: String(synchronousRow?.synchronous ?? 'normal'),
+          busyTimeout: busyTimeoutRow?.timeout || config.sqlBusyTimeoutMs,
+        },
+      });
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, error: { message: err.message } });
+    }
+  });
+
   // Receive a migrated SQLite file from another node
   fastify.post('/internal/node/databases/:id/receive', {
     bodyLimit: config.maxImportMb * 1024 * 1024,

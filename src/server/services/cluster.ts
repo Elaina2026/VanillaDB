@@ -447,6 +447,35 @@ export class ClusterService {
   }
 
   /**
+   * Fetch SQLite overview stats from a remote storage node
+   */
+  public async getRemoteDatabaseStats(nodeId: string, databaseId: string): Promise<any> {
+    const metaDb = getMetadataDb();
+    const node = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(nodeId) as any;
+    if (!node) {
+      throw new Error(`Target storage node "${nodeId}" not found in cluster metadata.`);
+    }
+
+    const res = await fetch(`${node.base_url.replace(/\/+$/, '')}/api/internal/node/databases/${databaseId}/overview-stats`, {
+      method: 'GET',
+      headers: {
+        'x-cluster-secret': node.auth_token || config.clusterSecret,
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Remote node responded with HTTP ${res.status}`);
+    }
+
+    const json = (await res.json()) as any;
+    if (!json.success || !json.data) {
+      throw new Error('Invalid response structure from worker node');
+    }
+    return json.data;
+  }
+
+  /**
    * Transparently forward API requests to the remote worker host
    */
   public async proxyToNode(nodeId: string, req: FastifyRequest, reply: FastifyReply): Promise<void> {

@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import path from 'path';
+import fs from 'fs';
+import { DatabaseSync } from 'node:sqlite';
 import { buildApp } from '../src/server/index.js';
 import { clusterService } from '../src/server/services/cluster.js';
 import { databaseService } from '../src/server/services/database.js';
@@ -266,4 +269,68 @@ describe('Cluster & Multi-Node Storage Spillover Test Suite', () => {
     if (fs.existsSync(targetWal)) try { fs.unlinkSync(targetWal); } catch {}
     if (fs.existsSync(targetShm)) try { fs.unlinkSync(targetShm); } catch {}
   }, 20000);
+
+  it('should serve GET /api/admin/databases/:id without 500 when database is on remote worker node', async () => {
+    const { getMetadataDb } = await import('../src/server/db/metadata.js');
+    const metaDb = getMetadataDb();
+
+    // 1. Create a database record marked as hosted on remote worker node
+    const testDb = databaseService.createDatabase('Remote Host Test DB', 'Testing overview stats for remote node');
+    metaDb.prepare("UPDATE databases SET node_id = 'worker_test_mock' WHERE id = ?").run(testDb.id);
+
+    // 2. Fetch GET /api/admin/databases/:id - must return 200 and not 500
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/admin/databases/${testDb.id}`,
+      headers: {
+        cookie: adminCookie,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const json = JSON.parse(res.payload);
+    expect(json.success).toBe(true);
+    expect(json.data.database.id).toBe(testDb.id);
+    expect(json.data.database.node_id).toBe('worker_test_mock');
+    expect(typeof json.data.fileSizeBytes).toBe('number');
+
+    // 3. Test internal overview-stats endpoint on local disk file
+    const overviewRes = await app.inject({
+      method: 'GET',
+      url: `/api/internal/node/databases/${testDb.id}/overview-stats`,
+      headers: {
+        'x-cluster-secret': config.clusterSecret,
+      },
+    });
+    expect(overviewRes.statusCode).toBe(200);
+    const overviewJson = JSON.parse(overviewRes.payload);
+    expect(overviewJson.success).toBe(true);
+    expect(overviewJson.data.pageSize).toBeGreaterThan(0);
+    expect(overviewJson.data.journalMode).toBe('wal');
+
+    // 4. Test storage-stats fallback on worker node (direct filesystem check when metadata absent)
+    const workerMockId = `worker_direct_${Date.now()}`;
+    const directPath = path.resolve(config.databasesDir, `${workerMockId}.sqlite`);
+    const tempDb = new DatabaseSync(directPath);
+    tempDb.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT); INSERT INTO items VALUES (1, 'A');");
+    tempDb.close();
+
+    const workerStorageStatsRes = await app.inject({
+      method: 'GET',
+      url: `/api/admin/databases/${workerMockId}/storage-stats`,
+      headers: {
+        'x-cluster-secret': config.clusterSecret,
+      },
+    });
+    expect(workerStorageStatsRes.statusCode).toBe(200);
+    const storageStatsJson = JSON.parse(workerStorageStatsRes.payload);
+    expect(storageStatsJson.success).toBe(true);
+    expect(storageStatsJson.data.tables.some((t: any) => t.name === 'items')).toBe(true);
+
+    // Cleanup
+    try { databaseService.deleteDatabase(testDb.id); } catch {}
+    if (fs.existsSync(directPath)) try { fs.unlinkSync(directPath); } catch {}
+    if (fs.existsSync(`${directPath}-wal`)) try { fs.unlinkSync(`${directPath}-wal`); } catch {}
+    if (fs.existsSync(`${directPath}-shm`)) try { fs.unlinkSync(`${directPath}-shm`); } catch {}
+  });
 });

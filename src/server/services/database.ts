@@ -187,13 +187,31 @@ export class DatabaseService {
       LEFT JOIN users u ON d.owner_id = u.id
       WHERE d.id = ?
     `).get(databaseId) as any;
-    if (!row) return null;
-    return {
-      ...row,
-      node_id: row.node_id || 'local',
-      backup_schedule: row.backup_schedule || null,
-      owner_avatar_url: row.owner_avatar_url || null,
-    };
+    if (row) {
+      return {
+        ...row,
+        node_id: row.node_id || 'local',
+        backup_schedule: row.backup_schedule || null,
+        owner_avatar_url: row.owner_avatar_url || null,
+      };
+    }
+
+    // Direct disk check: on worker storage nodes, tenant databases exist on disk without central metadata
+    const safeId = databaseId.replace(/[^a-zA-Z0-9_-]/g, '');
+    const dbPath = path.resolve(config.databasesDir, `${safeId}.sqlite`);
+    if (fs.existsSync(dbPath)) {
+      return {
+        id: safeId,
+        name: safeId,
+        slug: safeId,
+        filename: `${safeId}.sqlite`,
+        node_id: config.nodeId,
+        created_at: 0,
+        updated_at: 0,
+      } as any;
+    }
+
+    return null;
   }
 
   public updateDatabase(databaseId: string, updates: {
@@ -319,7 +337,7 @@ export class DatabaseService {
     return newRecord;
   }
 
-  public getDatabaseOverviewStats(databaseId: string, userId?: string, systemRole?: string): DatabaseOverviewStats {
+  public async getDatabaseOverviewStats(databaseId: string, userId?: string, systemRole?: string): Promise<DatabaseOverviewStats> {
     const dbRecord = this.getDatabase(databaseId);
     if (!dbRecord) throw new Error(`Database not found: ${databaseId}`);
 
@@ -335,68 +353,104 @@ export class DatabaseService {
       }
     }
 
-    const db = dbManager.get(databaseId);
-    const dbPath = dbManager.resolveDatabasePath(databaseId);
-
-    let fileSizeBytes = 0;
-    let walSizeBytes = 0;
-
-    try {
-      fileSizeBytes = fs.statSync(dbPath).size;
-      const walPath = `${dbPath}-wal`;
-      if (fs.existsSync(walPath)) {
-        walSizeBytes = fs.statSync(walPath).size;
-      }
-    } catch {
-      // Ignore stat error
-    }
-
-    const sqliteVersionRow = db.prepare('SELECT sqlite_version() as version').get() as { version: string };
-    const pageCountRow = db.prepare('PRAGMA page_count').get() as { page_count: number };
-    const pageSizeRow = db.prepare('PRAGMA page_size').get() as { page_size: number };
-    const freelistRow = db.prepare('PRAGMA freelist_count').get() as { freelist_count: number };
-    const journalModeRow = db.prepare('PRAGMA journal_mode').get() as { journal_mode: string };
-    const synchronousRow = db.prepare('PRAGMA synchronous').get() as { synchronous: number | string };
-    const busyTimeoutRow = db.prepare('PRAGMA busy_timeout').get() as { timeout: number };
-
-    const schemaObjects = db.prepare(`
-      SELECT type, count(*) as count
-      FROM sqlite_schema
-      WHERE name NOT LIKE 'sqlite_%'
-      GROUP BY type
-    `).all() as Array<{ type: string; count: number }>;
-
-    let tableCount = 0;
-    let indexCount = 0;
-    let viewCount = 0;
-    let triggerCount = 0;
-
-    for (const row of schemaObjects) {
-      if (row.type === 'table') tableCount = row.count;
-      if (row.type === 'index') indexCount = row.count;
-      if (row.type === 'view') viewCount = row.count;
-      if (row.type === 'trigger') triggerCount = row.count;
-    }
-
     const metaDb = getMetadataDb();
     const tokenCountRow = metaDb.prepare('SELECT count(*) as count FROM api_tokens WHERE database_id = ?').get(databaseId) as { count: number };
     const lastBackupRow = metaDb.prepare("SELECT created_at FROM database_backups WHERE database_id = ? AND status = 'completed' ORDER BY created_at DESC LIMIT 1").get(databaseId) as { created_at: number } | undefined;
 
+    let sqliteVersion = '3.x';
+    let fileSizeBytes = 0;
+    let walSizeBytes = 0;
+    let tableCount = 0;
+    let indexCount = 0;
+    let viewCount = 0;
+    let triggerCount = 0;
+    let pageCount = 0;
+    let pageSize = 4096;
+    let freelistCount = 0;
+    let journalMode = 'wal';
+    let synchronous = 'normal';
+    let busyTimeout = config.sqlBusyTimeoutMs;
+
+    // If hosted on a remote worker node, query worker for SQLite statistics
+    if (dbRecord.node_id && dbRecord.node_id !== 'local' && dbRecord.node_id !== config.nodeId) {
+      try {
+        const remote = await clusterService.getRemoteDatabaseStats(dbRecord.node_id, databaseId);
+        sqliteVersion = remote.sqliteVersion || sqliteVersion;
+        fileSizeBytes = remote.fileSizeBytes || 0;
+        walSizeBytes = remote.walSizeBytes || 0;
+        tableCount = remote.tableCount || 0;
+        indexCount = remote.indexCount || 0;
+        viewCount = remote.viewCount || 0;
+        triggerCount = remote.triggerCount || 0;
+        pageCount = remote.pageCount || 0;
+        pageSize = remote.pageSize || 4096;
+        freelistCount = remote.freelistCount || 0;
+        journalMode = remote.journalMode || 'wal';
+        synchronous = remote.synchronous || 'normal';
+        busyTimeout = remote.busyTimeout || config.sqlBusyTimeoutMs;
+      } catch (err: any) {
+        logger.warn({ err, databaseId, nodeId: dbRecord.node_id }, 'Failed to fetch remote SQLite overview stats from worker node, using fallback');
+      }
+    } else {
+      const db = dbManager.get(databaseId);
+      const dbPath = dbManager.resolveDatabasePath(databaseId);
+
+      try {
+        fileSizeBytes = fs.statSync(dbPath).size;
+        const walPath = `${dbPath}-wal`;
+        if (fs.existsSync(walPath)) {
+          walSizeBytes = fs.statSync(walPath).size;
+        }
+      } catch {
+        // Ignore stat error
+      }
+
+      const sqliteVersionRow = db.prepare('SELECT sqlite_version() as version').get() as { version: string } | undefined;
+      const pageCountRow = db.prepare('PRAGMA page_count;').get() as { page_count: number } | undefined;
+      const pageSizeRow = db.prepare('PRAGMA page_size;').get() as { page_size: number } | undefined;
+      const freelistRow = db.prepare('PRAGMA freelist_count;').get() as { freelist_count: number } | undefined;
+      const journalModeRow = db.prepare('PRAGMA journal_mode;').get() as { journal_mode: string } | undefined;
+      const synchronousRow = db.prepare('PRAGMA synchronous;').get() as { synchronous: number | string } | undefined;
+      const busyTimeoutRow = db.prepare('PRAGMA busy_timeout;').get() as { timeout: number } | undefined;
+
+      const schemaObjects = db.prepare(`
+        SELECT type, count(*) as count
+        FROM sqlite_schema
+        WHERE name NOT LIKE 'sqlite_%'
+        GROUP BY type
+      `).all() as Array<{ type: string; count: number }>;
+
+      for (const row of schemaObjects) {
+        if (row.type === 'table') tableCount = row.count;
+        if (row.type === 'index') indexCount = row.count;
+        if (row.type === 'view') viewCount = row.count;
+        if (row.type === 'trigger') triggerCount = row.count;
+      }
+
+      sqliteVersion = sqliteVersionRow?.version || sqliteVersion;
+      pageCount = pageCountRow?.page_count || 0;
+      pageSize = pageSizeRow?.page_size || 4096;
+      freelistCount = freelistRow?.freelist_count || 0;
+      journalMode = journalModeRow?.journal_mode || 'wal';
+      synchronous = String(synchronousRow?.synchronous ?? 'normal');
+      busyTimeout = busyTimeoutRow?.timeout || config.sqlBusyTimeoutMs;
+    }
+
     return {
       database: dbRecord,
-      sqliteVersion: sqliteVersionRow.version,
+      sqliteVersion,
       fileSizeBytes,
       walSizeBytes,
       tableCount,
       indexCount,
       viewCount,
       triggerCount,
-      pageCount: pageCountRow?.page_count || 0,
-      pageSize: pageSizeRow?.page_size || 4096,
-      freelistCount: freelistRow?.freelist_count || 0,
-      journalMode: journalModeRow?.journal_mode || 'wal',
-      synchronous: String(synchronousRow?.synchronous ?? 'normal'),
-      busyTimeout: busyTimeoutRow?.timeout || config.sqlBusyTimeoutMs,
+      pageCount,
+      pageSize,
+      freelistCount,
+      journalMode,
+      synchronous,
+      busyTimeout,
       tokenCount: tokenCountRow?.count || 0,
       lastBackupAt: lastBackupRow?.created_at || null,
     };
