@@ -1,0 +1,175 @@
+name: Full Security & Feature Audit Suite
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    # Run daily at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-security-and-types:
+    name: 1. Static Security, Secrets & TypeScript Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit 1 - Hardcoded Secrets & Plain Tokens
+        run: |
+          echo "[SECURITY] Scanning codebase for leaked keys, tokens, and private secrets..."
+          # Scan for live API tokens, webhooks secrets, private keys, or cloud credentials
+          if grep -rEn "(vdb_live_[a-f0-9]{32,}|whsec_[a-f0-9]{32,}|ghp_[a-zA-Z0-9]{36,}|xoxb-[0-9]{10,}|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY)" src/ --exclude-dir={node_modules,dist}; then
+            echo "[FAIL] Security alert: Plaintext tokens or private keys detected in src/!"
+            exit 1
+          fi
+          echo "[OK] No plaintext secrets or tokens found in source code."
+
+      - name: Audit 2 - Anti-SQL Injection & Dangerous Code Execution Patterns
+        run: |
+          echo "[SECURITY] Checking for dangerous eval and unchecked command injection..."
+          # Check for dangerous eval() or new Function() in source code
+          if grep -rEn "\b(eval\s*\(|new\s+Function\s*\()" src/server/ --exclude-dir={node_modules,dist}; then
+            echo "[FAIL] Security alert: Unsafe eval() or new Function() detected in server code!"
+            exit 1
+          fi
+          echo "[OK] No eval() or dynamic Function constructors detected."
+
+      - name: Audit 3 - Strict TypeScript Typecheck
+        run: |
+          echo "[TYPES] Running full TypeScript typecheck across client and server..."
+          npm run typecheck
+
+  functional-and-security-tests:
+    name: 2. Core Functional & OWASP Pentest Suite
+    needs: [static-security-and-types]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22.x, 24.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit 4 - Full Platform Test Suite (135+ Tests)
+        run: |
+          echo "[TEST] Running all functional, cluster, auth, and database test suites..."
+          npm test
+
+      - name: Audit 5 - Dedicated Pentest Suite (OWASP, Zero-Day & Leak Defense)
+        run: |
+          echo "[SECURITY] Running hardcore security, anti-tamper, and data leak pentest..."
+          npm run test:security
+
+  production-build-and-smoke:
+    name: 3. Production Build & Live API Security Smoke
+    needs: [static-security-and-types]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Web Client & Server
+        run: |
+          echo "[BUILD] Compiling Vite frontend and TypeScript server..."
+          npm run build
+
+      - name: Live Smoke Test & Security Headers Check
+        env:
+          PORT: 25588
+          HOST: 127.0.0.1
+          NODE_ENV: production
+          SESSION_SECRET: "ci_pipeline_super_secret_session_key_min_32_bytes_long"
+          MASTER_KEY: "ci_pipeline_aes_256_encryption_master_key_32_chars!"
+        run: |
+          echo "[SMOKE] Launching production server in background..."
+          node dist/src/server/index.js &
+          SERVER_PID=$!
+
+          # Wait for server to become ready
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:25588/health > /dev/null; then
+              echo "[SMOKE] Server started successfully on port 25588 (PID: $SERVER_PID)"
+              break
+            fi
+            sleep 1
+          done
+
+          # 1. Verify /health status
+          echo "[SMOKE] 1. Checking /health endpoint..."
+          HEALTH_RES=$(curl -s -w "\n%{http_code}" http://127.0.0.1:25588/health)
+          STATUS_CODE=$(echo "$HEALTH_RES" | tail -n 1)
+          BODY=$(echo "$HEALTH_RES" | sed '$d')
+          if [ "$STATUS_CODE" != "200" ]; then
+            echo "[FAIL] /health returned status $STATUS_CODE: $BODY"
+            kill $SERVER_PID
+            exit 1
+          fi
+
+          # 2. Verify security headers (Helmet: nosniff, frameguard, etc.)
+          echo "[SMOKE] 2. Checking security HTTP response headers..."
+          HEADERS=$(curl -s -I http://127.0.0.1:25588/health)
+          if ! echo "$HEADERS" | grep -qi "x-content-type-options: nosniff"; then
+            echo "[FAIL] Missing X-Content-Type-Options: nosniff header!"
+            kill $SERVER_PID
+            exit 1
+          fi
+
+          # 3. Verify BOLA / unauthenticated access rejection
+          echo "[SMOKE] 3. Checking unauthenticated API endpoint security..."
+          AUTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:25588/api/admin/databases)
+          if [ "$AUTH_CHECK" != "401" ]; then
+            echo "[FAIL] Expected 401 Unauthorized for /api/admin/databases, got $AUTH_CHECK"
+            kill $SERVER_PID
+            exit 1
+          fi
+
+          # 4. Verify error responses do not leak stack traces or internal server paths
+          echo "[SMOKE] 4. Checking error information leakage..."
+          ERR_RES=$(curl -s http://127.0.0.1:25588/api/nonexistent-route-random-test)
+          if echo "$ERR_RES" | grep -qiE "(node_modules|at [a-zA-Z0-9_\.]+\s*\(|\.ts:[0-9]+)"; then
+            echo "[FAIL] Server error response leaked stack trace or internal paths: $ERR_RES"
+            kill $SERVER_PID
+            exit 1
+          fi
+
+          # 5. Clean server shutdown
+          echo "[SMOKE] All live API security checks passed. Stopping background server..."
+          kill $SERVER_PID
+          echo "[OK] Smoke and security validation completed cleanly."

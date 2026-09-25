@@ -19,7 +19,8 @@
     "test:zeroday": "vitest run tests/zeroDay.test.ts --fileParallelism=false",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "admin:reset": "node --no-warnings dist/src/server/cli.js",
-    "benchmark": "tsx src/server/benchmark.ts"
+    "benchmark": "tsx src/server/benchmark.ts",
+    "test:audit": "npm run typecheck && npm run test:security && npm test && npm run build"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
