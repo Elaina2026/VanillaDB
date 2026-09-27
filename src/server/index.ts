@@ -368,7 +368,7 @@ export async function buildApp() {
   // Data Plane APIs (v1 public database endpoints)
   await app.register(dataRoutes, { prefix: '/v1' });
 
-  // Serve Frontend assets in production
+  // Serve Frontend assets in production or fallback to public directory during test/dev
   const clientDistCandidates = [
     path.resolve(__dirname, '../../client'), // when running from dist/src/server
     path.resolve(__dirname, '../client'),    // when running from dist/server
@@ -377,10 +377,18 @@ export async function buildApp() {
   ];
   const clientDist = clientDistCandidates.find(p => fs.existsSync(p));
 
-  if (clientDist) {
-    logger.info({ clientDist }, 'Serving static client frontend');
+  const publicDirCandidates = [
+    path.resolve(process.cwd(), 'public'),
+    path.resolve(__dirname, '../../public'),
+    path.resolve(__dirname, '../public'),
+  ];
+  const publicDir = publicDirCandidates.find(p => fs.existsSync(p));
+  const staticRoot = clientDist || publicDir;
+
+  if (staticRoot) {
+    logger.info({ clientDist, publicDir, staticRoot }, 'Serving static client frontend');
     await app.register(fastifyStatic, {
-      root: clientDist,
+      root: staticRoot,
       prefix: '/',
       wildcard: false,
       index: false,
@@ -395,6 +403,22 @@ export async function buildApp() {
       },
     });
 
+    const resolveStaticFile = (fileName: string): { filePath: string; inStaticRoot: boolean } | null => {
+      if (clientDist) {
+        const p = path.join(clientDist, fileName);
+        if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+          return { filePath: p, inStaticRoot: staticRoot === clientDist };
+        }
+      }
+      if (publicDir) {
+        const p = path.join(publicDir, fileName);
+        if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+          return { filePath: p, inStaticRoot: staticRoot === publicDir };
+        }
+      }
+      return null;
+    };
+
     const serveSpaHtml = (req: any, reply: any) => {
       const cleanPath = (req.url || '').split('?')[0];
       if (cleanPath.startsWith('/api') || cleanPath.startsWith('/v1')) {
@@ -407,19 +431,22 @@ export async function buildApp() {
         cleanPath === '/index.md' ||
         ((cleanPath === '/' || cleanPath === '') && typeof acceptHeader === 'string' && acceptHeader.includes('text/markdown'))
       ) {
-        const mdCandidate = path.join(clientDist, 'index.md');
-        if (fs.existsSync(mdCandidate)) {
+        const md = resolveStaticFile('index.md');
+        if (md) {
           reply.header('Vary', 'Accept');
-          return reply.type('text/markdown; charset=utf-8').sendFile('index.md');
+          return reply.type('text/markdown; charset=utf-8').send(fs.readFileSync(md.filePath, 'utf8'));
         }
       }
 
-      // 2. Direct static file check in clientDist (e.g. robots.txt, sitemap.xml, llms.txt, favicon)
+      // 2. Direct static file check in static directories (e.g. robots.txt, sitemap.xml, llms.txt, favicon, webp)
       const relativeTarget = cleanPath.replace(/^\/+/, '');
       if (relativeTarget.length > 0) {
-        const directCandidate = path.join(clientDist, relativeTarget);
-        if (fs.existsSync(directCandidate) && fs.statSync(directCandidate).isFile()) {
-          return reply.sendFile(relativeTarget);
+        const targetFile = resolveStaticFile(relativeTarget);
+        if (targetFile) {
+          if (targetFile.inStaticRoot) {
+            return reply.sendFile(relativeTarget);
+          }
+          return reply.send(fs.createReadStream(targetFile.filePath));
         }
       }
 
@@ -441,13 +468,25 @@ export async function buildApp() {
         reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
         reply.header('Pragma', 'no-cache');
         reply.header('Expires', '0');
-        return reply.sendFile('index.html');
+        if (clientDist && fs.existsSync(path.join(clientDist, 'index.html'))) {
+          return reply.sendFile('index.html');
+        }
+        const rootHtmlCandidates = [
+          path.resolve(process.cwd(), 'index.html'),
+          path.resolve(__dirname, '../../index.html'),
+          path.resolve(__dirname, '../index.html'),
+        ];
+        const rootHtml = rootHtmlCandidates.find(p => fs.existsSync(p));
+        if (rootHtml) {
+          return reply.type('text/html; charset=utf-8').send(fs.readFileSync(rootHtml, 'utf8'));
+        }
+        return reply.status(200).type('text/plain').send('VanillaDatabase');
       }
 
       // 5. Unknown routes: return true HTTP 404 to avoid Soft 404 crawl penalties
-      const notFoundCandidate = path.join(clientDist, '404.html');
-      if (fs.existsSync(notFoundCandidate)) {
-        return reply.status(404).type('text/html; charset=utf-8').sendFile('404.html');
+      const notFound = resolveStaticFile('404.html');
+      if (notFound) {
+        return reply.status(404).type('text/html; charset=utf-8').send(fs.readFileSync(notFound.filePath, 'utf8'));
       }
       return reply.status(404).type('text/plain').send('Page not found');
     };
@@ -456,7 +495,7 @@ export async function buildApp() {
     app.get('/*', async (req, reply) => serveSpaHtml(req, reply));
     app.setNotFoundHandler((req, reply) => serveSpaHtml(req, reply));
   } else {
-    logger.warn('Frontend client dist folder not found. Web UI will return 404.');
+    logger.warn('Frontend client dist or public folder not found. Web UI will return 404.');
   }
 
   // Bootstrap admin user if specified in environment

@@ -78,7 +78,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Audit 4 - Full Platform Test Suite (135+ Tests)
+      - name: Build Web Client & Server
+        run: npm run build
+
+      - name: Audit 4 - Full Platform Test Suite (137 Tests)
         run: |
           echo "[TEST] Running all functional, cluster, auth, and database test suites..."
           npm test
