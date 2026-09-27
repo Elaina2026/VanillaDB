@@ -34,6 +34,14 @@ export class ClusterService {
     return this.activeMigrations.has(databaseId);
   }
 
+  public markMigrating(databaseId: string): void {
+    this.activeMigrations.add(databaseId);
+  }
+
+  public releaseMigration(databaseId: string): void {
+    this.activeMigrations.delete(databaseId);
+  }
+
   /**
    * Pause incoming write/read requests if database is mid-migration (prevents data loss or race conditions)
    */
@@ -623,7 +631,7 @@ export class ClusterService {
           throw new Error(`Source worker node "${currentNodeId}" not found in cluster metadata.`);
         }
 
-        const downloadRes = await fetch(`${sourceNode.base_url}/api/internal/node/databases/${databaseId}/export`, {
+        const downloadRes = await fetch(`${sourceNode.base_url.replace(/\/+$/, '')}/api/internal/node/databases/${databaseId}/export`, {
           method: 'GET',
           headers: {
             'x-cluster-secret': sourceNode.auth_token || config.clusterSecret,
@@ -686,7 +694,7 @@ export class ClusterService {
           throw new Error(`Target node "${targetNodeId}" is offline or unhealthy.`);
         }
 
-        const uploadRes = await fetch(`${targetNode.base_url}/api/internal/node/databases/${databaseId}/receive`, {
+        const uploadRes = await fetch(`${targetNode.base_url.replace(/\/+$/, '')}/api/internal/node/databases/${databaseId}/receive`, {
           method: 'POST',
           headers: {
             'x-cluster-secret': targetNode.auth_token || config.clusterSecret,
@@ -725,7 +733,7 @@ export class ClusterService {
           try { fs.unlinkSync(`${localDbPath}-journal`); } catch {}
         }
       } else if (sourceNode) {
-        await fetch(`${sourceNode.base_url}/api/internal/node/databases/${databaseId}`, {
+        await fetch(`${sourceNode.base_url.replace(/\/+$/, '')}/api/internal/node/databases/${databaseId}`, {
           method: 'DELETE',
           headers: {
             'x-cluster-secret': sourceNode.auth_token || config.clusterSecret,

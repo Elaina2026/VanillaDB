@@ -48,11 +48,16 @@ export class DatabaseService {
     const assignedNodeId = placement.nodeId;
 
     const now = Date.now();
-    // Temporarily insert with node_id = 'local' so local initialization completes safely
+    const isRemotePlacement = assignedNodeId !== 'local' && assignedNodeId !== config.nodeId;
+
+    if (isRemotePlacement) {
+      clusterService.markMigrating(id);
+    }
+
     metaDb.prepare(`
       INSERT INTO databases (id, name, slug, description, filename, max_size_mb, owner_id, node_id, created_at, updated_at, last_accessed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'local', ?, ?, ?)
-    `).run(id, name, slug, description || null, filename, maxSizeMb || null, ownerId || null, now, now, now);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, name, slug, description || null, filename, maxSizeMb || null, ownerId || null, assignedNodeId, now, now, now);
 
     // Initialize the SQLite database file with WAL and Pragmas
     const db = dbManager.get(id);
@@ -65,7 +70,7 @@ export class DatabaseService {
     `);
 
     // If assigned to a remote worker node, transfer the initialized file and remove local copy
-    if (assignedNodeId !== 'local' && assignedNodeId !== config.nodeId) {
+    if (isRemotePlacement) {
       dbManager.close(id);
 
       // Checkpoint WAL to flush _vdb_meta into main file
@@ -79,7 +84,7 @@ export class DatabaseService {
         const workerNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(assignedNodeId) as any;
         if (workerNode) {
           const fileData = fs.readFileSync(dbPath);
-          fetch(`${workerNode.base_url}/api/internal/node/databases/${id}/receive`, {
+          fetch(`${workerNode.base_url.replace(/\/+$/, '')}/api/internal/node/databases/${id}/receive`, {
             method: 'POST',
             headers: {
               'x-cluster-secret': workerNode.auth_token || config.clusterSecret,
@@ -88,20 +93,26 @@ export class DatabaseService {
             body: fileData,
           }).then(res => {
             if (res.ok) {
-              // Successfully transferred to remote worker, set official node_id and unlink local files
-              metaDb.prepare('UPDATE databases SET node_id = ? WHERE id = ?').run(assignedNodeId, id);
+              // Successfully transferred to remote worker, unlink local template files
               if (fs.existsSync(dbPath)) try { fs.unlinkSync(dbPath); } catch {}
               if (fs.existsSync(`${dbPath}-wal`)) try { fs.unlinkSync(`${dbPath}-wal`); } catch {}
               if (fs.existsSync(`${dbPath}-shm`)) try { fs.unlinkSync(`${dbPath}-shm`); } catch {}
             } else {
-              logger.error({ status: res.status, assignedNodeId }, 'Failed to initialize database on remote worker node, keeping on local');
+              logger.error({ status: res.status, assignedNodeId }, 'Failed to initialize database on remote worker node, reverting to local');
+              metaDb.prepare('UPDATE databases SET node_id = ? WHERE id = ?').run('local', id);
             }
           }).catch(err => {
-            logger.error({ err, assignedNodeId }, 'Network error transferring database to remote worker node, keeping on local');
+            logger.error({ err, assignedNodeId }, 'Network error transferring database to remote worker node, reverting to local');
+            metaDb.prepare('UPDATE databases SET node_id = ? WHERE id = ?').run('local', id);
+          }).finally(() => {
+            clusterService.releaseMigration(id);
           });
+        } else {
+          clusterService.releaseMigration(id);
         }
       } catch (err) {
         logger.error({ err, assignedNodeId }, 'Error transferring new database to worker node');
+        clusterService.releaseMigration(id);
       }
     }
 
