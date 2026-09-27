@@ -84,7 +84,7 @@ export class BackupScheduler {
 
           if (shouldBackup) {
             logger.info({ databaseId: db.id, name: db.name }, 'Creating automated scheduled snapshot');
-            backupService.createBackup(db.id, 'scheduled');
+            await backupService.createBackup(db.id, 'scheduled');
             this.pruneBackups(db.id, settings.backup_retention);
           }
         } catch (err) {

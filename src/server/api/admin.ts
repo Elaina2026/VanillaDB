@@ -264,7 +264,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      const cloned = databaseService.duplicateDatabase(id, parsed.data.name, req.adminUser?.userId);
+      const cloned = await databaseService.duplicateDatabase(id, parsed.data.name, req.adminUser?.userId);
       activityService.recordAudit({
         user: req.adminUser!.username,
         action: 'database.clone',
@@ -1017,7 +1017,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = req.params as { id: string };
     const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
     if (!dbRecord) return;
-    const backup = backupService.createBackup(id, 'manual');
+    const backup = await backupService.createBackup(id, 'manual');
     activityService.recordAudit({
       user: req.adminUser!.username,
       action: 'backup.create',
@@ -1033,7 +1033,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id, backupId } = req.params as { id: string; backupId: string };
     const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
     if (!dbRecord) return;
-    backupService.restoreBackup(id, backupId);
+    await backupService.restoreBackup(id, backupId);
     activityService.recordAudit({
       user: req.adminUser!.username,
       action: 'database.restore',

@@ -2,6 +2,7 @@ import { databaseService } from './database.js';
 import { dbManager } from '../db/manager.js';
 import { systemService } from './system.js';
 import { activityService } from './activity.js';
+import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
 // ponytail: in-process interval worker; add distributed job queue (BullMQ/Redis) when running multi-instance cluster.
@@ -61,6 +62,9 @@ export class MaintenanceWorker {
       // 2. Perform background optimization on all active databases
       const dbs = databaseService.listDatabases();
       for (const db of dbs) {
+        if (db.node_id && db.node_id !== 'local' && db.node_id !== config.nodeId) {
+          continue;
+        }
         try {
           const dbHandle = dbManager.get(db.id);
           // PRAGMA optimize builds query planner statistics in sqlite_stat1

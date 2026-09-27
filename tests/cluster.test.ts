@@ -333,4 +333,58 @@ describe('Cluster & Multi-Node Storage Spillover Test Suite', () => {
     if (fs.existsSync(`${directPath}-wal`)) try { fs.unlinkSync(`${directPath}-wal`); } catch {}
     if (fs.existsSync(`${directPath}-shm`)) try { fs.unlinkSync(`${directPath}-shm`); } catch {}
   });
+
+  it('should support backup creation for databases hosted on remote worker nodes without throwing local handle error', async () => {
+    const { getMetadataDb } = await import('../src/server/db/metadata.js');
+    const { backupService } = await import('../src/server/services/backup.js');
+    const metaDb = getMetadataDb();
+
+    // 1. Create a database record marked as hosted on worker node
+    const remoteDb = databaseService.createDatabase('Remote Backup Test DB', 'Testing backup on worker');
+    const workerNodeId = 'worker_backup_mock';
+    metaDb.prepare(`
+      INSERT OR REPLACE INTO storage_nodes (
+        id, name, base_url, auth_token, status, disk_total_bytes, disk_free_bytes, disk_available_bytes, cpu_percent, ram_percent, network_rate_bps, database_count, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'healthy', 1000000000, 500000000, 500000000, 5, 20, 1000, 1, ?, ?)
+    `).run(workerNodeId, 'Backup Worker Mock', 'http://127.0.0.1:25589', config.clusterSecret, Date.now(), Date.now());
+
+    metaDb.prepare('UPDATE databases SET node_id = ? WHERE id = ?').run(workerNodeId, remoteDb.id);
+
+    // 2. Mock fetch for worker export endpoint
+    const originalFetch = global.fetch;
+    const directPath = path.resolve(config.databasesDir, `${remoteDb.id}.sqlite`);
+    const tempDb = new DatabaseSync(directPath);
+    tempDb.exec("CREATE TABLE test_data (id INT, val TEXT); INSERT INTO test_data VALUES (1, 'snap');");
+    tempDb.close();
+
+    // @ts-ignore
+    global.fetch = async (url: string, opts: any) => {
+      if (url.includes(`/api/internal/node/databases/${remoteDb.id}/export`)) {
+        const fileBuf = fs.readFileSync(directPath);
+        return new Response(fileBuf, { status: 200 });
+      }
+      return originalFetch(url, opts);
+    };
+
+    try {
+      // 3. Create backup - must not throw local handle exception
+      const backup = await backupService.createBackup(remoteDb.id, 'scheduled');
+      expect(backup).toBeDefined();
+      expect(backup.database_id).toBe(remoteDb.id);
+      expect(backup.status).toBe('completed');
+      expect(backup.size_bytes).toBeGreaterThan(0);
+
+      // 4. Verify backup is saved and encrypted on disk
+      const backups = backupService.listBackups(remoteDb.id);
+      expect(backups.length).toBeGreaterThan(0);
+      expect(backups[0].id).toBe(backup.id);
+    } finally {
+      global.fetch = originalFetch;
+      try { databaseService.deleteDatabase(remoteDb.id); } catch {}
+      metaDb.prepare('DELETE FROM storage_nodes WHERE id = ?').run(workerNodeId);
+      if (fs.existsSync(directPath)) try { fs.unlinkSync(directPath); } catch {}
+      if (fs.existsSync(`${directPath}-wal`)) try { fs.unlinkSync(`${directPath}-wal`); } catch {}
+      if (fs.existsSync(`${directPath}-shm`)) try { fs.unlinkSync(`${directPath}-shm`); } catch {}
+    }
+  });
 });

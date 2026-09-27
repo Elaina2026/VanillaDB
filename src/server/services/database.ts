@@ -309,7 +309,7 @@ export class DatabaseService {
     return true;
   }
 
-  public duplicateDatabase(sourceDatabaseId: string, newName: string, ownerId?: string | null): DatabaseRecord {
+  public async duplicateDatabase(sourceDatabaseId: string, newName: string, ownerId?: string | null): Promise<DatabaseRecord> {
     const source = this.getDatabase(sourceDatabaseId);
     if (!source) throw new Error(`Source database not found: ${sourceDatabaseId}`);
 
@@ -317,7 +317,6 @@ export class DatabaseService {
     const newRecord = this.createDatabase(newName, `Duplicate of ${source.name}`, effectiveOwnerId, source.max_size_mb);
     dbManager.close(newRecord.id);
 
-    const sourcePath = dbManager.resolveDatabasePath(sourceDatabaseId);
     const targetPath = dbManager.resolveDatabasePath(newRecord.id);
 
     // Clean up newly created target WAL and SHM files to prevent WAL header salt mismatch
@@ -326,13 +325,38 @@ export class DatabaseService {
     if (fs.existsSync(targetWal)) fs.unlinkSync(targetWal);
     if (fs.existsSync(targetShm)) fs.unlinkSync(targetShm);
 
-    // Checkpoint source database to ensure main .sqlite file is current
-    const sourceDb = dbManager.get(sourceDatabaseId);
-    try {
-      sourceDb.exec('PRAGMA wal_checkpoint(FULL);');
-    } catch {}
+    const isRemote = source.node_id && source.node_id !== 'local' && source.node_id !== config.nodeId;
+    if (isRemote) {
+      const metaDb = getMetadataDb();
+      const workerNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(source.node_id!) as any;
+      if (!workerNode) {
+        throw new Error(`Worker node "${source.node_id}" not found in cluster metadata.`);
+      }
 
-    fs.copyFileSync(sourcePath, targetPath);
+      const res = await fetch(`${workerNode.base_url.replace(/\/+$/, '')}/api/internal/node/databases/${sourceDatabaseId}/export`, {
+        method: 'GET',
+        headers: {
+          'x-cluster-secret': workerNode.auth_token || config.clusterSecret,
+        },
+        signal: AbortSignal.timeout(120_000),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to export source database from worker: HTTP ${res.status}`);
+      }
+
+      const rawBuffer = Buffer.from(await res.arrayBuffer());
+      fs.writeFileSync(targetPath, rawBuffer);
+    } else {
+      const sourcePath = dbManager.resolveDatabasePath(sourceDatabaseId);
+      // Checkpoint source database to ensure main .sqlite file is current
+      const sourceDb = dbManager.get(sourceDatabaseId);
+      try {
+        sourceDb.exec('PRAGMA wal_checkpoint(FULL);');
+      } catch {}
+
+      fs.copyFileSync(sourcePath, targetPath);
+    }
 
     return newRecord;
   }
