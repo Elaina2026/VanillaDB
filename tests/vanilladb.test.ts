@@ -1685,5 +1685,77 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     expect(futureVerify.valid).toBe(true);
     expect(futureVerify.step).toBeGreaterThan(firstVerify.step!);
   });
+
+  // 28. SEO, Static Asset Serving & Soft-404 Crawl Hardening
+  it('should serve robots.txt, sitemap.xml, llms.txt, and return true HTTP 404 for unknown routes', async () => {
+    // 1. Robots.txt
+    const robotsRes = await app.inject({
+      method: 'GET',
+      url: '/robots.txt',
+    });
+    expect(robotsRes.statusCode).toBe(200);
+    expect(robotsRes.body).toContain('User-agent: *');
+    expect(robotsRes.body).toContain('Sitemap:');
+
+    // 2. Sitemap.xml
+    const sitemapRes = await app.inject({
+      method: 'GET',
+      url: '/sitemap.xml',
+    });
+    expect(sitemapRes.statusCode).toBe(200);
+    expect(sitemapRes.body).toContain('<urlset');
+    expect(sitemapRes.body).not.toContain('<!DOCTYPE html>');
+
+    // 3. LLMs.txt
+    const llmsRes = await app.inject({
+      method: 'GET',
+      url: '/llms.txt',
+    });
+    expect(llmsRes.statusCode).toBe(200);
+    expect(llmsRes.body).toContain('# VanillaDatabase');
+
+    // 4. Index.md
+    const indexMdRes = await app.inject({
+      method: 'GET',
+      url: '/index.md',
+    });
+    expect(indexMdRes.statusCode).toBe(200);
+    expect(indexMdRes.body).toContain('# VanillaDatabase');
+
+    // 5. Content negotiation for Markdown
+    const markdownNegotiation = await app.inject({
+      method: 'GET',
+      url: '/',
+      headers: { accept: 'text/markdown' },
+    });
+    expect(markdownNegotiation.statusCode).toBe(200);
+    expect(markdownNegotiation.headers['content-type']).toContain('text/markdown');
+    expect(markdownNegotiation.headers['vary']).toBe('Accept');
+
+    // 6. Root HTML delivery with canonical and schema
+    const rootHtmlRes = await app.inject({
+      method: 'GET',
+      url: '/',
+    });
+    expect(rootHtmlRes.statusCode).toBe(200);
+    expect(rootHtmlRes.body).toContain('rel="canonical"');
+    expect(rootHtmlRes.body).toContain('application/ld+json');
+    expect(rootHtmlRes.body).toContain('SoftwareApplication');
+
+    // 7. Non-existent path MUST return true HTTP 404 (prevents Soft-404 penalties)
+    const notFoundProbe = await app.inject({
+      method: 'GET',
+      url: '/claude-seo-404-probe-551703e2',
+    });
+    expect(notFoundProbe.statusCode).toBe(404);
+    expect(notFoundProbe.body).toContain('404');
+
+    // 8. Well-known non-existent discovery path MUST return true HTTP 404
+    const wellKnownNotFound = await app.inject({
+      method: 'GET',
+      url: '/.well-known/api-catalog',
+    });
+    expect(wellKnownNotFound.statusCode).toBe(404);
+  });
 });
 

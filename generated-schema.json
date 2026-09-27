@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "comment": "Validated Schema.org JSON-LD Structured Data for VanillaDatabase (June 2026 Active Standards)",
+  "schema": {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://vanilladatabase.elaina2026.io.vn/#website",
+        "url": "https://vanilladatabase.elaina2026.io.vn/",
+        "name": "VanillaDatabase",
+        "description": "High-Performance SQLite Cloud Platform with AES-256-GCM encryption, WAL mode, multi-tenant database isolation, multi-node clustering, and REST APIs.",
+        "publisher": {
+          "@id": "https://vanilladatabase.elaina2026.io.vn/#organization"
+        },
+        "inLanguage": ["vi", "en"]
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://vanilladatabase.elaina2026.io.vn/#software",
+        "name": "VanillaDatabase",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Linux, macOS, Windows",
+        "softwareVersion": "1.3.2",
+        "description": "Nền tảng SQLite Cloud đa người dùng với mã hóa AES-256-GCM data-at-rest, chế độ Write-Ahead Logging (WAL), phân quyền RBAC đa cấp, sao lưu tự động và API REST realtime tốc độ cao cho ứng dụng đa tenant và AI agent.",
+        "url": "https://vanilladatabase.elaina2026.io.vn/",
+        "image": "https://vanilladatabase.elaina2026.io.vn/banner.png",
+        "screenshot": "https://vanilladatabase.elaina2026.io.vn/banner.png",
+        "author": {
+          "@id": "https://vanilladatabase.elaina2026.io.vn/#organization"
+        },
+        "publisher": {
+          "@id": "https://vanilladatabase.elaina2026.io.vn/#organization"
+        },
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD",
+          "availability": "https://schema.org/InStock"
+        },
+        "featureList": [
+          "AES-256-GCM Hardware Encryption",
+          "Write-Ahead Logging (WAL)",
+          "Multi-Node Cluster Sharding & Transparent Proxy",
+          "Zero Data-Loss Database Migration",
+          "TOTP 2FA Replay Protection (RFC 6238)",
+          "Realtime Webhooks & SQL Query Profiler"
+        ]
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://vanilladatabase.elaina2026.io.vn/#organization",
+        "name": "VanillaDatabase",
+        "url": "https://vanilladatabase.elaina2026.io.vn/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://vanilladatabase.elaina2026.io.vn/logo.svg"
+        },
+        "sameAs": [
+          "https://github.com/AriaaSama/VanillaDatabase"
+        ]
+      }
+    ]
+  }
+}

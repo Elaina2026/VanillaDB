@@ -383,6 +383,7 @@ export async function buildApp() {
       root: clientDist,
       prefix: '/',
       wildcard: false,
+      index: false,
       setHeaders: (res, pathName) => {
         if (pathName.includes('assets/') || pathName.includes('assets\\')) {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
@@ -399,19 +400,59 @@ export async function buildApp() {
       if (cleanPath.startsWith('/api') || cleanPath.startsWith('/v1')) {
         return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'API endpoint not found' } });
       }
-      // Never return index.html for static asset requests (CSS, JS, source maps, fonts, media)
+
+      // 1. Content negotiation for Markdown (LLM and agent delivery)
+      const acceptHeader = req.headers['accept'] || '';
+      if (
+        cleanPath === '/index.md' ||
+        ((cleanPath === '/' || cleanPath === '') && typeof acceptHeader === 'string' && acceptHeader.includes('text/markdown'))
+      ) {
+        const mdCandidate = path.join(clientDist, 'index.md');
+        if (fs.existsSync(mdCandidate)) {
+          reply.header('Vary', 'Accept');
+          return reply.type('text/markdown; charset=utf-8').sendFile('index.md');
+        }
+      }
+
+      // 2. Direct static file check in clientDist (e.g. robots.txt, sitemap.xml, llms.txt, favicon)
+      const relativeTarget = cleanPath.replace(/^\/+/, '');
+      if (relativeTarget.length > 0) {
+        const directCandidate = path.join(clientDist, relativeTarget);
+        if (fs.existsSync(directCandidate) && fs.statSync(directCandidate).isFile()) {
+          return reply.sendFile(relativeTarget);
+        }
+      }
+
+      // 3. Known static asset extensions that are missing should return true 404
       if (
         cleanPath.startsWith('/assets/') ||
-        /\.(css|js|map|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json|webp|avif)$/i.test(cleanPath)
+        /\.(css|js|map|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json|webp|avif|txt|xml|md)$/i.test(cleanPath)
       ) {
         return reply.status(404).type('text/plain').send('Asset not found');
       }
-      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-      reply.header('Pragma', 'no-cache');
-      reply.header('Expires', '0');
-      return reply.sendFile('index.html');
+
+      // 4. Recognized SPA route patterns
+      const isKnownSpaRoute =
+        cleanPath === '/' ||
+        cleanPath === '' ||
+        /^\/(login|register|reset-password|overview|databases(\/.*)?|telemetry|users|cluster|activity|settings|shortcuts|inbox)$/.test(cleanPath);
+
+      if (isKnownSpaRoute) {
+        reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+        reply.header('Pragma', 'no-cache');
+        reply.header('Expires', '0');
+        return reply.sendFile('index.html');
+      }
+
+      // 5. Unknown routes: return true HTTP 404 to avoid Soft 404 crawl penalties
+      const notFoundCandidate = path.join(clientDist, '404.html');
+      if (fs.existsSync(notFoundCandidate)) {
+        return reply.status(404).type('text/html; charset=utf-8').sendFile('404.html');
+      }
+      return reply.status(404).type('text/plain').send('Page not found');
     };
 
+    app.get('/', async (req, reply) => serveSpaHtml(req, reply));
     app.get('/*', async (req, reply) => serveSpaHtml(req, reply));
     app.setNotFoundHandler((req, reply) => serveSpaHtml(req, reply));
   } else {

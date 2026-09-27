@@ -1,0 +1,16 @@
+# VanillaDatabase
+
+> High-Performance SQLite Cloud Platform with AES-256-GCM encryption, WAL mode, multi-tenant database isolation, multi-node clustering, and real-time REST APIs.
+
+## Architecture
+- Backend: Node.js 22+, Fastify 5.2, better-sqlite3 with WAL mode, AES-256-GCM data-at-rest encryption.
+- Multi-Node Cluster: API Gateway + Worker Storage Nodes with transparent reverse proxying and zero data loss migration.
+- Security: Role-Based Access Control (RBAC), TOTP 2FA replay protection (RFC 6238), HMAC session token revocation (VDB-SEC-01), SSRF webhook protection.
+
+## SDK & APIs
+- Data Plane: /v1/databases/:id/query, /v1/databases/:id/exec, /v1/databases/:id/batch
+- Official TypeScript SDK: @vanilladb/sdk
+
+## Links
+- [Homepage](https://vanilladatabase.elaina2026.io.vn/)
+- [Login & Dashboard](https://vanilladatabase.elaina2026.io.vn/login)

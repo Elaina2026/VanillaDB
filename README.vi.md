@@ -15,7 +15,7 @@
   <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
   <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Phi%C3%AAn%20b%E1%BA%A3n-1.3.2-ea580c.svg?style=flat-square" alt="Phiên bản 1.3.2" /></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-134%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="134 bài kiểm thử vượt qua" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-137%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="137 bài kiểm thử vượt qua" /></a>
 </p>
 
 <p align="center">
@@ -120,8 +120,15 @@ Thay vì phải duy trì các cụm cơ sở dữ liệu cồng kềnh cho từn
 - **Giao diện Tương thích Đa Kích thước (Responsive):** Tối ưu hóa 100% cho mobile (<640px), tablet (640px–1024px), laptop (1024px–1280px) và desktop rộng (>1280px).
 - **Trang Quản lý Cụm & Máy chủ Lưu trữ:** Đồng hồ đo thời gian thực CPU %, RAM %, dung lượng ổ đĩa, lưu lượng I/O mạng, kết nối máy chủ worker và chuyển đổi cơ sở dữ liệu chỉ với 1 cú click.
 - **Hỗ trợ Song ngữ Hoàn chỉnh:** Chuyển đổi qua lại giữa Tiếng Việt và English dễ dàng chỉ với một nút bấm trên thanh điều hướng hoặc phím tắt.
-- **Hệ thống Phím tắt Đầy đủ:** Khung tìm kiếm lệnh nhanh (`Ctrl+K`), tạo nhanh DB (`Ctrl+B`), phím điều hướng Vim (`G+D`, `G+I`), thu gọn sidebar (`Ctrl+\`), thao tác bảng (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).
-- Hệ thống phím tắt tích hợp: Vim chords (`G+D`, `G+I`), thu gọn sidebar (`Ctrl+\`), thao tác soạn thảo SQL (`Ctrl+Enter`, `Ctrl+E`, `Ctrl+S`, `Alt+Up/Down`, `F11`) và duyệt bảng dữ liệu (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).
+- **Hệ thống Phím tắt Đầy đủ:** Khung tìm kiếm lệnh nhanh (`Ctrl+K`), tạo nhanh DB (`Ctrl+B`), phím điều hướng Vim (`G+D`, `G+I`), thu gọn sidebar (`Ctrl+\`), thao tác soạn thảo SQL (`Ctrl+Enter`, `Ctrl+E`, `Ctrl+S`, `Alt+Up/Down`, `F11`) và duyệt bảng dữ liệu (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).
+
+### <img src="https://api.iconify.design/lucide:search.svg?color=%2310b981" width="20" height="20" align="absmiddle" /> Tối ưu hóa Tìm kiếm & Sẵn sàng cho AI Agent (SEO/GEO/AEO)
+- **Tệp điều hướng Crawler & Bot:** Tệp tĩnh `robots.txt` quy định chính sách thu thập dữ liệu và tiêu đề Cloudflare `Content-Signal` (`search=yes, ai-input=yes, ai-train=no`), đồng bộ cùng `sitemap.xml` tiêu chuẩn.
+- **Sẵn sàng cho AI Agent (`llms.txt` & `index.md`):** Cung cấp tệp tóm tắt kiến trúc và API chuẩn theo đặc tả cộng đồng `llmstxt.org`, hỗ trợ cơ chế đàm phán nội dung HTTP (`Accept: text/markdown`) trả về tài liệu markdown với tiêu đề `Vary: Accept`.
+- **Nội dung Ngữ nghĩa Tĩnh Dự phòng (Fallback):** Nhúng mã HTML ngữ nghĩa hoàn chỉnh trong thẻ `<div id="root">`, giúp các bot tìm kiếm và trình thu thập không kích hoạt JS đọc được tiêu đề H1/H2, mô tả kiến trúc và code mẫu SDK.
+- **Dữ liệu có cấu trúc Schema.org JSON-LD:** Nhúng biểu đồ `@graph` kết hợp `WebSite`, `SoftwareApplication` (loại DeveloperApplication với thông tin OS và giấy phép) và `Organization`.
+- **Chống lỗi Soft-404:** Máy chủ Fastify phân tách rõ ràng route giao diện hợp lệ và các URL không tồn tại, trả đúng mã trạng thái HTTP 404 cùng trang `404.html` tùy biến nhằm bảo toàn ngân sách thu thập của công cụ tìm kiếm.
+- **Định dạng Hình ảnh Thế hệ mới (WebP):** Cung cấp `banner.webp` giảm 80% dung lượng so với PNG truyền thống, nâng cao chỉ số Core Web Vitals (LCP).
 
 ---
 

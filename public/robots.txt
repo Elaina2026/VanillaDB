@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /v1/
+
+# Sitemaps
+Sitemap: https://vanilladatabase.elaina2026.io.vn/sitemap.xml
+
+# AI Content Signals (Cloudflare / IETF spec)
+Content-Signal: search=yes, ai-input=yes, ai-train=no

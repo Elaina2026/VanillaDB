@@ -12,6 +12,75 @@
     <meta name="title" content="VanillaDatabase — High-Performance SQLite Cloud Platform" />
     <meta name="description" content="Nền tảng SQLite Cloud đa người dùng, mã hóa AES-256-GCM, sao lưu tự động, phân quyền RBAC và API REST realtime tốc độ cao." />
     <meta name="theme-color" content="#2563eb" />
+    <link rel="canonical" href="https://vanilladatabase.elaina2026.io.vn/" />
+    <link rel="alternate" hreflang="vi" href="https://vanilladatabase.elaina2026.io.vn/?lang=vi" />
+    <link rel="alternate" hreflang="en" href="https://vanilladatabase.elaina2026.io.vn/?lang=en" />
+    <link rel="alternate" hreflang="x-default" href="https://vanilladatabase.elaina2026.io.vn/" />
+
+    <!-- Schema.org JSON-LD Structured Data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://vanilladatabase.elaina2026.io.vn/#website",
+            "url": "https://vanilladatabase.elaina2026.io.vn/",
+            "name": "VanillaDatabase",
+            "description": "High-Performance SQLite Cloud Platform with AES-256-GCM encryption, WAL mode, multi-tenant database isolation, multi-node clustering, and REST APIs.",
+            "publisher": {
+              "@id": "https://vanilladatabase.elaina2026.io.vn/#organization"
+            },
+            "inLanguage": ["vi", "en"]
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://vanilladatabase.elaina2026.io.vn/#software",
+            "name": "VanillaDatabase",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "Linux, macOS, Windows",
+            "softwareVersion": "1.3.2",
+            "description": "Nền tảng SQLite Cloud đa người dùng với mã hóa AES-256-GCM data-at-rest, chế độ Write-Ahead Logging (WAL), phân quyền RBAC đa cấp, sao lưu tự động và API REST realtime tốc độ cao cho ứng dụng đa tenant và AI agent.",
+            "url": "https://vanilladatabase.elaina2026.io.vn/",
+            "image": "https://vanilladatabase.elaina2026.io.vn/banner.png",
+            "screenshot": "https://vanilladatabase.elaina2026.io.vn/banner.png",
+            "author": {
+              "@id": "https://vanilladatabase.elaina2026.io.vn/#organization"
+            },
+            "publisher": {
+              "@id": "https://vanilladatabase.elaina2026.io.vn/#organization"
+            },
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD",
+              "availability": "https://schema.org/InStock"
+            },
+            "featureList": [
+              "AES-256-GCM Hardware Encryption",
+              "Write-Ahead Logging (WAL)",
+              "Multi-Node Cluster Sharding & Transparent Proxy",
+              "Zero Data-Loss Database Migration",
+              "TOTP 2FA Replay Protection (RFC 6238)",
+              "Realtime Webhooks & SQL Query Profiler"
+            ]
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://vanilladatabase.elaina2026.io.vn/#organization",
+            "name": "VanillaDatabase",
+            "url": "https://vanilladatabase.elaina2026.io.vn/",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://vanilladatabase.elaina2026.io.vn/logo.svg"
+            },
+            "sameAs": [
+              "https://github.com/AriaaSama/VanillaDatabase"
+            ]
+          }
+        ]
+      }
+    </script>
 
     <!-- Open Graph / Facebook / Discord Embed -->
     <meta property="og:type" content="website" />
@@ -110,7 +179,57 @@
     </script>
   </head>
   <body class="bg-background text-foreground antialiased selection:bg-blue-500 selection:text-white min-h-screen">
-    <div id="root"></div>
+    <div id="root">
+      <!-- Semantic Static Fallback for Crawlers, Indexers & AI Agents -->
+      <header style="padding: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; max-width: 1200px; margin: 0 auto;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <img src="/logo.svg" alt="VanillaDatabase Logo" width="32" height="32" />
+          <strong style="font-size: 1.25rem;">VanillaDatabase</strong>
+        </div>
+        <nav style="display: flex; gap: 1rem;">
+          <a href="/login" style="color: #38bdf8; text-decoration: none;">Đăng nhập / Login</a>
+          <a href="/register" style="color: #38bdf8; text-decoration: none;">Đăng ký / Register</a>
+        </nav>
+      </header>
+      <main style="max-width: 1200px; margin: 0 auto; padding: 3rem 1.5rem;">
+        <h1 style="font-size: 2.5rem; font-weight: 800; line-height: 1.2; margin-bottom: 1rem;">
+          VanillaDatabase — High-Performance SQLite Cloud Platform
+        </h1>
+        <p style="font-size: 1.25rem; color: #94a3b8; max-width: 800px; line-height: 1.6; margin-bottom: 2rem;">
+          Nền tảng SQLite Cloud đa người dùng với mã hóa AES-256-GCM data-at-rest, chế độ Write-Ahead Logging (WAL), phân quyền RBAC đa cấp, sao lưu tự động và API REST realtime tốc độ cao cho ứng dụng đa tenant và AI agent.
+        </p>
+        <section style="margin-bottom: 3rem;">
+          <h2 style="font-size: 1.75rem; font-weight: 700; margin-bottom: 1rem;">Kiến Trúc &amp; Tính Năng Cốt Lõi</h2>
+          <ul style="color: #cbd5e1; line-height: 1.8; font-size: 1rem;">
+            <li><strong>Mã hóa AES-256-GCM:</strong> Toàn bộ cơ sở dữ liệu và bản sao lưu được mã hóa ở mức phần cứng, bảo vệ tuyệt đối dữ liệu tenant.</li>
+            <li><strong>Write-Ahead Logging (WAL):</strong> Tối ưu hóa ghi đồng thời với độ trễ microsecond, không lo ngại khóa bảng.</li>
+            <li><strong>Cluster Sharding &amp; Gateway Proxy:</strong> Cụm phân tán với Gateway định tuyến trong suốt và cơ chế chuyển đổi dữ liệu không gián đoạn (Zero Data-Loss Migration).</li>
+            <li><strong>Bảo mật RBAC &amp; TOTP 2FA:</strong> Phân quyền chặt chẽ theo vai trò (Owner, Admin, Editor, Viewer) và chống tấn công phát lại mã 2FA (RFC 6238).</li>
+            <li><strong>Session Revocation (VDB-SEC-01):</strong> Cơ chế vô hiệu hóa phiên tức thì qua token version khi đổi mật khẩu.</li>
+          </ul>
+        </section>
+        <section style="margin-bottom: 3rem;">
+          <h2 style="font-size: 1.75rem; font-weight: 700; margin-bottom: 1rem;">TypeScript SDK &amp; REST APIs</h2>
+          <pre style="background: #0f172a; padding: 1.5rem; border-radius: 0.5rem; overflow-x: auto; color: #38bdf8; font-family: monospace;"><code>import { VanillaClient } from '@vanilladb/sdk';
+
+const vdb = new VanillaClient({
+  apiKey: process.env.VDB_API_KEY,
+});
+
+// Khởi tạo cơ sở dữ liệu mã hóa riêng biệt cho mỗi tenant
+const db = await vdb.databases.create({
+  name: 'tenant-enterprise-01',
+  encryption: 'aes-256-gcm',
+  wal: true,
+});
+
+console.log(`Database sẵn sàng: ${db.id}`);</code></pre>
+        </section>
+      </main>
+      <footer style="max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); color: #64748b; font-size: 0.875rem;">
+        <p>&copy; 2026 VanillaDatabase Team. High-Performance SQLite Cloud Platform.</p>
+      </footer>
+    </div>
     <script type="module" src="/src/web/main.tsx"></script>
   </body>
 </html>

@@ -15,7 +15,7 @@
   <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
   <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Version-1.3.2-ea580c.svg?style=flat-square" alt="Version 1.3.2" /></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/Tests-134%20passed-22c55e.svg?style=flat-square" alt="134 Tests Passed" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Tests-137%20passed-22c55e.svg?style=flat-square" alt="137 Tests Passed" /></a>
 </p>
 
 <p align="center">
@@ -121,6 +121,14 @@ Rather than running monolithic database clusters for every client, project, or m
 - **Cluster Management UI:** Real-time multi-host telemetry dials (CPU, RAM, Disk, Network I/O throughput), worker node registration, and one-click database migration modal.
 - **Complete Bilingual Matrix:** Seamless one-click English & Tiếng Việt switching across all dashboard screens, landing page, and notifications.
 - **Integrated Keyboard Shortcuts:** Command palette (`Ctrl+K`), quick DB creation (`Ctrl+B`), Vim navigation chords (`G+D`, `G+I`), collapsible sidebar (`Ctrl+\`), and table browser hotkeys (`Alt+I`, `Alt+R`, `[`, `]`, `/`, `Del`).
+
+### <img src="https://api.iconify.design/lucide:search.svg?color=%2310b981" width="20" height="20" align="absmiddle" /> Search Engine Optimization & AI-Agent Discovery (GEO/AEO)
+- **Crawler & Bot Discovery:** Static `robots.txt` declaring crawler policies and Cloudflare `Content-Signal` (`search=yes, ai-input=yes, ai-train=no`), paired with standard `sitemap.xml`.
+- **AI Agent Readiness (`llms.txt` & `index.md`):** Publishes curated LLM markdown summaries according to the community `llmstxt.org` specification, alongside native HTTP content negotiation (`Accept: text/markdown`) serving documentation with `Vary: Accept`.
+- **Pre-rendered Fallback Semantics:** High-density semantic HTML embedded inside `<div id="root">` ensures search bots and non-JS scrapers read complete product copy, H1/H2 hierarchies, and SDK examples.
+- **Schema.org JSON-LD Structured Data:** Injected `@graph` schema combining `WebSite`, `SoftwareApplication` (DeveloperApplication with OS and pricing definitions), and `Organization`.
+- **Soft-404 Crawl Hardening:** Backend server cleanly separates valid SPA client routes from non-existent endpoints, returning true HTTP 404 responses with custom `404.html` to preserve search crawl budgets.
+- **Next-Gen Image Delivery:** Packaged `banner.webp` delivering 80% payload size reduction compared to traditional PNG banners for optimal Core Web Vitals (LCP).
 
 ---
 
