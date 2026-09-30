@@ -387,4 +387,58 @@ describe('Cluster & Multi-Node Storage Spillover Test Suite', () => {
       if (fs.existsSync(`${directPath}-shm`)) try { fs.unlinkSync(`${directPath}-shm`); } catch {}
     }
   });
+
+  it('should support ProjectStatus health check for both Gateway and Worker storage node roles', async () => {
+    const { healthService } = await import('../src/server/services/health.js');
+
+    // 1. Gateway health check
+    const gatewayHealth = await healthService.getHealthStatus({ nodeRole: 'gateway' });
+    expect(gatewayHealth.statusCode).toBe(200);
+    expect(gatewayHealth.body.status).toBe('operational');
+    expect(gatewayHealth.body.service).toBe('vanilladb-gateway');
+    expect(gatewayHealth.body.checks.database).toBe('ok');
+    expect(gatewayHealth.body.checks.gateway).toBe('connected');
+
+    // 2. Worker health check (standalone / direct storage mode)
+    const workerHealth = await healthService.getHealthStatus({
+      nodeRole: 'worker',
+      serviceName: 'vanilladb-worker-node1',
+    });
+    expect(workerHealth.statusCode).toBe(200);
+    expect(workerHealth.body.status).toBe('operational');
+    expect(workerHealth.body.service).toBe('vanilladb-worker-node1');
+    expect(workerHealth.body.checks.database).toBe('ok');
+    expect(workerHealth.body.checks.gateway).toBe('connected');
+
+    // 3. Worker health check with connected gateway URL
+    const originalFetch = global.fetch;
+    // @ts-ignore
+    global.fetch = async (url: string) => {
+      if (url.includes('/health')) {
+        return new Response(null, { status: 200 });
+      }
+      return originalFetch(url);
+    };
+
+    try {
+      const connectedWorker = await healthService.getHealthStatus({
+        nodeRole: 'worker',
+        gatewayUrl: 'http://127.0.0.1:3000',
+      });
+      expect(connectedWorker.statusCode).toBe(200);
+      expect(connectedWorker.body.status).toBe('operational');
+      expect(connectedWorker.body.checks.gateway).toBe('connected');
+    } finally {
+      global.fetch = originalFetch;
+    }
+
+    // 4. Worker outage when gateway is unreachable
+    const outageWorker = await healthService.getHealthStatus({
+      nodeRole: 'worker',
+      gatewayUrl: 'http://127.0.0.1:49998',
+    });
+    expect(outageWorker.statusCode).toBe(503);
+    expect(outageWorker.body.status).toBe('outage');
+    expect(outageWorker.body.checks.gateway).toBe('unreachable');
+  });
 });

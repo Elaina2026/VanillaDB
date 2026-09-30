@@ -15,7 +15,7 @@
   <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
   <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Phi%C3%AAn%20b%E1%BA%A3n-1.3.2-ea580c.svg?style=flat-square" alt="Phiên bản 1.3.2" /></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-137%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="137 bài kiểm thử vượt qua" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-138%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="138 bài kiểm thử vượt qua" /></a>
 </p>
 
 <p align="center">
@@ -268,6 +268,7 @@ Range: bytes=0-1048575
 
 | Giao thức | Điểm cuối | Quyền truy cập | Mục đích |
 | :--- | :--- | :--- | :--- |
+| `GET`, `HEAD` | `/health` hoặc `/api/health` | Công khai (CORS `*`) | Kiểm tra trạng thái sức khỏe theo chuẩn ProjectStatus cho Gateway & Worker |
 | `POST` | `/api/auth/register` | Công khai | Đăng ký tài khoản người dùng mới |
 | `POST` | `/api/auth/login` | Công khai | Đăng nhập và sinh cookie phiên |
 | `POST` | `/api/auth/login/2fa` | Công khai | Xác thực bước 2FA bằng TOTP hoặc mã dự phòng |
@@ -283,6 +284,24 @@ Range: bytes=0-1048575
 | `DELETE` | `/api/admin/cluster/nodes/:id` | Admin | Hủy kết nối máy chủ worker lưu trữ |
 | `POST` | `/api/admin/cluster/poll` | Admin | Kích hoạt kiểm tra nhịp tim (heartbeat) toàn cụm |
 | `POST` | `/api/admin/cluster/migrate` | Admin | Di chuyển cơ sở dữ liệu không downtime sang node đích |
+
+```bash
+# Kiểm tra sức khỏe chuẩn ProjectStatus (Hỗ trợ cả Gateway và Worker)
+GET /health
+Accept: application/json
+
+# Kết quả JSON (200 OK cho operational/degraded, 503 cho outage):
+{
+  "status": "operational",
+  "service": "vanilladb-gateway",
+  "uptime": 12450,
+  "timestamp": 1740000000000,
+  "checks": {
+    "database": "ok",
+    "gateway": "connected"
+  }
+}
+```
 
 ---
 

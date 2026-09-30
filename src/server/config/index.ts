@@ -109,6 +109,9 @@ export const config = {
   bootstrapAdminUsername: process.env.VDB_ADMIN_USERNAME || null,
   bootstrapAdminPassword: process.env.VDB_ADMIN_PASSWORD || null,
   nodeId: process.env.VDB_NODE_ID || 'local',
+  nodeRole: (process.env.VDB_NODE_ROLE || (process.env.VDB_NODE_ID && process.env.VDB_NODE_ID !== 'local' ? 'worker' : 'gateway')).toLowerCase(),
+  gatewayUrl: process.env.VDB_GATEWAY_URL || process.env.VDB_PRIMARY_URL || null,
+  serviceName: process.env.VDB_SERVICE_NAME || process.env.SERVICE_NAME || null,
   clusterSecret: process.env.VDB_CLUSTER_SECRET || sessionSecret,
   hostDiskGb: getEnvInt('VDB_HOST_DISK_GB', getEnvInt('VDB_MAX_DISK_GB', 0)),
 };

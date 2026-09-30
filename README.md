@@ -15,7 +15,7 @@
   <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
   <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Version-1.3.2-ea580c.svg?style=flat-square" alt="Version 1.3.2" /></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/Tests-137%20passed-22c55e.svg?style=flat-square" alt="137 Tests Passed" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Tests-138%20passed-22c55e.svg?style=flat-square" alt="138 Tests Passed" /></a>
 </p>
 
 <p align="center">
@@ -268,6 +268,7 @@ Range: bytes=0-1048575
 
 | Method | Endpoint | Access | Purpose |
 | :--- | :--- | :--- | :--- |
+| `GET`, `HEAD` | `/health` or `/api/health` | Public (CORS `*`) | ProjectStatus-compliant health check for Gateway and Worker nodes |
 | `POST` | `/api/auth/register` | Public | Self-service user account registration |
 | `POST` | `/api/auth/login` | Public | User authentication and session cookie generation |
 | `POST` | `/api/auth/login/2fa` | Public | Step-up 2FA verification with TOTP code or backup code |
@@ -283,6 +284,24 @@ Range: bytes=0-1048575
 | `DELETE` | `/api/admin/cluster/nodes/:id` | Admin | Deregister worker storage node |
 | `POST` | `/api/admin/cluster/poll` | Admin | Trigger instantaneous cluster heartbeat poll |
 | `POST` | `/api/admin/cluster/migrate` | Admin | Execute zero-downtime database migration to target node |
+
+```bash
+# ProjectStatus Health Check API (Gateway & Worker compatible)
+GET /health
+Accept: application/json
+
+# Response (200 OK for operational/degraded, 503 for outage):
+{
+  "status": "operational",
+  "service": "vanilladb-gateway",
+  "uptime": 12450,
+  "timestamp": 1740000000000,
+  "checks": {
+    "database": "ok",
+    "gateway": "connected"
+  }
+}
+```
 
 ---
 

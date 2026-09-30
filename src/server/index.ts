@@ -22,6 +22,7 @@ import { backupScheduler } from './services/backupScheduler.js';
 import { jobSchedulerService } from './services/jobScheduler.js';
 import { maintenanceWorker } from './services/maintenanceWorker.js';
 import { clusterService } from './services/cluster.js';
+import { healthService } from './services/health.js';
 
 import { authRoutes } from './api/auth.js';
 import { adminRoutes } from './api/admin.js';
@@ -197,20 +198,36 @@ export async function buildApp() {
     },
   });
 
-  // CORS configuration: only reflect origin when explicit allowlist is configured, or permit when settings allow
+  // CORS configuration: support ProjectStatus on /health & /api/health from any origin; reflect origin when explicit allowlist is configured, or permit when settings allow
   await app.register(cors, {
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-      if (config.corsOrigins.length > 0) {
-        return cb(null, config.corsOrigins.includes(origin));
+    delegator: (req, cb) => {
+      const pathname = (req.url || '').split('?')[0];
+      if (pathname === '/health' || pathname === '/api/health') {
+        return cb(null, {
+          origin: req.headers.origin || '*',
+          methods: ['GET', 'HEAD', 'OPTIONS'],
+          allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+          credentials: false,
+          maxAge: 86400,
+        });
       }
-      const settings = systemService.getSettings();
-      if (settings.enable_cors_all) {
-        return cb(null, true);
+      const origin = req.headers.origin;
+      let allowed = false;
+      if (!origin) {
+        allowed = true;
+      } else if (config.corsOrigins.length > 0) {
+        allowed = config.corsOrigins.includes(origin);
+      } else {
+        const settings = systemService.getSettings();
+        if (settings.enable_cors_all) {
+          allowed = true;
+        }
       }
-      return cb(null, false);
+      return cb(null, {
+        origin: allowed,
+        credentials: true,
+      });
     },
-    credentials: true,
   });
 
   // Request/Response metrics hook
@@ -347,17 +364,42 @@ export async function buildApp() {
       },
     });
   });
-  app.get('/health', async (req, reply) => {
-    const metaDb = getMetadataDb();
-    const sqliteVer = metaDb.prepare('SELECT sqlite_version() as version').get() as { version: string };
-    return reply.send({
-      status: 'ok',
-      service: 'VanillaDatabase',
-      version: '1.3.2',
-      sqlite: sqliteVer.version,
-      uptime: Math.floor(process.uptime()),
-    });
+  const sendHealthResponse = async (req: any, reply: any) => {
+    const origin = req.headers.origin || '*';
+    reply.header('Access-Control-Allow-Origin', origin);
+    reply.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+    const { statusCode, body } = await healthService.getHealthStatus();
+    if (req.method === 'HEAD') {
+      return reply.status(statusCode).send();
+    }
+    return reply.status(statusCode).send(body);
+  };
+
+  const handleHealthOptions = async (req: any, reply: any) => {
+    const origin = req.headers.origin || '*';
+    reply.header('Access-Control-Allow-Origin', origin);
+    reply.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    reply.header('Access-Control-Max-Age', '86400');
+    return reply.status(204).send();
+  };
+
+  app.route({
+    method: ['GET', 'HEAD'],
+    url: '/health',
+    handler: sendHealthResponse,
   });
+  app.options('/health', handleHealthOptions);
+
+  app.route({
+    method: ['GET', 'HEAD'],
+    url: '/api/health',
+    handler: sendHealthResponse,
+  });
+  app.options('/api/health', handleHealthOptions);
 
   // Control Plane APIs
   await app.register(authRoutes, { prefix: '/api/auth' });

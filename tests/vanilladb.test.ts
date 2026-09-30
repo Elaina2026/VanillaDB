@@ -113,16 +113,82 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
     }
   });
 
-  it('should verify health endpoint without secrets', async () => {
+  it('should verify health endpoint adhering to ProjectStatus standard (GET, HEAD & CORS)', async () => {
+    // 1. GET /health on Gateway
     const res = await app.inject({
       method: 'GET',
       url: '/health',
+      headers: {
+        origin: 'https://status.projectstatus.dev',
+      },
     });
     expect(res.statusCode).toBe(200);
+    expect(res.headers['access-control-allow-origin']).toBe('https://status.projectstatus.dev');
     const body = res.json();
-    expect(body.status).toBe('ok');
-    expect(body.service).toBe('VanillaDatabase');
-    expect(body.version).toBe('1.3.2');
+    expect(body.status).toBe('operational');
+    expect(body.service).toBe('vanilladb-gateway');
+    expect(typeof body.uptime).toBe('number');
+    expect(typeof body.timestamp).toBe('number');
+    expect(body.checks).toBeDefined();
+    expect(body.checks.database).toBe('ok');
+    expect(body.checks.gateway).toBe('connected');
+
+    // 2. HEAD /health
+    const headRes = await app.inject({
+      method: 'HEAD',
+      url: '/health',
+    });
+    expect(headRes.statusCode).toBe(200);
+    expect(headRes.body).toBe('');
+
+    // 3. GET /api/health
+    const apiHealthRes = await app.inject({
+      method: 'GET',
+      url: '/api/health',
+    });
+    expect(apiHealthRes.statusCode).toBe(200);
+    expect(apiHealthRes.json().status).toBe('operational');
+
+    // 4. HEAD /api/health
+    const apiHealthHead = await app.inject({
+      method: 'HEAD',
+      url: '/api/health',
+    });
+    expect(apiHealthHead.statusCode).toBe(200);
+    expect(apiHealthHead.body).toBe('');
+
+    // 5. Preflight OPTIONS /health
+    const optionsRes = await app.inject({
+      method: 'OPTIONS',
+      url: '/health',
+      headers: {
+        origin: 'https://any-origin.projectstatus.io',
+        'access-control-request-method': 'GET',
+      },
+    });
+    expect([200, 204]).toContain(optionsRes.statusCode);
+    expect(optionsRes.headers['access-control-allow-origin']).toBe('https://any-origin.projectstatus.io');
+
+    // 6. Worker Node Health Check Simulation
+    const { healthService } = await import('../src/server/services/health.js');
+    const workerHealth = await healthService.getHealthStatus({
+      nodeRole: 'worker',
+      serviceName: 'vanilladb-worker-01',
+    });
+    expect(workerHealth.statusCode).toBe(200);
+    expect(workerHealth.body.status).toBe('operational');
+    expect(workerHealth.body.service).toBe('vanilladb-worker-01');
+    expect(workerHealth.body.checks.database).toBe('ok');
+    expect(workerHealth.body.checks.gateway).toBe('connected');
+
+    // 7. Worker Outage Simulation (unreachable gateway URL)
+    const outageHealth = await healthService.getHealthStatus({
+      nodeRole: 'worker',
+      gatewayUrl: 'http://127.0.0.1:49999', // guaranteed closed port
+    });
+    expect(outageHealth.statusCode).toBe(503);
+    expect(outageHealth.body.status).toBe('outage');
+    expect(outageHealth.body.checks.gateway).toBe('unreachable');
   });
 
   // 2. Database Lifecycle
