@@ -278,21 +278,6 @@ export const LandingPage: React.FC<{
         transition: 'opacity 0.28s ease, transform 0.28s ease',
       }}
     >
-      {/* Subtle dot-grid — respects theme */}
-      <div
-        className="pointer-events-none fixed inset-0 z-0 opacity-[0.35] dark:opacity-[0.22]"
-        style={{
-          backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
-          backgroundSize: '28px 28px',
-          color: 'var(--tw-color-border, hsl(var(--border)))',
-        }}
-      />
-
-      {/* Ambient top glow */}
-      <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute inset-x-0 top-0 h-[450px] bg-gradient-to-b from-blue-500/10 dark:from-blue-600/15 via-blue-500/5 to-transparent blur-2xl" />
-      </div>
-
       {/* Border wrapper */}
       <div className="relative z-10 max-w-7xl mx-auto border-x border-border">
 
@@ -675,7 +660,6 @@ export const LandingPage: React.FC<{
 
         {/* ── FINAL CTA ─────────────────────────────────────────────────── */}
         <section className="relative px-4 sm:px-8 py-20 sm:py-24 md:py-28 text-center border-b border-border overflow-hidden">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-blue-500/10 dark:from-blue-600/15 via-blue-500/5 to-transparent blur-xl" />
           <Reveal className="relative max-w-xl mx-auto space-y-5 sm:space-y-6">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
               {t('landing.ctaTitle1')}<br /><span className="text-blue-500 dark:text-blue-400">{t('landing.ctaTitle2')}</span>

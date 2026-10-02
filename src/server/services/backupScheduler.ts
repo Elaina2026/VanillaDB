@@ -2,6 +2,7 @@ import { systemService } from './system.js';
 import { backupService } from './backup.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { logger } from '../utils/logger.js';
+import { config } from '../config/index.js';
 
 export class BackupScheduler {
   private timer: NodeJS.Timeout | null = null;
@@ -48,10 +49,11 @@ export class BackupScheduler {
       }
 
       const metaDb = getMetadataDb();
-      const databases = metaDb.prepare('SELECT id, name, backup_schedule FROM databases').all() as {
+      const databases = metaDb.prepare('SELECT id, name, backup_schedule, node_id FROM databases').all() as {
         id: string;
         name: string;
         backup_schedule?: string | null;
+        node_id?: string | null;
       }[];
 
       for (const db of databases) {
@@ -62,6 +64,15 @@ export class BackupScheduler {
 
           if (!effectiveSchedule || effectiveSchedule === 'disabled') {
             continue;
+          }
+
+          // If database is placed on a remote worker node, verify worker is online before attempting backup
+          if (db.node_id && db.node_id !== 'local' && db.node_id !== config.nodeId) {
+            const worker = metaDb.prepare('SELECT status, name, base_url FROM storage_nodes WHERE id = ?').get(db.node_id) as any;
+            if (!worker || worker.status === 'offline') {
+              logger.debug({ databaseId: db.id, nodeId: db.node_id }, 'Skipping automated scheduled backup: worker node is offline');
+              continue;
+            }
           }
 
           const lastBackup = metaDb.prepare(
@@ -87,8 +98,13 @@ export class BackupScheduler {
             await backupService.createBackup(db.id, 'scheduled');
             this.pruneBackups(db.id, settings.backup_retention);
           }
-        } catch (err) {
-          logger.warn({ err, databaseId: db.id }, 'Scheduled backup failed for database');
+        } catch (err: any) {
+          const msg = err.message || '';
+          if (msg.includes('ECONNREFUSED') || msg.includes('timeout') || msg.includes('offline')) {
+            logger.warn({ databaseId: db.id, error: msg }, 'Scheduled backup skipped: worker storage node is unreachable');
+          } else {
+            logger.warn({ err, databaseId: db.id }, 'Scheduled backup failed for database');
+          }
         }
       }
     } catch (err) {

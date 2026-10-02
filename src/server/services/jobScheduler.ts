@@ -3,6 +3,7 @@ import { getMetadataDb } from '../db/metadata.js';
 import { dbManager } from '../db/manager.js';
 import { activityService } from './activity.js';
 import { logger } from '../utils/logger.js';
+import { config } from '../config/index.js';
 import type { ScheduledJobRecord } from '#shared/index.js';
 
 export function parseNextRunTime(cronExpr: string, fromTime = Date.now()): number {
@@ -88,7 +89,33 @@ export class JobSchedulerService {
     let errorMessage: string | null = null;
 
     try {
-      dbManager.executeMultiStatements(job.database_id, job.sql_query);
+      const dbRow = metaDb.prepare('SELECT node_id FROM databases WHERE id = ?').get(job.database_id) as { node_id?: string } | undefined;
+      const isRemote = dbRow && dbRow.node_id && dbRow.node_id !== 'local' && dbRow.node_id !== config.nodeId;
+
+      if (isRemote) {
+        const workerNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(dbRow.node_id!) as any;
+        if (!workerNode) {
+          throw new Error(`Worker node "${dbRow.node_id}" not found in cluster metadata.`);
+        }
+
+        const res = await fetch(`${workerNode.base_url.replace(/\/+$/, '')}/api/admin/databases/${job.database_id}/exec`, {
+          method: 'POST',
+          headers: {
+            'x-cluster-secret': workerNode.auth_token || config.clusterSecret,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ sql: job.sql_query }),
+          signal: AbortSignal.timeout(60_000),
+        });
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson?.error?.message || `Worker execution failed with HTTP ${res.status}`);
+        }
+      } else {
+        dbManager.executeMultiStatements(job.database_id, job.sql_query);
+      }
+
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
 
       activityService.recordActivity({

@@ -464,6 +464,10 @@ export class ClusterService {
       throw new Error(`Target storage node "${nodeId}" not found in cluster metadata.`);
     }
 
+    if (node.status === 'offline') {
+      throw new Error(`Target storage node "${node.name || nodeId}" is currently offline`);
+    }
+
     const res = await fetch(`${node.base_url.replace(/\/+$/, '')}/api/internal/node/databases/${databaseId}/overview-stats`, {
       method: 'GET',
       headers: {
@@ -496,23 +500,134 @@ export class ClusterService {
       });
     }
 
-    const targetUrl = `${node.base_url.replace(/\/+$/, '')}${req.raw.url}`;
+    const rawUrl = req.raw.url || req.url || '';
+
+    // Fast-fail if node is known to be offline (prevents blocking connection retry storms and ECONNREFUSED log flood)
+    if (node.status === 'offline') {
+      if (req.method === 'GET' && rawUrl.includes('/storage-stats')) {
+        return reply.send({
+          success: true,
+          data: {
+            tables: [],
+            indexes: [],
+            fileSizeBytes: 0,
+            walSizeBytes: 0,
+            totalSizeBytes: 0,
+            pageSize: 4096,
+            pageCount: 0,
+            freelistCount: 0,
+            fragmentationPercent: 0,
+            journalMode: 'wal',
+            synchronous: 'normal',
+            autoVacuum: 0,
+            cacheSize: 0,
+            schemaVersion: 0,
+            isNodeOffline: true,
+            nodeId: node.id,
+            nodeName: node.name,
+          },
+        });
+      }
+      if (req.method === 'GET' && rawUrl.includes('/schema')) {
+        return reply.send({
+          success: true,
+          data: [],
+          isNodeOffline: true,
+          nodeId: node.id,
+          nodeName: node.name,
+        });
+      }
+      if (req.method === 'GET' && rawUrl.includes('/files')) {
+        return reply.send({
+          success: true,
+          data: [],
+          isNodeOffline: true,
+          nodeId: node.id,
+          nodeName: node.name,
+        });
+      }
+
+      return reply.status(502).send({
+        success: false,
+        error: {
+          code: 'BAD_GATEWAY',
+          message: `Worker storage node "${node.name}" (${node.base_url}) is currently offline or unreachable. Please verify worker process is running and port is open.`,
+        },
+      });
+    }
+
+    const isRealtime = Boolean(rawUrl.includes('/realtime'));
+    const isLargeTransfer = Boolean(
+      rawUrl.includes('/import') ||
+      rawUrl.includes('/export') ||
+      rawUrl.includes('/files') ||
+      rawUrl.includes('/storage')
+    );
+
+    const targetUrl = `${node.base_url.replace(/\/+$/, '')}${rawUrl}`;
     const headers: Record<string, string> = {};
 
-    // Forward relevant headers
+    // Forward relevant headers (strip internal inter-node headers if supplied by external client)
+    const protectedInternalHeaders = new Set([
+      'host',
+      'connection',
+      'content-length',
+      'x-cluster-secret',
+      'x-token-id',
+      'x-token-allowed-tables',
+      'x-token-denied-tables',
+      'x-user-id',
+      'x-user-role',
+    ]);
+
     for (const [key, val] of Object.entries(req.headers)) {
       if (!val) continue;
       const lower = key.toLowerCase();
-      if (['host', 'connection', 'content-length'].includes(lower)) continue;
+      if (protectedInternalHeaders.has(lower)) continue;
       headers[lower] = Array.isArray(val) ? val.join(', ') : String(val);
     }
     headers['x-cluster-secret'] = node.auth_token || config.clusterSecret;
     headers['x-forwarded-host'] = req.headers.host || '';
+    if (req.ip) headers['x-forwarded-for'] = req.ip;
+
+    const token = (req as any).apiToken;
+    const adminUser = (req as any).adminUser;
+    if (token) {
+      headers['x-token-id'] = token.id;
+      if (token.allowed_tables && token.allowed_tables.length > 0) {
+        headers['x-token-allowed-tables'] = JSON.stringify(token.allowed_tables);
+      }
+      if (token.denied_tables && token.denied_tables.length > 0) {
+        headers['x-token-denied-tables'] = JSON.stringify(token.denied_tables);
+      }
+    }
+    if (adminUser) {
+      headers['x-user-id'] = adminUser.userId;
+      headers['x-user-role'] = adminUser.role;
+    }
+
+    const controller = new AbortController();
+    const timeoutMs = isRealtime ? 0 : (isLargeTransfer ? 600_000 : 120_000);
+    let timeoutId: NodeJS.Timeout | null = null;
+    if (timeoutMs > 0) {
+      timeoutId = setTimeout(() => {
+        controller.abort(new Error(`Proxy request to ${node.name} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    }
+
+    const onClientClose = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      controller.abort();
+    };
+    req.raw.on('close', onClientClose);
+    req.raw.on('error', onClientClose);
 
     try {
       let body: any = undefined;
+      let duplex: 'half' | undefined = undefined;
+
       if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
-        if (req.body) {
+        if (req.body !== undefined && req.body !== null) {
           if (Buffer.isBuffer(req.body)) {
             body = req.body;
             if (!headers['content-type']) {
@@ -529,6 +644,21 @@ export class ClusterService {
               headers['content-type'] = 'application/json';
             }
           }
+        } else {
+          const contentType = req.headers['content-type'] || '';
+          const contentLength = req.headers['content-length'];
+          const isChunked = req.headers['transfer-encoding'] === 'chunked';
+          const hasStreamContent = Boolean(
+            (contentLength && contentLength !== '0') ||
+            isChunked ||
+            contentType.includes('multipart') ||
+            contentType.includes('octet-stream')
+          );
+
+          if (hasStreamContent && !req.raw.destroyed && req.raw.readable) {
+            body = Readable.toWeb(req.raw);
+            duplex = 'half';
+          }
         }
       }
 
@@ -537,8 +667,8 @@ export class ClusterService {
         headers,
         body,
         // @ts-ignore
-        duplex: body ? 'half' : undefined,
-        signal: AbortSignal.timeout(120_000),
+        duplex: body ? (duplex || 'half') : undefined,
+        signal: controller.signal,
       });
 
       reply.status(remoteRes.status);
@@ -548,6 +678,48 @@ export class ClusterService {
         reply.header(name, value);
       });
 
+      if (isRealtime || remoteRes.headers.get('content-type')?.includes('text/event-stream')) {
+        reply.header('Content-Type', 'text/event-stream');
+        reply.header('Cache-Control', 'no-cache, no-transform');
+        reply.header('Connection', 'keep-alive');
+        reply.header('X-Accel-Buffering', 'no');
+      }
+
+      const isFileUpload = req.method === 'POST' && rawUrl.includes('/files');
+      const isFileDelete = req.method === 'DELETE' && rawUrl.includes('/files');
+
+      if (isFileUpload && (remoteRes.status === 200 || remoteRes.status === 201)) {
+        try {
+          const json = await remoteRes.json() as any;
+          if (json?.success && json?.data?.id && json?.data?.database_id) {
+            const f = json.data;
+            metaDb.prepare(`
+              INSERT OR REPLACE INTO files (id, database_id, filename, original_name, mime_type, size_bytes, checksum, metadata, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              f.id,
+              f.database_id,
+              f.filename,
+              f.original_name,
+              f.mime_type || 'application/octet-stream',
+              f.size_bytes || 0,
+              f.checksum || '',
+              f.metadata || null,
+              f.created_at || Date.now(),
+              f.updated_at || Date.now()
+            );
+          }
+          return reply.send(json);
+        } catch {}
+      } else if (isFileDelete && remoteRes.ok) {
+        try {
+          const match = rawUrl.match(/\/files\/([a-zA-Z0-9_-]+)/);
+          if (match && match[1]) {
+            metaDb.prepare('DELETE FROM files WHERE id = ?').run(match[1]);
+          }
+        } catch {}
+      }
+
       if (remoteRes.body) {
         // Stream back to client
         const stream = Readable.fromWeb(remoteRes.body as any);
@@ -556,11 +728,81 @@ export class ClusterService {
         return reply.send();
       }
     } catch (err: any) {
-      logger.error({ err, targetUrl }, 'Cluster proxy request failed');
+      const isClientAborted = req.raw.destroyed || reply.raw.destroyed;
+      if (isClientAborted) {
+        return;
+      }
+
+      const isConnectionRefused =
+        err.cause?.code === 'ECONNREFUSED' ||
+        err.code === 'ECONNREFUSED' ||
+        (typeof err.message === 'string' && err.message.includes('ECONNREFUSED'));
+      const isTimeout = err.name === 'AbortError' || (typeof err.message === 'string' && err.message.includes('timeout'));
+
+      if (isConnectionRefused || isTimeout) {
+        try {
+          metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
+        } catch {}
+      }
+
+      // For read-only stats/schema requests, provide safe offline fallback so dashboard can render cleanly
+      if (req.method === 'GET' && rawUrl.includes('/storage-stats')) {
+        return reply.send({
+          success: true,
+          data: {
+            tables: [],
+            indexes: [],
+            fileSizeBytes: 0,
+            walSizeBytes: 0,
+            totalSizeBytes: 0,
+            pageSize: 4096,
+            pageCount: 0,
+            freelistCount: 0,
+            fragmentationPercent: 0,
+            journalMode: 'wal',
+            synchronous: 'normal',
+            autoVacuum: 0,
+            cacheSize: 0,
+            schemaVersion: 0,
+            isNodeOffline: true,
+            nodeId: node.id,
+            nodeName: node.name,
+          },
+        });
+      }
+
+      if (req.method === 'GET' && rawUrl.includes('/schema')) {
+        return reply.send({
+          success: true,
+          data: [],
+          isNodeOffline: true,
+          nodeId: node.id,
+          nodeName: node.name,
+        });
+      }
+
+      if (req.method === 'GET' && rawUrl.includes('/files')) {
+        return reply.send({
+          success: true,
+          data: [],
+          isNodeOffline: true,
+          nodeId: node.id,
+          nodeName: node.name,
+        });
+      }
+
+      logger.warn({ targetUrl, nodeId: node.id, error: err.message }, 'Cluster proxy request failed: worker node is unreachable');
       return reply.status(502).send({
         success: false,
-        error: { code: 'GATEWAY_ERROR', message: `Failed to proxy request to worker host: ${err.message}` },
+        error: {
+          code: 'BAD_GATEWAY',
+          message: `Worker storage node "${node.name}" (${node.base_url}) is offline or unreachable: ${err.message}`,
+        },
       });
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      req.raw.off('close', onClientClose);
+      req.raw.off('error', onClientClose);
     }
   }
 

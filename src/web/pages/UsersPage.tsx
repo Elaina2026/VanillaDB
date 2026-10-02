@@ -32,7 +32,7 @@ import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
 import { UserAuditDrawer, getAvatarStyle, getInitials } from '../components/UserAuditDrawer.js';
-import type { UserRecord, UserRole } from '@shared/index.js';
+import type { UserRecord, UserRole, RoleRecord } from '@shared/index.js';
 
 export const UsersPage: React.FC = () => {
   const { user: currentUser } = useAuth();
@@ -44,6 +44,45 @@ export const UsersPage: React.FC = () => {
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Roles Management state
+  const [isRolesModalOpen, setIsRolesModalOpen] = useState(false);
+  const [roleForm, setRoleForm] = useState({ id: '', name: '', description: '' });
+  const [roleFormError, setRoleFormError] = useState<string | null>(null);
+
+  const { data: roles = [], refetch: refetchRoles } = useQuery<RoleRecord[]>({
+    queryKey: ['roles'],
+    queryFn: () => apiRequest('/api/admin/roles'),
+  });
+
+  const createRoleMutation = useMutation({
+    mutationFn: (data: { id?: string; name: string; description?: string }) =>
+      apiRequest('/api/admin/roles', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      setRoleForm({ id: '', name: '', description: '' });
+      setRoleFormError(null);
+    },
+    onError: (err: any) => {
+      setRoleFormError(err.message || 'Failed to create role');
+    },
+  });
+
+  const deleteRoleMutation = useMutation({
+    mutationFn: (roleId: string) =>
+      apiRequest(`/api/admin/roles/${roleId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+    },
+    onError: (err: any) => {
+      alert(err.message || 'Failed to delete role');
+    },
+  });
 
   // Bulk actions state
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
@@ -279,6 +318,15 @@ export const UsersPage: React.FC = () => {
             <span className="hidden sm:inline">{t('common.refresh', 'Refresh')}</span>
           </button>
 
+          <button
+            onClick={() => setIsRolesModalOpen(true)}
+            className="px-3 py-1.5 bg-muted/60 hover:bg-muted text-foreground border border-border rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            title={t('users.manageRoles', 'Manage Roles')}
+          >
+            <Shield className="w-3.5 h-3.5 text-primary" />
+            <span>{t('users.manageRoles', 'Manage Roles')}</span>
+          </button>
+
           {isSuperAdmin && (
             <button
               onClick={() => {
@@ -302,7 +350,7 @@ export const UsersPage: React.FC = () => {
       )}
 
       {/* Quota & Role Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-3.5 rounded-xl border border-border bg-card shadow-xs flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
             <Users className="w-5 h-5" />
@@ -321,6 +369,18 @@ export const UsersPage: React.FC = () => {
             <div className="text-[11px] font-medium text-muted-foreground">{t('users.superAdmins', 'Super Admins')}</div>
             <div className="text-lg font-bold text-foreground mt-0.5">
               {users.filter(u => u.role === 'super_admin').length}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl border border-border bg-card shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
+            <Zap className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-[11px] font-medium text-muted-foreground">{t('users.roleDeveloper', 'Developers')}</div>
+            <div className="text-lg font-bold text-foreground mt-0.5">
+              {users.filter(u => u.role === 'developer').length}
             </div>
           </div>
         </div>
@@ -482,6 +542,8 @@ export const UsersPage: React.FC = () => {
                             ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
                             : u.role === 'admin'
                             ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                            : u.role === 'developer'
+                            ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20'
                             : 'bg-muted text-muted-foreground border border-border'
                         }`}>
                           {u.role}
@@ -699,6 +761,15 @@ export const UsersPage: React.FC = () => {
 
               <button
                 type="button"
+                onClick={() => bulkActionMutation.mutate({ userIds: [...selectedUserIds], action: 'set_role', role: 'developer' })}
+                className="w-full p-2.5 rounded-lg border border-purple-500/20 bg-purple-500/10 hover:bg-purple-500/20 text-left text-xs font-semibold text-purple-600 dark:text-purple-400 flex items-center justify-between transition-colors"
+              >
+                <span>{t('users.roleDeveloper', 'Developer')}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-500 font-mono">developer</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => bulkActionMutation.mutate({ userIds: [...selectedUserIds], action: 'set_role', role: 'admin' })}
                 className="w-full p-2.5 rounded-lg border border-blue-500/20 bg-blue-500/10 hover:bg-blue-500/20 text-left text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center justify-between transition-colors"
               >
@@ -864,9 +935,20 @@ export const UsersPage: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                     className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   >
-                    <option value="user">{t('users.roleUserStandard', 'User (Standard)')}</option>
-                    <option value="admin">{t('users.roleAdmin', 'Admin')}</option>
-                    <option value="super_admin">{t('users.roleSuperAdmin', 'Super Admin')}</option>
+                    {roles && roles.length > 0 ? (
+                      roles.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} ({r.id})
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="user">{t('users.roleUserStandard', 'User (Standard)')}</option>
+                        <option value="developer">{t('users.roleDeveloper', 'Developer')}</option>
+                        <option value="admin">{t('users.roleAdmin', 'Admin')}</option>
+                        <option value="super_admin">{t('users.roleSuperAdmin', 'Super Admin')}</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -889,9 +971,18 @@ export const UsersPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="user-max-databases" className="block text-muted-foreground font-medium mb-1">
-                    {t('users.maxDbsAllowed', 'Max DBs Allowed')}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="user-max-databases" className="text-muted-foreground font-medium">
+                      {t('users.maxDbsAllowed', 'Max DBs Allowed')}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, maxDatabases: 0 })}
+                      className="text-[10px] text-primary hover:underline font-semibold"
+                    >
+                      {t('users.setUnlimited', 'Không giới hạn (0)')}
+                    </button>
+                  </div>
                   <input
                     id="user-max-databases"
                     name="maxDatabases"
@@ -901,13 +992,37 @@ export const UsersPage: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, maxDatabases: parseInt(e.target.value, 10) || 0 })}
                     className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary"
                   />
-                  <span className="text-[10px] text-muted-foreground mt-0.5 block">{t('users.noLimitAdmin', '0 = No limit for admin')}</span>
+                  <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                    {[0, 5, 20, 50].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, maxDatabases: num })}
+                        className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                          formData.maxDatabases === num
+                            ? 'bg-primary/10 border-primary text-primary font-bold'
+                            : 'border-border text-muted-foreground hover:bg-accent'
+                        }`}
+                      >
+                        {num === 0 ? t('users.unlimitedShort', '∞ Vô hạn') : `${num} DBs`}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
-                  <label htmlFor="user-rate-limit" className="block text-muted-foreground font-medium mb-1">
-                    {t('users.rateLimit', 'Rate Limit (req/min)')}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="user-rate-limit" className="text-muted-foreground font-medium">
+                      {t('users.rateLimit', 'Rate Limit (req/min)')}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, rateLimitPerMinute: 0 })}
+                      className="text-[10px] text-primary hover:underline font-semibold"
+                    >
+                      {t('users.setUnlimited', 'Không giới hạn (0)')}
+                    </button>
+                  </div>
                   <input
                     id="user-rate-limit"
                     name="rateLimitPerMinute"
@@ -917,7 +1032,22 @@ export const UsersPage: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, rateLimitPerMinute: parseInt(e.target.value, 10) || 0 })}
                     className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary"
                   />
-                  <span className="text-[10px] text-muted-foreground mt-0.5 block">{t('users.zeroUnlimited', '0 = Unlimited')}</span>
+                  <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                    {[0, 60, 180, 300, 1000].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, rateLimitPerMinute: num })}
+                        className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                          formData.rateLimitPerMinute === num
+                            ? 'bg-primary/10 border-primary text-primary font-bold'
+                            : 'border-border text-muted-foreground hover:bg-accent'
+                        }`}
+                      >
+                        {num === 0 ? t('users.unlimitedShort', '∞ Vô hạn') : `${num}/m`}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -991,6 +1121,160 @@ export const UsersPage: React.FC = () => {
         onEditUser={(u) => handleOpenEdit(u)}
         isSuperAdmin={isSuperAdmin}
       />
+
+      {/* Role Management Modal */}
+      {isRolesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-xs">
+          <div className="bg-card border border-border rounded-xl max-w-xl w-full p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-primary" />
+                <div>
+                  <h2 className="text-base font-bold text-foreground">
+                    {t('roles.title', 'Role & Permission Management')}
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    {t('roles.subtitle', 'Manage system and custom RBAC roles with scoped privileges')}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsRolesModalOpen(false);
+                  setRoleFormError(null);
+                }}
+                className="p-1 rounded text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Existing Roles List */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {t('roles.existingRoles', 'Active Platform Roles')} ({roles.length})
+              </h3>
+              <div className="divide-y divide-border border border-border rounded-lg overflow-hidden bg-muted/10">
+                {roles.map((r) => (
+                  <div key={r.id} className="p-3 flex items-start justify-between gap-3 text-xs">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-foreground">{r.name}</span>
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                          {r.id}
+                        </span>
+                        {r.is_system ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-medium">
+                            {t('roles.systemRole', 'System')}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20 font-medium">
+                            {t('roles.customRole', 'Custom')}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-muted-foreground text-[11px] mt-0.5">{r.description || 'No description'}</p>
+                    </div>
+
+                    {!r.is_system && isSuperAdmin && (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete custom role "${r.name}"?`)) {
+                            deleteRoleMutation.mutate(r.id);
+                          }
+                        }}
+                        disabled={deleteRoleMutation.isPending}
+                        className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors shrink-0"
+                        title="Delete Role"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Create New Role Form */}
+            {isSuperAdmin && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!roleForm.name.trim()) return;
+                  createRoleMutation.mutate({
+                    id: roleForm.id.trim() || undefined,
+                    name: roleForm.name.trim(),
+                    description: roleForm.description.trim() || undefined,
+                  });
+                }}
+                className="space-y-3 pt-3 border-t border-border"
+              >
+                <h3 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <UserPlus className="w-3.5 h-3.5 text-primary" />
+                  {t('roles.createNew', 'Create New Role')}
+                </h3>
+
+                {roleFormError && (
+                  <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded text-red-500 text-xs">
+                    {roleFormError}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-muted-foreground mb-1">
+                      {t('roles.roleName', 'Role Display Name')} *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={roleForm.name}
+                      onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+                      placeholder="e.g. QA Engineer"
+                      className="w-full bg-muted/40 border border-border rounded px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-muted-foreground mb-1">
+                      {t('roles.roleId', 'Role Identifier (slug)')}
+                    </label>
+                    <input
+                      type="text"
+                      value={roleForm.id}
+                      onChange={(e) => setRoleForm({ ...roleForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') })}
+                      placeholder="e.g. qa_engineer"
+                      className="w-full bg-muted/40 border border-border rounded px-3 py-1.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-muted-foreground mb-1">
+                    {t('roles.roleDesc', 'Description')}
+                  </label>
+                  <input
+                    type="text"
+                    value={roleForm.description}
+                    onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
+                    placeholder="e.g. Quality assurance tester with read and query inspection rights"
+                    className="w-full bg-muted/40 border border-border rounded px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    disabled={createRoleMutation.isPending || !roleForm.name.trim()}
+                    className="px-3 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                  >
+                    {createRoleMutation.isPending ? t('common.saving', 'Creating...') : t('roles.createNew', 'Create Role')}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

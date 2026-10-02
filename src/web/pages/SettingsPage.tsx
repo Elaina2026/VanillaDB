@@ -1066,7 +1066,18 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.rateLimitPerUser', 'Default API Rate Limit (req/min)')}</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-muted-foreground">{t('settings.rateLimitPerUser', 'Default API Rate Limit (req/min)')}</label>
+                {isSuperAdminOrAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, default_user_rate_limit: 0 })}
+                    className="text-[10px] text-primary hover:underline font-semibold"
+                  >
+                    {t('users.setUnlimited', 'Không giới hạn (0)')}
+                  </button>
+                )}
+              </div>
               <input
                 type="number"
                 min={0}
@@ -1074,8 +1085,25 @@ export const SettingsPage: React.FC = () => {
                 disabled={!isSuperAdminOrAdmin}
                 value={current.default_user_rate_limit ?? 180}
                 onChange={(e) => setForm({ ...form, default_user_rate_limit: parseInt(e.target.value, 10) || 0 })}
-                className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
+                className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary text-foreground font-mono disabled:opacity-50"
               />
+              <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                {[0, 60, 180, 300, 1000].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    disabled={!isSuperAdminOrAdmin}
+                    onClick={() => setForm({ ...form, default_user_rate_limit: num })}
+                    className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                      (current.default_user_rate_limit ?? 180) === num
+                        ? 'bg-primary/10 border-primary text-primary font-bold'
+                        : 'border-border text-muted-foreground hover:bg-accent'
+                    }`}
+                  >
+                    {num === 0 ? '∞ Không giới hạn' : `${num}/m`}
+                  </button>
+                ))}
+              </div>
               <span className="text-[10px] text-muted-foreground mt-1 block">
                 {t('settings.rateLimitPerUserDesc', '0 = Unlimited requests per minute for standard accounts.')}
               </span>

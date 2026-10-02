@@ -382,6 +382,26 @@ function runMigrations(db: DatabaseSync): void {
         );
         CREATE INDEX IF NOT EXISTS idx_storage_nodes_status ON storage_nodes(status);
       `
+    },
+    {
+      version: 16,
+      name: 'add_roles_table',
+      sql: `
+        CREATE TABLE IF NOT EXISTS roles (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT,
+          is_system INTEGER NOT NULL DEFAULT 0,
+          permissions TEXT NOT NULL DEFAULT '[]',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        INSERT OR IGNORE INTO roles (id, name, description, is_system, permissions, created_at, updated_at) VALUES
+          ('super_admin', 'Super Admin', 'Full system control, cluster nodes & security management', 1, '["*"]', 1787821216000, 1787821216000),
+          ('admin', 'Admin', 'Platform administration, user management, quotas & telemetry', 1, '["users:manage", "databases:manage", "settings:manage"]', 1787821216000, 1787821216000),
+          ('developer', 'Developer', 'Full database lifecycle, API tokens, DDL/SQL execution & SDK access', 1, '["databases:create", "databases:query", "tokens:create", "backups:create"]', 1787821216000, 1787821216000),
+          ('user', 'User', 'Standard user with assigned database access & read/write quotas', 1, '["databases:read", "databases:write"]', 1787821216000, 1787821216000);
+      `
     }
   ];
 

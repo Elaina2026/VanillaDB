@@ -14,14 +14,33 @@ import { getMetadataDb } from '../db/metadata.js';
 import { requireTokenPermission } from '../middleware/auth.js';
 import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
 
-function isTablePermitted(table: string, apiToken?: any): boolean {
-  if (!apiToken) return true;
+function resolveTokenRestrictions(req: FastifyRequest) {
+  let allowed: string[] | null = (req as any).apiToken?.allowed_tables || null;
+  let denied: string[] | null = (req as any).apiToken?.denied_tables || null;
+
+  if (!allowed && req.headers['x-token-allowed-tables']) {
+    try {
+      allowed = JSON.parse(req.headers['x-token-allowed-tables'] as string);
+    } catch {}
+  }
+  if (!denied && req.headers['x-token-denied-tables']) {
+    try {
+      denied = JSON.parse(req.headers['x-token-denied-tables'] as string);
+    } catch {}
+  }
+
+  return { allowed, denied };
+}
+
+function isTablePermitted(table: string, apiToken?: any, customRestrictions?: { allowed?: string[] | null; denied?: string[] | null }): boolean {
   const lower = table.toLowerCase();
-  if (apiToken.denied_tables && Array.isArray(apiToken.denied_tables) && apiToken.denied_tables.some((t: string) => t.toLowerCase() === lower)) {
+  const denied = apiToken?.denied_tables || customRestrictions?.denied;
+  if (denied && Array.isArray(denied) && denied.some((t: string) => t.toLowerCase() === lower)) {
     return false;
   }
-  if (apiToken.allowed_tables && Array.isArray(apiToken.allowed_tables) && apiToken.allowed_tables.length > 0) {
-    return apiToken.allowed_tables.some((t: string) => t.toLowerCase() === lower);
+  const allowed = apiToken?.allowed_tables || customRestrictions?.allowed;
+  if (allowed && Array.isArray(allowed) && allowed.length > 0) {
+    return allowed.some((t: string) => t.toLowerCase() === lower);
   }
   return true;
 }
@@ -132,7 +151,101 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       const metaDb = getMetadataDb();
       const row = metaDb.prepare('SELECT node_id FROM databases WHERE id = ?').get(databaseId) as { node_id?: string } | undefined;
       if (row && row.node_id && row.node_id !== 'local' && row.node_id !== config.nodeId) {
+        const isInternalCluster = Boolean(
+          req.headers['x-cluster-secret'] &&
+          req.headers['x-cluster-secret'] === config.clusterSecret
+        );
+
+        if (!isInternalCluster) {
+          const rawUrl = (req.raw.url || req.url || '').split('?')[0];
+          const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
+          const isRealtime = rawUrl.includes('/realtime');
+
+          let requiredPermission: 'database:read' | 'database:write' = isWrite ? 'database:write' : 'database:read';
+
+          // For /query: read is acceptable if it's a SELECT/PRAGMA/EXPLAIN query
+          if (rawUrl.endsWith('/query') && req.body && typeof (req.body as any).sql === 'string') {
+            const sqlTrim = (req.body as any).sql.trim();
+            if (/^(SELECT|WITH|EXPLAIN|PRAGMA)\b/i.test(sqlTrim)) {
+              requiredPermission = 'database:read';
+            } else {
+              requiredPermission = 'database:write';
+            }
+          }
+
+          // Special authentication check for realtime SSE
+          if (isRealtime) {
+            const queryToken = (req.query as any)?.token;
+            if (queryToken && typeof queryToken === 'string' && !req.headers.authorization) {
+              req.headers.authorization = `Bearer ${queryToken}`;
+            }
+
+            if (!req.headers.authorization && req.cookies?.vdb_session) {
+              const user = authService.verifySessionCookie(req.cookies.vdb_session, config.sessionSecret);
+              if (user) {
+                if (user.role !== 'super_admin' && user.role !== 'admin') {
+                  const { databaseMembersService } = await import('../services/members.js');
+                  const role = databaseMembersService.getUserDatabaseRole(databaseId, user.userId, user.role);
+                  if (!role) {
+                    return reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied: you are not a member of this database' } });
+                  }
+                }
+                req.adminUser = user;
+                req.databaseId = databaseId;
+              }
+            }
+          }
+
+          if (!req.adminUser) {
+            await requireTokenPermission(requiredPermission)(req, reply);
+            if (reply.sent) return reply;
+          }
+
+          // Check table allowlist/denylist for REST and realtime endpoints
+          const table = (req.params as any)?.table || (req.query as any)?.table;
+          if (table && req.apiToken && !isTablePermitted(table, req.apiToken)) {
+            return reply.status(403).send({
+              success: false,
+              error: { code: 'FORBIDDEN', message: `Access to table "${table}" is denied for this token` }
+            });
+          }
+        }
+
+        const startTime = performance.now();
         await clusterService.proxyToNode(row.node_id, req, reply);
+
+        // Record activity log on Gateway if write operation completed
+        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+          const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
+          const rawUrl = (req.raw.url || req.url || '').split('?')[0];
+          const statusCode = reply.raw.statusCode || reply.statusCode;
+
+          activityService.recordActivity({
+            databaseId,
+            tokenId: req.apiToken?.id || `admin:${req.adminUser?.username || 'user'}`,
+            operation: rawUrl.endsWith('/query') ? 'SQL_QUERY' : (rawUrl.endsWith('/batch') ? 'BATCH_QUERY' : `REST_${req.method}`),
+            durationMs,
+            status: statusCode >= 400 ? 'error' : 'success',
+          });
+
+          // If write operation was successful on remote worker, emit event on Gateway
+          // This triggers Webhook dispatch and local subscribers on Gateway
+          if (statusCode < 400) {
+            const table = (req.params as any)?.table;
+            let eventType: 'insert' | 'update' | 'delete' | 'schema' = 'update';
+            if (req.method === 'POST') eventType = 'insert';
+            else if (req.method === 'DELETE') eventType = 'delete';
+
+            realtimeService.emitEvent({
+              databaseId,
+              table,
+              type: eventType,
+              data: req.body || null,
+              timestamp: Date.now(),
+            });
+          }
+        }
+
         return reply;
       }
     } catch {
@@ -208,10 +321,11 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
     const startTime = performance.now();
     try {
+      const { allowed, denied } = resolveTokenRestrictions(req);
       const result = dbManager.executeSql(databaseId, parsed.data.sql, parsed.data.params, {
         readonly: !hasWrite,
-        allowedTables: token?.allowed_tables || null,
-        deniedTables: token?.denied_tables || null,
+        allowedTables: allowed,
+        deniedTables: denied,
       });
 
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
@@ -315,10 +429,11 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
     const startTime = performance.now();
     try {
+      const { allowed, denied } = resolveTokenRestrictions(req);
       const result = dbManager.executeBatch(databaseId, parsed.data.statements, parsed.data.transaction, {
         readonly: false,
-        allowedTables: token?.allowed_tables || null,
-        deniedTables: token?.denied_tables || null,
+        allowedTables: allowed,
+        deniedTables: denied,
       });
 
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
@@ -399,10 +514,14 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
     try {
       const startTime = performance.now();
+      const { allowed, denied } = resolveTokenRestrictions(req);
+      if (!isTablePermitted(tableInfo.name, req.apiToken, { allowed, denied })) {
+        return reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: `Access to table "${tableInfo.name}" is denied for this token` } });
+      }
       const result = dbManager.executeSql(databaseId, sql, [limit, offset], {
         readonly: true,
-        allowedTables: req.apiToken?.allowed_tables,
-        deniedTables: req.apiToken?.denied_tables,
+        allowedTables: allowed,
+        deniedTables: denied,
       });
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
 
@@ -455,9 +574,13 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
     try {
       const startTime = performance.now();
+      const { allowed, denied } = resolveTokenRestrictions(req);
+      if (!isTablePermitted(tableInfo.name, req.apiToken, { allowed, denied })) {
+        return reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: `Access to table "${tableInfo.name}" is denied for this token` } });
+      }
       const result = dbManager.executeSql(databaseId, sql, values, {
-        allowedTables: req.apiToken?.allowed_tables,
-        deniedTables: req.apiToken?.denied_tables,
+        allowedTables: allowed,
+        deniedTables: denied,
       });
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
 
@@ -534,9 +657,13 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
     try {
       const startTime = performance.now();
+      const { allowed, denied } = resolveTokenRestrictions(req);
+      if (!isTablePermitted(tableInfo.name, req.apiToken, { allowed, denied })) {
+        return reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: `Access to table "${tableInfo.name}" is denied for this token` } });
+      }
       const result = dbManager.executeSql(databaseId, sql, params, {
-        allowedTables: req.apiToken?.allowed_tables,
-        deniedTables: req.apiToken?.denied_tables,
+        allowedTables: allowed,
+        deniedTables: denied,
       });
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
 
@@ -594,9 +721,13 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     const sql = `DELETE FROM ${dbManager.escapeIdentifier(tableInfo.name)} WHERE ${dbManager.escapeIdentifier(pkCol)} = ?`;
     try {
       const startTime = performance.now();
+      const { allowed, denied } = resolveTokenRestrictions(req);
+      if (!isTablePermitted(tableInfo.name, req.apiToken, { allowed, denied })) {
+        return reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: `Access to table "${tableInfo.name}" is denied for this token` } });
+      }
       const result = dbManager.executeSql(databaseId, sql, [pkVal], {
-        allowedTables: req.apiToken?.allowed_tables,
-        deniedTables: req.apiToken?.denied_tables,
+        allowedTables: allowed,
+        deniedTables: denied,
       });
       const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
 

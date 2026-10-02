@@ -41,13 +41,27 @@ export class BackupService {
         throw new Error(`Worker node "${dbRow.node_id}" not found in cluster metadata.`);
       }
 
-      const res = await fetch(`${workerNode.base_url.replace(/\/+$/, '')}/api/internal/node/databases/${databaseId}/export`, {
-        method: 'GET',
-        headers: {
-          'x-cluster-secret': workerNode.auth_token || config.clusterSecret,
-        },
-        signal: AbortSignal.timeout(120_000),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${workerNode.base_url.replace(/\/+$/, '')}/api/internal/node/databases/${databaseId}/export`, {
+          method: 'GET',
+          headers: {
+            'x-cluster-secret': workerNode.auth_token || config.clusterSecret,
+          },
+          signal: AbortSignal.timeout(120_000),
+        });
+      } catch (fetchErr: any) {
+        if (
+          fetchErr.cause?.code === 'ECONNREFUSED' ||
+          fetchErr.code === 'ECONNREFUSED' ||
+          String(fetchErr.message).includes('ECONNREFUSED')
+        ) {
+          try {
+            metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), workerNode.id);
+          } catch {}
+        }
+        throw new Error(`Cannot export snapshot from worker "${workerNode.name}" (${workerNode.base_url}): ${fetchErr.message}`);
+      }
 
       if (!res.ok) {
         throw new Error(`Worker node export responded with HTTP ${res.status}`);

@@ -9,9 +9,19 @@ export const TokenPermissionSchema = z.enum([
   'database:admin'
 ]);
 
-export type UserRole = 'super_admin' | 'admin' | 'user';
+export type UserRole = 'super_admin' | 'admin' | 'developer' | 'user' | (string & {});
 
 export type MemberRole = 'owner' | 'admin' | 'editor' | 'viewer';
+
+export interface RoleRecord {
+  id: string;
+  name: string;
+  description?: string | null;
+  is_system: boolean;
+  permissions: string[];
+  created_at: number;
+  updated_at?: number;
+}
 
 export interface UserRecord {
   id: string;
@@ -46,6 +56,8 @@ export interface DatabaseRecord {
   is_shared?: boolean;
   member_count?: number;
   node_id?: string | null;
+  nodeName?: string | null;
+  isNodeOffline?: boolean;
   created_at: number;
   updated_at: number;
   last_accessed_at: number | null;
@@ -247,6 +259,8 @@ export interface DatabaseStorageStats {
     tableName: string;
     unique: boolean;
   }>;
+  isNodeOffline?: boolean;
+  nodeId?: string | null;
 }
 
 export interface DatabaseMetricsStats {

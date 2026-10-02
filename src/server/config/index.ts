@@ -86,7 +86,7 @@ export const config = {
   env: appEnv,
   isProduction,
   host: process.env.VDB_HOST || process.env.HOST || '0.0.0.0',
-  port: getEnvInt('VDB_PORT', getEnvInt('PORT', 3000)),
+  port: getEnvInt('VDB_PORT', getEnvInt('PORT', getEnvInt('SERVER_PORT', 3000))),
   dataDir,
   systemDir,
   databasesDir,

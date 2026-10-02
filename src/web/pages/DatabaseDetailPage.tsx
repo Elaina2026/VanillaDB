@@ -110,6 +110,7 @@ export const DatabaseDetailPage: React.FC<{
     queryKey: ['dbStats', databaseId],
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}`),
     staleTime: 30000,
+    retry: 1,
   });
 
   const { data: storageStats, isLoading: isStorageLoading, refetch: refetchStorageStats } = useQuery<DatabaseStorageStats>({
@@ -118,6 +119,7 @@ export const DatabaseDetailPage: React.FC<{
     enabled: activeTab === 'analytics' || activeTab === 'overview',
     refetchInterval: 30000,
     staleTime: 25000,
+    retry: 1,
   });
 
   const { data: metricsStats, isLoading: isMetricsLoading, refetch: refetchMetrics } = useQuery<DatabaseMetricsStats>({
@@ -126,17 +128,25 @@ export const DatabaseDetailPage: React.FC<{
     enabled: activeTab === 'analytics',
     refetchInterval: 30000,
     staleTime: 25000,
+    retry: 1,
   });
 
   const { data: schema = [], isLoading: isSchemaLoading, refetch: refetchSchema } = useQuery<TableSchemaDetail[]>({
     queryKey: ['dbSchema', databaseId],
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/schema`),
     staleTime: 60000,
+    retry: 1,
   });
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isSystemAdmin = isSuperAdmin || currentUser?.role === 'admin';
   const dbAccessRole = stats?.database?.access_role;
+  const isNodeOffline = Boolean(
+    stats?.database?.isNodeOffline ||
+    storageStats?.isNodeOffline ||
+    (stats?.database?.node_id && stats?.database?.node_id !== 'local' && stats?.database?.node_id !== 'gateway' && stats?.database?.isNodeOffline)
+  );
+  const workerNodeName = stats?.database?.nodeName || (stats?.database?.node_id !== 'local' ? stats?.database?.node_id : null);
   // useMemo: permission booleans derived from stats — avoids recomputing on every render
   const { isOwner, canAdmin, canEdit, canManageTokens, canManageMembers } = useMemo(() => {
     const _isOwner = isSuperAdmin || (Boolean(currentUser?.userId) && stats?.database?.owner_id === currentUser?.userId) || dbAccessRole === 'owner';
@@ -286,6 +296,24 @@ export const DatabaseDetailPage: React.FC<{
     },
     onError: (err: any) => {
       showError(err.message || 'Failed to update database');
+    },
+  });
+
+  const reassignToLocalMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('/api/admin/cluster/reassign-database', {
+        method: 'POST',
+        body: JSON.stringify({ databaseId, targetNodeId: 'local' }),
+      }),
+    onSuccess: () => {
+      refetchStats();
+      refetchStorageStats();
+      refetchSchema();
+      queryClient.invalidateQueries({ queryKey: ['databases'] });
+      showSuccess(t('cluster.reassignedToLocal', 'Database successfully reassigned to local host!'));
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to reassign database to local host');
     },
   });
 
@@ -1173,6 +1201,19 @@ export const DatabaseDetailPage: React.FC<{
         </div>
 
         <div className="flex items-center gap-2 text-xs">
+          {workerNodeName ? (
+            <span
+              className={`text-[10px] px-2 py-0.5 border rounded font-medium flex items-center gap-1 ${
+                isNodeOffline
+                  ? 'bg-rose-500/10 text-rose-500 border-rose-500/20'
+                  : 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+              }`}
+            >
+              <Server className="w-2.5 h-2.5" />
+              {workerNodeName}
+              {isNodeOffline ? ` • ${t('cluster.workerOffline', 'Ngoại tuyến')}` : ''}
+            </span>
+          ) : null}
           {stats?.database.max_size_mb ? (
             <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded font-mono font-medium">
               {t('db.quota', 'Quota:')} {stats.database.max_size_mb} MB
@@ -1189,6 +1230,36 @@ export const DatabaseDetailPage: React.FC<{
 
       {/* Main Tab Content */}
       <div className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
+        {/* Worker Node Offline Alert Banner */}
+        {isNodeOffline && (
+          <div className="mb-5 max-w-7xl mx-auto bg-rose-500/10 border border-rose-500/30 rounded-xl p-3.5 text-rose-700 dark:text-rose-400 flex flex-wrap items-center justify-between gap-3 animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+              <div className="text-xs">
+                <span className="font-semibold">{t('cluster.nodeOfflineWarning', 'Máy chủ lưu trữ của cơ sở dữ liệu này hiện đang ngoại tuyến hoặc không thể kết nối. Dữ liệu bảng và truy vấn tạm thời bị gián đoạn.')}</span>
+                {workerNodeName && <span className="opacity-80 block text-[11px] mt-0.5 font-mono">Node ID: {workerNodeName}</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {canAdmin && (
+                <button
+                  onClick={() => reassignToLocalMutation.mutate()}
+                  disabled={reassignToLocalMutation.isPending}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold text-xs transition-colors shrink-0 cursor-pointer shadow-sm disabled:opacity-50"
+                >
+                  {reassignToLocalMutation.isPending ? t('common.saving', 'Đang chuyển...') : t('cluster.reassignLocalBtn', 'Chuyển về Local')}
+                </button>
+              )}
+              <button
+                onClick={() => { refetchStats(); refetchStorageStats(); refetchSchema(); }}
+                className="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-600 dark:text-rose-300 rounded-md font-semibold text-xs transition-colors shrink-0 cursor-pointer"
+              >
+                {t('cluster.retryConnection', 'Thử lại')}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Active Rate Limit Warning Banner */}
         {dbRateWarning && (
           <div className="mb-5 max-w-7xl mx-auto bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 text-amber-700 dark:text-amber-300 flex items-center justify-between gap-3 animate-in fade-in">
@@ -4783,19 +4854,19 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-card border border-border rounded-xl shadow-xl p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-foreground">Rename Table</h3>
+              <h3 className="text-sm font-bold text-foreground">{t('tables.renameTitle', 'Đổi tên bảng')}</h3>
               <button onClick={() => setIsRenameTableOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">New Table Name</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">{t('tables.newTableName', 'Tên bảng mới')}</label>
               <input
                 type="text"
                 required
                 value={newTableName}
                 onChange={(e) => setNewTableName(e.target.value)}
-                className="w-full px-3 py-1.5 text-xs font-mono bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500 text-foreground"
+                className="w-full px-3 py-1.5 text-xs font-mono bg-background border border-border rounded-md focus:ring-1 focus:ring-primary text-foreground"
               />
             </div>
             <div className="flex justify-end gap-2">
@@ -4803,14 +4874,14 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 onClick={() => setIsRenameTableOpen(false)}
                 className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md text-foreground"
               >
-                Cancel
+                {t('common.cancel', 'Hủy')}
               </button>
               <button
                 onClick={() => renameTableMutation.mutate(newTableName.trim())}
                 disabled={renameTableMutation.isPending || !newTableName.trim()}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded-md"
+                className="px-3 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-xs font-semibold rounded-md shadow-xs"
               >
-                {renameTableMutation.isPending ? 'Renaming...' : 'Rename'}
+                {renameTableMutation.isPending ? t('common.saving', 'Đang lưu...') : t('common.save', 'Lưu thay đổi')}
               </button>
             </div>
           </div>
@@ -4845,8 +4916,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
           <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-xl p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-purple-500" />
-                <h3 className="text-sm font-bold text-foreground">Setup FTS5 Full-Text Search</h3>
+                <FileText className="w-4 h-4 text-primary" />
+                <h3 className="text-sm font-bold text-foreground">{t('fts5.modalTitle', 'Thiết lập tìm kiếm toàn văn FTS5')}</h3>
               </div>
               <button onClick={() => setIsFtsModalOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground">
                 <X className="w-4 h-4" />
@@ -4867,7 +4938,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
               className="space-y-4"
             >
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Source Table</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">{t('fts5.sourceTable', 'Bảng nguồn dữ liệu')}</label>
                 <select
                   value={ftsSourceTable}
                   onChange={(e) => {
@@ -4878,7 +4949,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                       setFtsColumns(found.columns.filter(c => c.type.toUpperCase().includes('TEXT') || c.type.toUpperCase().includes('CHAR')).map(c => c.name));
                     }
                   }}
-                  className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary"
                 >
                   {schema.filter(s => s.type === 'table').map(s => (
                     <option key={s.name} value={s.name}>{s.name}</option>
@@ -4887,7 +4958,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Indexable Text Columns</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">{t('fts5.indexColumns', 'Các cột văn bản cần lập chỉ mục')}</label>
                 <div className="max-h-32 overflow-y-auto space-y-1.5 p-2 bg-muted/20 border border-border rounded-md">
                   {schema.find(s => s.name === ftsSourceTable)?.columns.map(c => {
                     const isChecked = ftsColumns.includes(c.name);
@@ -4900,7 +4971,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                             if (e.target.checked) setFtsColumns([...ftsColumns, c.name]);
                             else setFtsColumns(ftsColumns.filter(col => col !== c.name));
                           }}
-                          className="rounded border-border text-purple-600 focus:ring-purple-500 bg-background"
+                          className="rounded border-border text-primary focus:ring-primary bg-background"
                         />
                         <span className="font-mono">{c.name}</span>
                         <span className="text-[10px] text-muted-foreground">({c.type || 'TEXT'})</span>
@@ -4912,13 +4983,13 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">Tokenizer</label>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">{t('fts5.tokenizer', 'Bộ tách từ (Tokenizer)')}</label>
                   <select
                     value={ftsTokenizer}
                     onChange={(e) => setFtsTokenizer(e.target.value as any)}
-                    className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-purple-500"
+                    className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary"
                   >
-                    <option value="unicode61">unicode61 (Multi-language/VN)</option>
+                    <option value="unicode61">unicode61 (Đa ngôn ngữ / Tiếng Việt)</option>
                     <option value="porter">porter (English Stemming)</option>
                     <option value="ascii">ascii (Basic ASCII)</option>
                     <option value="trigram">trigram (Substring search)</option>
@@ -4926,15 +4997,15 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">Auto-Sync Triggers</label>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">{t('fts5.autoSyncTriggers', 'Trigger tự động đồng bộ')}</label>
                   <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer pt-2">
                     <input
                       type="checkbox"
                       checked={ftsWithTriggers}
                       onChange={(e) => setFtsWithTriggers(e.target.checked)}
-                      className="rounded border-border text-purple-600 focus:ring-purple-500 bg-background"
+                      className="rounded border-border text-primary focus:ring-primary bg-background"
                     />
-                    <span>Sync on INSERT/UPDATE/DELETE</span>
+                    <span>{t('fts5.syncDesc', 'Đồng bộ khi INSERT/UPDATE/DELETE')}</span>
                   </label>
                 </div>
               </div>
@@ -4943,16 +5014,16 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 <button
                   type="button"
                   onClick={() => setIsFtsModalOpen(false)}
-                  className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md"
+                  className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md text-foreground"
                 >
-                  Cancel
+                  {t('common.cancel', 'Hủy')}
                 </button>
                 <button
                   type="submit"
                   disabled={setupFtsMutation.isPending || ftsColumns.length === 0}
-                  className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                  className="px-4 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-md text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                 >
-                  {setupFtsMutation.isPending ? 'Generating...' : 'Create FTS5 Index'}
+                  {setupFtsMutation.isPending ? t('common.saving', 'Đang khởi tạo...') : t('fts5.createIndex', 'Khởi tạo chỉ mục FTS5')}
                 </button>
               </div>
             </form>

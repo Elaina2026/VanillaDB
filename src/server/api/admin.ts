@@ -12,6 +12,7 @@ import { webhookService, WebhookService } from '../services/webhook.js';
 import { realtimeService } from '../services/realtime.js';
 import { activityService } from '../services/activity.js';
 import { authService } from '../services/auth.js';
+import { rolesService } from '../services/roles.js';
 import { systemService } from '../services/system.js';
 import { jobSchedulerService } from '../services/jobScheduler.js';
 import { databaseMembersService } from '../services/members.js';
@@ -77,7 +78,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Transparently proxy SQLite-backed database operations to remote worker nodes
   fastify.addHook('preHandler', async (req, reply) => {
     const pathname = (req.url || '').split('?')[0];
-    const match = pathname.match(/^\/api\/admin\/databases\/([a-zA-Z0-9_-]+)\/(schema|storage-stats|tables|query|exec|explain|maintenance|fts5-setup|export|import)(\/.*)?$/);
+    const match = pathname.match(/^\/api\/admin\/databases\/([a-zA-Z0-9_-]+)\/(schema|storage-stats|tables|query|exec|explain|maintenance|fts5-setup|export|import|files)(\/.*)?$/);
     if (!match) return;
 
     const databaseId = match[1];
@@ -96,7 +97,75 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           if (reply.sent) return reply;
         }
 
-        const dbRecord = requireDatabaseAccess(req, reply, databaseId, 'viewer');
+        const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
+        const subRoute = match[2];
+
+        // Listing files is managed directly by Gateway metadata DB
+        if (subRoute === 'files' && req.method === 'GET' && !match[3]) {
+          return;
+        }
+
+        const targetNode = metaDb.prepare('SELECT id, name, base_url, status FROM storage_nodes WHERE id = ?').get(row.node_id) as any;
+        if (!targetNode) {
+          // Check if local database file exists on disk (auto-repair orphaned mock/deleted node)
+          const localPath = path.resolve(config.databasesDir, `${databaseId}.sqlite`);
+          if (fs.existsSync(localPath)) {
+            metaDb.prepare("UPDATE databases SET node_id = 'local' WHERE id = ?").run(databaseId);
+            return;
+          }
+
+          // Node not found in metadata and file not on disk: for read-only overview routes, return safe empty data instead of 502
+          if (req.method === 'GET') {
+            if (subRoute === 'storage-stats') {
+              return reply.send({
+                success: true,
+                data: {
+                  tables: [],
+                  indexes: [],
+                  fileSizeBytes: 0,
+                  walSizeBytes: 0,
+                  totalSizeBytes: 0,
+                  pageSize: 4096,
+                  pageCount: 0,
+                  freelistCount: 0,
+                  fragmentationPercent: 0,
+                  journalMode: 'wal',
+                  synchronous: 'normal',
+                  autoVacuum: 0,
+                  cacheSize: 0,
+                  schemaVersion: 0,
+                  isNodeOffline: true,
+                  nodeId: row.node_id,
+                },
+              });
+            }
+            if (subRoute === 'schema') {
+              return reply.send({
+                success: true,
+                data: [],
+                isNodeOffline: true,
+                nodeId: row.node_id,
+              });
+            }
+          }
+
+          return reply.status(502).send({
+            success: false,
+            error: {
+              code: 'BAD_GATEWAY',
+              message: `Target storage node "${row.node_id}" not found in cluster metadata.`,
+            },
+          });
+        }
+
+        let requiredRole: 'viewer' | 'editor' | 'admin' = 'viewer';
+        if (subRoute === 'import' || subRoute === 'maintenance') {
+          requiredRole = 'admin';
+        } else if (isWrite && subRoute !== 'query' && subRoute !== 'explain') {
+          requiredRole = 'editor';
+        }
+
+        const dbRecord = requireDatabaseAccess(req, reply, databaseId, requiredRole);
         if (reply.sent || !dbRecord) return reply;
 
         await clusterService.proxyToNode(row.node_id, req, reply);
@@ -922,7 +991,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       permissions: z.array(TokenPermissionSchema).min(1),
       allowedTables: z.array(z.string()).optional().nullable(),
       deniedTables: z.array(z.string()).optional().nullable(),
-      rateLimit: z.number().int().positive().optional().nullable(),
+      rateLimit: z.number().int().min(0).optional().nullable(),
       expiresInDays: z.number().int().positive().optional().nullable(),
       type: z.enum(['live', 'test']).optional(),
     });
@@ -1870,6 +1939,76 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  // ==========================================
+  // Role Management APIs (Super Admin / Admin)
+  // ==========================================
+  fastify.get('/roles', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
+    const roles = rolesService.listRoles();
+    return reply.send({ success: true, data: roles });
+  });
+
+  fastify.post('/roles', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
+    const Schema = z.object({
+      id: z.string().min(2).max(50).regex(/^[a-z0-9_-]+$/, 'Role ID must be lowercase alphanumeric with underscores/hyphens').optional(),
+      name: z.string().min(2).max(100),
+      description: z.string().max(500).optional().nullable(),
+      permissions: z.array(z.string()).default([]),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid role payload' },
+      });
+    }
+
+    try {
+      const created = rolesService.createRole({
+        id: parsed.data.id,
+        name: parsed.data.name,
+        description: parsed.data.description,
+        permissions: parsed.data.permissions,
+      });
+
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'role.create',
+        resource: created.id,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ name: created.name, description: created.description }),
+      });
+
+      return reply.status(201).send({ success: true, data: created });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'ROLE_CREATE_ERROR', message: err.message },
+      });
+    }
+  });
+
+  fastify.delete('/roles/:roleId', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+    const { roleId } = req.params as { roleId: string };
+    try {
+      rolesService.deleteRole(roleId);
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'role.delete',
+        resource: roleId,
+        result: 'success',
+        requestId: req.id,
+      });
+      return reply.send({ success: true });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'ROLE_DELETE_ERROR', message: err.message },
+      });
+    }
+  });
+
   // User Management & RBAC APIs (Super Admin / Admin only)
   fastify.get('/users', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
     const users = authService.listUsers();
@@ -1882,7 +2021,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       username: z.string().min(3).max(50),
       password: z.string().min(6).max(128),
       email: z.string().email().optional().or(z.literal('')).nullable(),
-      role: z.enum(['super_admin', 'admin', 'user']).default('user'),
+      role: z.string().min(1).max(50).default('user'),
       maxDatabases: z.number().int().min(0).default(settings.default_user_max_databases ?? 2),
       rateLimitPerMinute: z.number().int().min(0).default(settings.default_user_rate_limit ?? 180),
       status: z.enum(['active', 'disabled']).default('active'),
@@ -1896,13 +2035,22 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    const availableRoles = rolesService.listRoles().map(r => r.id);
+    const targetRole = parsed.data.role;
+    if (availableRoles.length > 0 && !availableRoles.includes(targetRole) && !['super_admin', 'admin', 'developer', 'user'].includes(targetRole)) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_ROLE', message: `Role "${targetRole}" does not exist in the system` },
+      });
+    }
+
     try {
       const cleanEmail = parsed.data.email ? parsed.data.email.trim().toLowerCase() : undefined;
       const newUser = await authService.createUser({
         username: parsed.data.username,
         password: parsed.data.password,
         email: cleanEmail,
-        role: parsed.data.role as any,
+        role: targetRole as any,
         maxDatabases: parsed.data.maxDatabases,
         rateLimitPerMinute: parsed.data.rateLimitPerMinute,
         status: parsed.data.status,
@@ -1935,7 +2083,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const Schema = z.object({
       email: z.string().email().optional().or(z.literal('')).nullable(),
       password: z.string().min(6).max(128).optional(),
-      role: z.enum(['super_admin', 'admin', 'user']).optional(),
+      role: z.string().min(1).max(50).optional(),
       maxDatabases: z.number().int().min(0).optional(),
       rateLimitPerMinute: z.number().int().min(0).optional(),
       status: z.enum(['active', 'disabled']).optional(),
@@ -1947,6 +2095,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         success: false,
         error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid user update payload' },
       });
+    }
+
+    if (parsed.data.role) {
+      const availableRoles = rolesService.listRoles().map(r => r.id);
+      if (availableRoles.length > 0 && !availableRoles.includes(parsed.data.role) && !['super_admin', 'admin', 'developer', 'user'].includes(parsed.data.role)) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_ROLE', message: `Role "${parsed.data.role}" does not exist in the system` },
+        });
+      }
     }
 
     if (req.adminUser?.userId === userId) {

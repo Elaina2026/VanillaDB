@@ -13,12 +13,19 @@ export interface HealthCheckResult {
   checks: {
     database: 'ok' | 'degraded' | 'error';
     gateway: 'connected' | 'unreachable' | 'error';
-    [key: string]: string;
+    workers?: 'ok' | 'degraded' | 'offline';
+    storageNodes?: string;
+    [key: string]: any;
   };
   version?: string;
 }
 
 export class HealthService {
+  private lastGatewayCheckResult: 'connected' | 'unreachable' = 'connected';
+  private lastGatewayCheckTime = 0;
+  private lastGatewayWarnLogTime = 0;
+  private cachedGatewayUrl: string | null = null;
+
   /**
    * Evaluate system health status adhering to ProjectStatus standard
    * Supports both Gateway (Primary) and Worker (Storage) node roles.
@@ -65,33 +72,122 @@ export class HealthService {
       }
     }
 
-    // 2. Evaluate gateway connection
+    // 2. Evaluate gateway & workers connection
+    let workersCheck: 'ok' | 'degraded' | 'offline' = 'ok';
+    let workerStats: { total: number; healthy: number; offline: number } | undefined = undefined;
+
     if (isWorker) {
       const targetGatewayUrl = overrides?.gatewayUrl !== undefined ? overrides.gatewayUrl : config.gatewayUrl;
       if (targetGatewayUrl) {
-        try {
-          const pingUrl = `${targetGatewayUrl.replace(/\/+$/, '')}/health`;
-          const res = await fetch(pingUrl, {
-            method: 'HEAD',
-            headers: {
-              'x-cluster-secret': config.clusterSecret,
-            },
-            signal: AbortSignal.timeout(3000),
-          });
-          if (!res.ok) {
+        const now = Date.now();
+        const isSameTarget = this.cachedGatewayUrl === targetGatewayUrl;
+        const cacheAgeMs = now - this.lastGatewayCheckTime;
+
+        // Cache gateway check for 15s when running in production to avoid log spam & connection timeouts
+        if (isSameTarget && cacheAgeMs < 15_000 && overrides?.gatewayUrl === undefined) {
+          gatewayCheck = this.lastGatewayCheckResult;
+        } else {
+          this.cachedGatewayUrl = targetGatewayUrl;
+          try {
+            const pingUrl = `${targetGatewayUrl.replace(/\/+$/, '')}/health`;
+            const res = await fetch(pingUrl, {
+              method: 'HEAD',
+              headers: {
+                'x-cluster-secret': config.clusterSecret,
+              },
+              signal: AbortSignal.timeout(5000),
+            });
+            if (res.ok || res.status === 503) {
+              gatewayCheck = 'connected';
+              this.lastGatewayCheckResult = 'connected';
+              this.lastGatewayCheckTime = now;
+            } else {
+              gatewayCheck = 'unreachable';
+              this.lastGatewayCheckResult = 'unreachable';
+              this.lastGatewayCheckTime = now;
+              if (now - this.lastGatewayWarnLogTime > 300_000) {
+                logger.warn({ gatewayUrl: targetGatewayUrl, status: res.status }, 'Worker failed to reach Gateway during health check (throttled)');
+                this.lastGatewayWarnLogTime = now;
+              }
+            }
+          } catch (err: any) {
             gatewayCheck = 'unreachable';
+            this.lastGatewayCheckResult = 'unreachable';
+            this.lastGatewayCheckTime = now;
+            if (now - this.lastGatewayWarnLogTime > 300_000) {
+              logger.warn({ err: err?.message || String(err), gatewayUrl: targetGatewayUrl }, 'Worker failed to reach Gateway during health check (throttled)');
+              this.lastGatewayWarnLogTime = now;
+            }
           }
-        } catch (err) {
-          gatewayCheck = 'unreachable';
-          logger.warn({ err, gatewayUrl: targetGatewayUrl }, 'Worker failed to reach Gateway during health check');
         }
       } else {
         // When no remote gateway URL is provided, worker node functions in standalone/direct mode
         gatewayCheck = 'connected';
       }
     } else {
-      // Primary gateway is connected by definition
+      // Primary gateway is connected
       gatewayCheck = 'connected';
+
+      try {
+        const metaDb = getMetadataDb();
+        const nodes = metaDb.prepare('SELECT id, name, base_url, auth_token, status FROM storage_nodes').all() as Array<{
+          id: string;
+          name: string;
+          base_url: string;
+          auth_token?: string | null;
+          status: string;
+        }>;
+
+        if (nodes.length > 0) {
+          let healthyCount = 0;
+          let offlineCount = 0;
+
+          await Promise.all(
+            nodes.map(async (node) => {
+              try {
+                const pingUrl = `${node.base_url.replace(/\/+$/, '')}/health`;
+                const res = await fetch(pingUrl, {
+                  method: 'GET',
+                  headers: {
+                    'x-cluster-secret': node.auth_token || config.clusterSecret,
+                  },
+                  signal: AbortSignal.timeout(2500),
+                });
+
+                if (res.ok) {
+                  const json = (await res.json()) as any;
+                  if (json.status === 'operational' || json.status === 'degraded') {
+                    healthyCount++;
+                    if (node.status === 'offline') {
+                      metaDb.prepare("UPDATE storage_nodes SET status = 'healthy', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
+                    }
+                    return;
+                  }
+                }
+                offlineCount++;
+                metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
+              } catch {
+                offlineCount++;
+                metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
+              }
+            })
+          );
+
+          workerStats = { total: nodes.length, healthy: healthyCount, offline: offlineCount };
+
+          if (offlineCount === 0) {
+            workersCheck = 'ok';
+          } else if (healthyCount > 0) {
+            workersCheck = 'degraded';
+            isDegraded = true;
+          } else {
+            workersCheck = 'offline';
+            isDegraded = true;
+          }
+        }
+      } catch (err) {
+        logger.warn({ err }, 'Error checking worker nodes health from Gateway');
+      }
     }
 
     // 3. Evaluate resource degradation (disk pressure >= 90% or ram pressure >= 95%)
@@ -108,7 +204,7 @@ export class HealthService {
     let status: 'operational' | 'degraded' | 'outage' = 'operational';
     if (databaseCheck === 'error' || gatewayCheck !== 'connected') {
       status = 'outage';
-    } else if (isDegraded) {
+    } else if (isDegraded || workersCheck === 'degraded' || workersCheck === 'offline') {
       status = 'degraded';
     }
 
@@ -124,6 +220,12 @@ export class HealthService {
         checks: {
           database: databaseCheck,
           gateway: gatewayCheck,
+          ...(workerStats
+            ? {
+                workers: workersCheck,
+                storageNodes: `${workerStats.healthy}/${workerStats.total} healthy${workerStats.offline > 0 ? ` (${workerStats.offline} offline)` : ''}`,
+              }
+            : {}),
         },
         version: '1.3.2',
       },

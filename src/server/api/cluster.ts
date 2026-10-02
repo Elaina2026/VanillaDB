@@ -368,5 +368,62 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
       const status = clusterService.getClusterStatus();
       return reply.send({ success: true, data: status });
     });
+
+    // Reassign an orphaned or offline database to 'local' or another worker node
+    adminScope.post('/admin/cluster/reassign-database', async (req, reply) => {
+      if (req.adminUser?.role !== 'super_admin' && req.adminUser?.role !== 'admin') {
+        return reply.status(403).send({ success: false, error: { message: 'Admin role required to reassign database host node' } });
+      }
+
+      const Schema = z.object({
+        databaseId: z.string().min(1),
+        targetNodeId: z.string().min(1), // 'local' or node_id
+      });
+
+      const parsed = Schema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ success: false, error: { message: 'databaseId and targetNodeId required' } });
+      }
+
+      const metaDb = getMetadataDb();
+      const dbRow = metaDb.prepare('SELECT id, name, filename, node_id FROM databases WHERE id = ?').get(parsed.data.databaseId) as any;
+      if (!dbRow) {
+        return reply.status(404).send({ success: false, error: { message: `Database "${parsed.data.databaseId}" not found` } });
+      }
+
+      if (parsed.data.targetNodeId !== 'local' && parsed.data.targetNodeId !== config.nodeId) {
+        const targetNode = metaDb.prepare('SELECT id, name, status FROM storage_nodes WHERE id = ?').get(parsed.data.targetNodeId) as any;
+        if (!targetNode) {
+          return reply.status(404).send({ success: false, error: { message: `Target storage node "${parsed.data.targetNodeId}" not found` } });
+        }
+      }
+
+      metaDb.prepare('UPDATE databases SET node_id = ?, updated_at = ? WHERE id = ?').run(
+        parsed.data.targetNodeId,
+        Date.now(),
+        parsed.data.databaseId
+      );
+
+      // Invalidate handle if locally open so it re-resolves
+      dbManager.close(parsed.data.databaseId);
+
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'cluster.database_reassign',
+        resource: parsed.data.databaseId,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ previousNodeId: dbRow.node_id, targetNodeId: parsed.data.targetNodeId }),
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          databaseId: parsed.data.databaseId,
+          nodeId: parsed.data.targetNodeId,
+        },
+        message: `Database "${dbRow.name}" reassigned to node "${parsed.data.targetNodeId}" successfully.`,
+      });
+    });
   });
 };

@@ -21,7 +21,8 @@ export const CreateTokenModal: React.FC<{
   const [type] = useState<'live'>('live'); // Always live prefix, test prefix removed
 
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedSecret, setCopiedSecret] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
@@ -70,7 +71,8 @@ export const CreateTokenModal: React.FC<{
     setName('');
     setDescription('');
     setPermissions(['database:read', 'database:write']);
-    setCopied(false);
+    setCopiedUrl(false);
+    setCopiedSecret(false);
     setError(null);
     onClose();
   };
@@ -78,8 +80,8 @@ export const CreateTokenModal: React.FC<{
   const handleCopy = () => {
     if (!createdSecret) return;
     navigator.clipboard.writeText(createdSecret);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedSecret(true);
+    setTimeout(() => setCopiedSecret(false), 2000);
   };
 
   return (
@@ -121,15 +123,16 @@ export const CreateTokenModal: React.FC<{
                   className="flex-1 px-3 py-2 text-xs font-mono bg-background border border-border rounded-md select-all text-blue-400 font-semibold"
                 />
                 <button
+                  type="button"
                   onClick={() => {
                     navigator.clipboard.writeText(`${window.location.origin}/v1/databases/${databaseId}`);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
+                    setCopiedUrl(true);
+                    setTimeout(() => setCopiedUrl(false), 2000);
                   }}
-                  className="px-3 py-2 bg-muted hover:bg-accent text-foreground rounded-md text-xs font-semibold flex items-center gap-1.5 shrink-0 border border-border cursor-pointer"
+                  className="px-3 py-2 bg-muted hover:bg-accent text-foreground rounded-md text-xs font-semibold flex items-center gap-1.5 shrink-0 border border-border cursor-pointer transition-colors"
                 >
                   <Copy className="w-3.5 h-3.5" />
-                  {copied ? t('common.copied', 'Copied') : t('storage.copyUrl', 'Copy URL')}
+                  {copiedUrl ? t('common.copied', 'Copied') : t('storage.copyUrl', 'Copy URL')}
                 </button>
               </div>
             </div>
@@ -146,11 +149,12 @@ export const CreateTokenModal: React.FC<{
                   className="flex-1 px-3 py-2 text-xs font-mono bg-background border border-border rounded-md select-all text-emerald-400 font-semibold"
                 />
                 <button
+                  type="button"
                   onClick={handleCopy}
-                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copied ? t('common.copied', 'Copied') : t('tokens.copySecret', 'Copy Secret')}
+                  <Copy className="w-3.5 h-3.5" />
+                  {copiedSecret ? t('common.copied', 'Copied') : t('common.copy', 'Copy')}
                 </button>
               </div>
             </div>
@@ -247,35 +251,36 @@ export const CreateTokenModal: React.FC<{
                   {t('tokens.rateLimit', 'Rate Limit')}
                 </label>
                 <select
-                  value={rateLimit ?? ''}
+                  value={rateLimit === 0 ? '0' : (rateLimit === null ? 'default' : String(rateLimit))}
                   onChange={(e) => {
-                    const val = e.target.value ? parseInt(e.target.value, 10) : null;
-                    const maxRate = currentUser?.role === 'super_admin' ? 1000 : (currentUser?.rate_limit_per_minute || 180);
-                    setRateLimit(val ? Math.min(val, maxRate) : null);
-                  }}
-                  className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded-md"
-                >
-                  {(() => {
-                    const maxRate = currentUser?.role === 'super_admin' ? 1000 : (currentUser?.rate_limit_per_minute || 180);
-                    const baseOptions = [30, 60, 120, 180].filter((o) => o <= maxRate);
-                    if (!baseOptions.includes(maxRate) && maxRate > 0) {
-                      baseOptions.push(maxRate);
+                    const val = e.target.value;
+                    if (val === 'default') {
+                      setRateLimit(null);
+                    } else if (val === '0') {
+                      setRateLimit(0);
+                    } else {
+                      setRateLimit(parseInt(val, 10));
                     }
-                    return (
-                      <>
-                        <option value="">{t('tokens.defaultRateLimit', `Default (${maxRate} req/min)`).replace('{maxRate}', String(maxRate))}</option>
-                        {baseOptions.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt} {t('tokens.reqPerMin', 'req/min')} {opt === maxRate ? `(${t('tokens.maxRate', 'Max')})` : ''}
-                          </option>
-                        ))}
-                        {currentUser?.role === 'super_admin' && (
-                          <option value="">{t('tokens.unlimited', 'Unlimited')}</option>
-                        )}
-                      </>
-                    );
-                  })()}
+                  }}
+                  className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary"
+                >
+                  <option value="0">{t('tokens.unlimited', 'Không giới hạn (0 req/min)')}</option>
+                  <option value="default">
+                    {t('tokens.accountDefault', 'Mặc định theo tài khoản')} ({currentUser?.rate_limit_per_minute ? `${currentUser.rate_limit_per_minute} ${t('tokens.reqPerMin', 'req/min')}` : t('tokens.unlimitedShort', '∞ Không giới hạn')})
+                  </option>
+                  {[30, 60, 120, 180, 300, 600, 1000].map((opt) => (
+                    <option key={opt} value={String(opt)}>
+                      {opt} {t('tokens.reqPerMin', 'req/min')}
+                    </option>
+                  ))}
                 </select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {rateLimit === 0
+                    ? t('tokens.unlimitedDesc', 'Token sẽ không bị giới hạn số lượng request.')
+                    : (rateLimit === null
+                        ? t('tokens.defaultDesc', 'Kế thừa hạn mức mặc định của tài khoản.')
+                        : `${rateLimit} req/min`)}
+                </p>
               </div>
             </div>
 

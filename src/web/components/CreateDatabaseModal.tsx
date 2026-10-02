@@ -118,16 +118,47 @@ export const CreateDatabaseModal: React.FC<{
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">{t('modal.createDb.quota', 'Disk Storage Quota (MB, Optional)')}</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-muted-foreground">{t('modal.createDb.quota', 'Disk Storage Quota (MB, Optional)')}</label>
+              <button
+                type="button"
+                onClick={() => setMaxSizeMb('')}
+                className="text-[10px] text-primary hover:underline font-semibold"
+              >
+                {t('modal.createDb.unlimited', 'Không giới hạn (Unlimited)')}
+              </button>
+            </div>
             <input
               type="number"
-              min={1}
-              placeholder={t('modal.createDb.quotaPlaceholder', 'e.g. 500 (Leave empty for unlimited)')}
+              min={0}
+              placeholder={t('modal.createDb.quotaPlaceholder', 'e.g. 500 (Để trống = Không giới hạn)')}
               value={maxSizeMb}
               onChange={(e) => setMaxSizeMb(e.target.value)}
-              className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-blue-500 font-mono"
+              className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-primary font-mono text-foreground"
             />
-            <p className="text-[10px] text-muted-foreground mt-0.5">{t('modal.createDb.quotaHint', 'Maximum size limit. Rejects write statements if exceeded.')}</p>
+            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+              {[
+                { label: '∞ Không giới hạn', val: '' },
+                { label: '100 MB', val: '100' },
+                { label: '500 MB', val: '500' },
+                { label: '1 GB', val: '1024' },
+                { label: '5 GB', val: '5120' },
+              ].map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => setMaxSizeMb(preset.val)}
+                  className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                    maxSizeMb === preset.val
+                      ? 'bg-primary/10 border-primary text-primary font-bold'
+                      : 'border-border text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">{t('modal.createDb.quotaHint', 'Giới hạn dung lượng tối đa. Để trống nếu muốn không giới hạn.')}</p>
           </div>
 
           <div className="pt-1">

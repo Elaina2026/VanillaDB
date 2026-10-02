@@ -4,6 +4,7 @@ import { systemService } from './system.js';
 import { activityService } from './activity.js';
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
+import { getMetadataDb } from '../db/metadata.js';
 
 // ponytail: in-process interval worker; add distributed job queue (BullMQ/Redis) when running multi-instance cluster.
 export class MaintenanceWorker {
@@ -63,6 +64,22 @@ export class MaintenanceWorker {
       const dbs = databaseService.listDatabases();
       for (const db of dbs) {
         if (db.node_id && db.node_id !== 'local' && db.node_id !== config.nodeId) {
+          try {
+            const metaDb = getMetadataDb();
+            const workerNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(db.node_id) as any;
+            if (workerNode) {
+              fetch(`${workerNode.base_url.replace(/\/+$/, '')}/api/admin/databases/${db.id}/maintenance`, {
+                method: 'POST',
+                headers: {
+                  'x-cluster-secret': workerNode.auth_token || config.clusterSecret,
+                  'content-type': 'application/json',
+                },
+                body: JSON.stringify({ action: 'wal_checkpoint' }),
+                signal: AbortSignal.timeout(10_000),
+              }).catch(() => {});
+              optimizedDatabases++;
+            }
+          } catch {}
           continue;
         }
         try {

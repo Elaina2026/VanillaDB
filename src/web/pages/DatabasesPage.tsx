@@ -155,7 +155,7 @@ export const DatabasesPage: React.FC<{
 
         <button
           onClick={onOpenCreateModal}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-xs font-semibold shadow-sm shadow-blue-500/25 hover:shadow-md hover:shadow-blue-500/35 transition-all cursor-pointer self-start sm:self-auto active:scale-[0.98]"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer self-start sm:self-auto active:scale-[0.98]"
         >
           <Plus className="w-4 h-4" />
           <span>{t('databases.create', 'Create Database')}</span>
@@ -402,7 +402,7 @@ export const DatabasesPage: React.FC<{
 
                 {/* Left Section: Icon & Identity */}
                 <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-blue-500/15 to-indigo-500/15 border border-blue-500/25 flex items-center justify-center text-blue-500 shrink-0 group-hover:scale-105 group-hover:border-blue-500/40 transition-all shadow-xs">
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 transition-all shadow-xs">
                     <Database className="w-5 h-5" />
                   </div>
 
@@ -602,7 +602,7 @@ export const DatabasesPage: React.FC<{
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex items-start gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/15 to-indigo-500/15 border border-blue-500/25 flex items-center justify-center text-blue-500 shrink-0 group-hover:scale-105 group-hover:border-blue-500/40 transition-all shadow-xs">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 transition-all shadow-xs">
                         <Database className="w-5 h-5" />
                       </div>
                       <div className="min-w-0 flex-1">

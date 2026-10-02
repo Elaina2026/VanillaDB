@@ -408,23 +408,41 @@ export class DatabaseService {
 
     // If hosted on a remote worker node, query worker for SQLite statistics
     if (dbRecord.node_id && dbRecord.node_id !== 'local' && dbRecord.node_id !== config.nodeId) {
-      try {
-        const remote = await clusterService.getRemoteDatabaseStats(dbRecord.node_id, databaseId);
-        sqliteVersion = remote.sqliteVersion || sqliteVersion;
-        fileSizeBytes = remote.fileSizeBytes || 0;
-        walSizeBytes = remote.walSizeBytes || 0;
-        tableCount = remote.tableCount || 0;
-        indexCount = remote.indexCount || 0;
-        viewCount = remote.viewCount || 0;
-        triggerCount = remote.triggerCount || 0;
-        pageCount = remote.pageCount || 0;
-        pageSize = remote.pageSize || 4096;
-        freelistCount = remote.freelistCount || 0;
-        journalMode = remote.journalMode || 'wal';
-        synchronous = remote.synchronous || 'normal';
-        busyTimeout = remote.busyTimeout || config.sqlBusyTimeoutMs;
-      } catch (err: any) {
-        logger.warn({ err, databaseId, nodeId: dbRecord.node_id }, 'Failed to fetch remote SQLite overview stats from worker node, using fallback');
+      const nodeRow = metaDb.prepare('SELECT id, name, status FROM storage_nodes WHERE id = ?').get(dbRecord.node_id) as any;
+      if (nodeRow) {
+        dbRecord.nodeName = nodeRow.name;
+        if (nodeRow.status === 'offline') {
+          dbRecord.isNodeOffline = true;
+        }
+      } else {
+        dbRecord.nodeName = dbRecord.node_id;
+        dbRecord.isNodeOffline = true;
+      }
+
+      if (!dbRecord.isNodeOffline) {
+        try {
+          const remote = await clusterService.getRemoteDatabaseStats(dbRecord.node_id, databaseId);
+          sqliteVersion = remote.sqliteVersion || sqliteVersion;
+          fileSizeBytes = remote.fileSizeBytes || 0;
+          walSizeBytes = remote.walSizeBytes || 0;
+          tableCount = remote.tableCount || 0;
+          indexCount = remote.indexCount || 0;
+          viewCount = remote.viewCount || 0;
+          triggerCount = remote.triggerCount || 0;
+          pageCount = remote.pageCount || 0;
+          pageSize = remote.pageSize || 4096;
+          freelistCount = remote.freelistCount || 0;
+          journalMode = remote.journalMode || 'wal';
+          synchronous = remote.synchronous || 'normal';
+          busyTimeout = remote.busyTimeout || config.sqlBusyTimeoutMs;
+          dbRecord.isNodeOffline = false;
+        } catch (err: any) {
+          logger.debug({ err: err?.message || String(err), databaseId, nodeId: dbRecord.node_id }, 'Remote SQLite overview stats unavailable from worker node, using fallback');
+          dbRecord.isNodeOffline = true;
+          try {
+            metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), dbRecord.node_id);
+          } catch {}
+        }
       }
     } else {
       const db = dbManager.get(databaseId);

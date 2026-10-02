@@ -58,9 +58,16 @@ function generateSeries(timeRange: TimeRange, status?: SystemStatus): SeriesPoin
 
 function buildSeries(timeRange: TimeRange, status?: SystemStatus, timeline?: MetricHistoryPoint[]): SeriesPoint[] {
   if (timeline && timeline.length >= 2) {
+    const spanMs = timeline[timeline.length - 1].timestamp - timeline[0].timestamp;
+    // Always include seconds if the window is short (under 10 minutes) so ticks don't repeat the same minute
+    const includeSeconds = spanMs <= 10 * 60 * 1000 || timeRange === '10m';
     return timeline.map((p) => {
       const date = new Date(p.timestamp);
-      const label = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: timeRange === '10m' ? '2-digit' : undefined });
+      const label = date.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: includeSeconds ? '2-digit' : undefined,
+      });
       const errorRate = p.requestsCount > 0 ? Math.min(100, parseFloat(((p.errorsCount / p.requestsCount) * 100).toFixed(2))) : 0;
       return {
         timestamp: p.timestamp,
@@ -90,14 +97,14 @@ export const NetworkChart: React.FC<{ timeRange: TimeRange; status?: SystemStatu
 
   const width = 500;
   const height = 180;
-  const padding = { top: 15, right: 15, bottom: 25, left: 45 };
+  const padding = { top: 15, right: 40, bottom: 25, left: 45 };
   const innerW = width - padding.left - padding.right;
   const innerH = height - padding.top - padding.bottom;
 
   const maxVal = Math.max(...data.map(d => Math.max(d.netInKB, d.netOutKB)), 100) * 1.15;
 
-  const getX = (i: number) => padding.left + (i / (data.length - 1)) * innerW;
-  const getY = (val: number) => padding.top + innerH - (val / maxVal) * innerH;
+  const getX = (i: number) => padding.left + (i / Math.max(1, data.length - 1)) * innerW;
+  const getY = (val: number) => padding.top + innerH - (Math.max(0, Math.min(maxVal, val)) / maxVal) * innerH;
 
   const pointsIn = data.map((d, i) => `${getX(i)},${getY(d.netInKB)}`).join(' ');
   const areaIn = `${padding.left},${padding.top + innerH} ${pointsIn} ${padding.left + innerW},${padding.top + innerH}`;
@@ -130,7 +137,7 @@ export const NetworkChart: React.FC<{ timeRange: TimeRange; status?: SystemStatu
       </div>
 
       <div className="relative flex-1 w-full min-h-[160px]">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" onMouseLeave={() => setHoverIndex(null)}>
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-hidden" onMouseLeave={() => setHoverIndex(null)}>
           <defs>
             <linearGradient id={`netInGrad-${chartId}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
@@ -155,10 +162,18 @@ export const NetworkChart: React.FC<{ timeRange: TimeRange; status?: SystemStatu
             );
           })}
 
-          {data.filter((_, idx) => idx % Math.ceil(data.length / 5) === 0).map((d) => {
-            const idx = data.indexOf(d);
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+            const idx = Math.min(data.length - 1, Math.round(ratio * (data.length - 1)));
+            const d = data[idx];
+            if (!d) return null;
             return (
-              <text key={idx} x={getX(idx)} y={height - 6} textAnchor="middle" className="fill-muted-foreground text-[9px] font-mono">
+              <text
+                key={ratio}
+                x={getX(idx)}
+                y={height - 6}
+                textAnchor={ratio === 0 ? 'start' : ratio === 1 ? 'end' : 'middle'}
+                className="fill-muted-foreground text-[9px] font-mono"
+              >
                 {d.label}
               </text>
             );
@@ -224,12 +239,12 @@ export const CpuRamChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus
 
   const width = 500;
   const height = 180;
-  const padding = { top: 15, right: 15, bottom: 25, left: 35 };
+  const padding = { top: 15, right: 40, bottom: 25, left: 45 };
   const innerW = width - padding.left - padding.right;
   const innerH = height - padding.top - padding.bottom;
 
-  const getX = (i: number) => padding.left + (i / (data.length - 1)) * innerW;
-  const getY = (val: number) => padding.top + innerH - (val / 100) * innerH;
+  const getX = (i: number) => padding.left + (i / Math.max(1, data.length - 1)) * innerW;
+  const getY = (val: number) => padding.top + innerH - (Math.max(0, Math.min(100, val)) / 100) * innerH;
 
   const pointsCpu = data.map((d, i) => `${getX(i)},${getY(d.cpu)}`).join(' ');
   const areaCpu = `${padding.left},${padding.top + innerH} ${pointsCpu} ${padding.left + innerW},${padding.top + innerH}`;
@@ -261,7 +276,7 @@ export const CpuRamChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus
       </div>
 
       <div className="relative flex-1 w-full min-h-[160px]">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" onMouseLeave={() => setHoverIndex(null)}>
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-hidden" onMouseLeave={() => setHoverIndex(null)}>
           <defs>
             <linearGradient id={`cpuGrad-${chartId}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#6366f1" stopOpacity="0.4" />
@@ -285,10 +300,18 @@ export const CpuRamChart: React.FC<{ timeRange: TimeRange; status?: SystemStatus
             );
           })}
 
-          {data.filter((_, idx) => idx % Math.ceil(data.length / 5) === 0).map((d) => {
-            const idx = data.indexOf(d);
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+            const idx = Math.min(data.length - 1, Math.round(ratio * (data.length - 1)));
+            const d = data[idx];
+            if (!d) return null;
             return (
-              <text key={idx} x={getX(idx)} y={height - 6} textAnchor="middle" className="fill-muted-foreground text-[9px] font-mono">
+              <text
+                key={ratio}
+                x={getX(idx)}
+                y={height - 6}
+                textAnchor={ratio === 0 ? 'start' : ratio === 1 ? 'end' : 'middle'}
+                className="fill-muted-foreground text-[9px] font-mono"
+              >
                 {d.label}
               </text>
             );
@@ -478,16 +501,17 @@ export const RequestVolumeChart: React.FC<{ timeRange: TimeRange; status?: Syste
 
   const width = 500;
   const height = 180;
-  const padding = { top: 15, right: 40, bottom: 25, left: 35 };
+  const padding = { top: 15, right: 40, bottom: 25, left: 45 };
   const innerW = width - padding.left - padding.right;
   const innerH = height - padding.top - padding.bottom;
 
   const maxQps = Math.max(...data.map((d) => d.qps), 20) * 1.15;
-  const maxErr = 10;
+  const maxErrVal = Math.max(...data.map((d) => d.errorRate || 0), 10);
+  const maxErr = Math.min(100, Math.max(10, Math.ceil(maxErrVal / 10) * 10));
 
-  const getX = (i: number) => padding.left + (i / (data.length - 1)) * innerW;
-  const getYQps = (val: number) => padding.top + innerH - (val / maxQps) * innerH;
-  const getYErr = (val: number) => padding.top + innerH - (val / maxErr) * innerH;
+  const getX = (i: number) => padding.left + (i / Math.max(1, data.length - 1)) * innerW;
+  const getYQps = (val: number) => padding.top + innerH - (Math.max(0, Math.min(maxQps, val)) / maxQps) * innerH;
+  const getYErr = (val: number) => padding.top + innerH - (Math.max(0, Math.min(maxErr, val)) / maxErr) * innerH;
 
   const pointsErr = data.map((d, i) => `${getX(i)},${getYErr(d.errorRate)}`).join(' ');
   const hoveredData = hoverIndex !== null ? data[hoverIndex] : null;
@@ -514,7 +538,7 @@ export const RequestVolumeChart: React.FC<{ timeRange: TimeRange; status?: Syste
       </div>
 
       <div className="relative flex-1 w-full min-h-[160px]">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" onMouseLeave={() => setHoverIndex(null)}>
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-hidden" onMouseLeave={() => setHoverIndex(null)}>
           {[0, 0.5, 1].map((ratio) => {
             const y = padding.top + innerH * (1 - ratio);
             const valQps = Math.round(maxQps * ratio);
@@ -532,10 +556,18 @@ export const RequestVolumeChart: React.FC<{ timeRange: TimeRange; status?: Syste
             );
           })}
 
-          {data.filter((_, idx) => idx % Math.ceil(data.length / 5) === 0).map((d) => {
-            const idx = data.indexOf(d);
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+            const idx = Math.min(data.length - 1, Math.round(ratio * (data.length - 1)));
+            const d = data[idx];
+            if (!d) return null;
             return (
-              <text key={idx} x={getX(idx)} y={height - 6} textAnchor="middle" className="fill-muted-foreground text-[9px] font-mono">
+              <text
+                key={ratio}
+                x={getX(idx)}
+                y={height - 6}
+                textAnchor={ratio === 0 ? 'start' : ratio === 1 ? 'end' : 'middle'}
+                className="fill-muted-foreground text-[9px] font-mono"
+              >
                 {d.label}
               </text>
             );
@@ -640,7 +672,7 @@ export const DatabaseOperationsTimelineChart: React.FC<{
   const maxTotal = Math.max(...timeline.map((d) => d.totalCount), 10) * 1.15;
 
   const getX = (i: number) => padding.left + (i / Math.max(1, timeline.length - 1)) * innerW;
-  const getY = (val: number) => padding.top + innerH - (val / maxTotal) * innerH;
+  const getY = (val: number) => padding.top + innerH - (Math.max(0, Math.min(maxTotal, val)) / maxTotal) * innerH;
 
   const pointsTotal = timeline.map((d, i) => `${getX(i)},${getY(d.totalCount)}`).join(' ');
   const areaTotal = `${padding.left},${padding.top + innerH} ${pointsTotal} ${padding.left + innerW},${padding.top + innerH}`;
@@ -650,7 +682,7 @@ export const DatabaseOperationsTimelineChart: React.FC<{
   return (
     <div className="flex flex-col h-full space-y-2">
       <div className="relative flex-1 w-full min-h-[180px]">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" onMouseLeave={() => setHoverIndex(null)}>
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-hidden" onMouseLeave={() => setHoverIndex(null)}>
           <defs>
             <linearGradient id={`dbOpsGrad-${chartId}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.45" />
@@ -742,14 +774,14 @@ export const QueryLatencyChart: React.FC<{ timeRange: TimeRange; status?: System
 
   const width = 500;
   const height = 180;
-  const padding = { top: 15, right: 15, bottom: 25, left: 35 };
+  const padding = { top: 15, right: 40, bottom: 25, left: 45 };
   const innerW = width - padding.left - padding.right;
   const innerH = height - padding.top - padding.bottom;
 
   const maxMs = Math.max(...data.map((d) => d.p95Ms), 5) * 1.2;
 
-  const getX = (i: number) => padding.left + (i / (data.length - 1)) * innerW;
-  const getY = (val: number) => padding.top + innerH - (val / maxMs) * innerH;
+  const getX = (i: number) => padding.left + (i / Math.max(1, data.length - 1)) * innerW;
+  const getY = (val: number) => padding.top + innerH - (Math.max(0, Math.min(maxMs, val)) / maxMs) * innerH;
 
   const pointsAvg = data.map((d, i) => `${getX(i)},${getY(d.avgMs)}`).join(' ');
   const pointsP95 = data.map((d, i) => `${getX(i)},${getY(d.p95Ms)}`).join(' ');
@@ -781,7 +813,7 @@ export const QueryLatencyChart: React.FC<{ timeRange: TimeRange; status?: System
       </div>
 
       <div className="relative flex-1 w-full min-h-[160px]">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" onMouseLeave={() => setHoverIndex(null)}>
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-hidden" onMouseLeave={() => setHoverIndex(null)}>
           <defs>
             <linearGradient id={`latBandGrad-${chartId}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#a855f7" stopOpacity="0.25" />
@@ -802,10 +834,18 @@ export const QueryLatencyChart: React.FC<{ timeRange: TimeRange; status?: System
             );
           })}
 
-          {data.filter((_, idx) => idx % Math.ceil(data.length / 5) === 0).map((d) => {
-            const idx = data.indexOf(d);
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+            const idx = Math.min(data.length - 1, Math.round(ratio * (data.length - 1)));
+            const d = data[idx];
+            if (!d) return null;
             return (
-              <text key={idx} x={getX(idx)} y={height - 6} textAnchor="middle" className="fill-muted-foreground text-[9px] font-mono">
+              <text
+                key={ratio}
+                x={getX(idx)}
+                y={height - 6}
+                textAnchor={ratio === 0 ? 'start' : ratio === 1 ? 'end' : 'middle'}
+                className="fill-muted-foreground text-[9px] font-mono"
+              >
                 {d.label}
               </text>
             );
