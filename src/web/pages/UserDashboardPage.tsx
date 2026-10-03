@@ -449,8 +449,8 @@ export const UserDashboardPage: React.FC<{
       {/* Modal Kích Hoạt 2FA */}
       {is2faModalOpen && qrCodeData && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150 max-h-[90dvh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-blue-500" />
                 <h3 className="text-sm font-bold text-foreground">{t('userDashboard.activateTotpModalTitle', 'Kích hoạt Google Authenticator / Authy')}</h3>
@@ -463,77 +463,79 @@ export const UserDashboardPage: React.FC<{
               </button>
             </div>
 
-            {totpError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-md">
-                {totpError}
-              </div>
-            )}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3">
+              {totpError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-md">
+                  {totpError}
+                </div>
+              )}
 
-            <div className="flex flex-col items-center justify-center p-3 bg-white rounded-lg border border-border">
-              <img src={qrCodeData.qrDataUrl} alt="2FA QR Code" className="w-44 h-44" />
-              <p className="text-[10px] text-zinc-600 mt-1 font-mono select-all">Secret: {qrCodeData.secret}</p>
-            </div>
-
-            <form onSubmit={handleActivate2fa} className="space-y-3 text-xs">
-              <input
-                type="text"
-                name="username"
-                autoComplete="username"
-                value={currentUser?.username || ''}
-                readOnly
-                tabIndex={-1}
-                aria-hidden="true"
-                className="sr-only pointer-events-none hidden"
-              />
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">
-                  {t('userDashboard.stepPassword', '1. Mật khẩu tài khoản (Bắt buộc xác thực)')}
-                </label>
-                <input
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  value={totpPassword}
-                  onChange={(e) => setTotpPassword(e.target.value)}
-                  placeholder={t('userDashboard.passwordPlaceholder', 'Nhập mật khẩu hiện tại...')}
-                  className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
-                />
+              <div className="flex flex-col items-center justify-center p-3 bg-white rounded-lg border border-border">
+                <img src={qrCodeData.qrDataUrl} alt="2FA QR Code" className="w-44 h-44" />
+                <p className="text-[10px] text-zinc-600 mt-1 font-mono select-all">Secret: {qrCodeData.secret}</p>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">
-                  {t('userDashboard.stepTotpCode', '2. Mã 6 chữ số trên ứng dụng Authenticator')}
-                </label>
+              <form onSubmit={handleActivate2fa} className="space-y-3 text-xs">
                 <input
                   type="text"
-                  required
-                  maxLength={6}
-                  pattern="[0-9]{6}"
-                  autoComplete="one-time-code"
-                  value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
-                  placeholder="000000"
-                  className="w-full px-3 py-2 text-center text-lg font-mono font-bold tracking-widest bg-background border border-border rounded-md text-foreground"
+                  name="username"
+                  autoComplete="username"
+                  value={currentUser?.username || ''}
+                  readOnly
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="sr-only pointer-events-none hidden"
                 />
-              </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    {t('userDashboard.stepPassword', '1. Mật khẩu tài khoản (Bắt buộc xác thực)')}
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                    value={totpPassword}
+                    onChange={(e) => setTotpPassword(e.target.value)}
+                    placeholder={t('userDashboard.passwordPlaceholder', 'Nhập mật khẩu hiện tại...')}
+                    className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
+                  />
+                </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIs2faModalOpen(false)}
-                  className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded"
-                >
-                  {t('common.cancel', 'Hủy')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={totpLoading || !totpPassword || totpCode.length !== 6}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-semibold cursor-pointer"
-                >
-                  {totpLoading ? t('common.verifying', 'Đang xác minh...') : t('userDashboard.confirmAndEnableTotp', 'Xác nhận & Bật 2FA')}
-                </button>
-              </div>
-            </form>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    {t('userDashboard.stepTotpCode', '2. Mã 6 chữ số trên ứng dụng Authenticator')}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    pattern="[0-9]{6}"
+                    autoComplete="one-time-code"
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="000000"
+                    className="w-full px-3 py-2 text-center text-lg font-mono font-bold tracking-widest bg-background border border-border rounded-md text-foreground"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-border shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIs2faModalOpen(false)}
+                    className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded"
+                  >
+                    {t('common.cancel', 'Hủy')}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={totpLoading || !totpPassword || totpCode.length !== 6}
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-semibold cursor-pointer"
+                  >
+                    {totpLoading ? t('common.verifying', 'Đang xác minh...') : t('userDashboard.confirmAndEnableTotp', 'Xác nhận & Bật 2FA')}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
@@ -541,8 +543,8 @@ export const UserDashboardPage: React.FC<{
       {/* Modal Hiển Thị 6 Mã Dự Phòng Khi Kích Hoạt 2FA Thành Công */}
       {isBackupCodesModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150 max-h-[90dvh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                 <h3 className="text-sm font-bold text-foreground">{t('settings.activate2faSuccessTitle', 'Kích hoạt 2FA thành công!')}</h3>
@@ -555,45 +557,47 @@ export const UserDashboardPage: React.FC<{
               </button>
             </div>
 
-            <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs rounded-lg space-y-1">
-              <p className="font-bold flex items-center gap-1.5">
-                <Shield className="w-4 h-4" />
-                {t('settings.backupCodesWarningTitle', 'Lưu trữ 6 mã dự phòng này ở nơi an toàn!')}
-              </p>
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                {t('settings.backupCodesWarningDesc', 'Nếu bạn làm mất điện thoại hoặc không thể truy cập ứng dụng Authenticator, bạn có thể dùng một trong các mã này để đặt lại mật khẩu và khôi phục tài khoản. Mỗi mã chỉ dùng được 1 lần.')}
-              </p>
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3">
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs rounded-lg space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <Shield className="w-4 h-4" />
+                  {t('settings.backupCodesWarningTitle', 'Lưu trữ 6 mã dự phòng này ở nơi an toàn!')}
+                </p>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  {t('settings.backupCodesWarningDesc', 'Nếu bạn làm mất điện thoại hoặc không thể truy cập ứng dụng Authenticator, bạn có thể dùng một trong các mã này để đặt lại mật khẩu và khôi phục tài khoản. Mỗi mã chỉ dùng được 1 lần.')}
+                </p>
+              </div>
+
+              {/* Grid 6 backup codes */}
+              <div className="grid grid-cols-2 gap-2 p-3 bg-muted/50 rounded-lg border border-border font-mono text-center text-xs font-bold text-foreground tracking-wider select-all">
+                {generatedBackupCodes.map((code, idx) => (
+                  <div key={idx} className="p-2 bg-background border border-border rounded shadow-xs">
+                    {code}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleCopyBackupCodes}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-muted hover:bg-accent border border-border text-foreground rounded text-xs font-medium transition-colors cursor-pointer"
+                >
+                  {copiedBackupCodes ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedBackupCodes ? t('common.copied', 'Đã sao chép!') : t('settings.copyAllBackupCodes', 'Sao chép tất cả')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadBackupCodes}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-muted hover:bg-accent border border-border text-foreground rounded text-xs font-medium transition-colors cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-blue-500" />
+                  <span>{t('settings.downloadBackupCodes', 'Tải về (.txt)')}</span>
+                </button>
+              </div>
             </div>
 
-            {/* Grid 6 backup codes */}
-            <div className="grid grid-cols-2 gap-2 p-3 bg-muted/50 rounded-lg border border-border font-mono text-center text-xs font-bold text-foreground tracking-wider select-all">
-              {generatedBackupCodes.map((code, idx) => (
-                <div key={idx} className="p-2 bg-background border border-border rounded shadow-xs">
-                  {code}
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={handleCopyBackupCodes}
-                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-muted hover:bg-accent border border-border text-foreground rounded text-xs font-medium transition-colors cursor-pointer"
-              >
-                {copiedBackupCodes ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedBackupCodes ? t('common.copied', 'Đã sao chép!') : t('settings.copyAllBackupCodes', 'Sao chép tất cả')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadBackupCodes}
-                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-muted hover:bg-accent border border-border text-foreground rounded text-xs font-medium transition-colors cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-blue-500" />
-                <span>{t('settings.downloadBackupCodes', 'Tải về (.txt)')}</span>
-              </button>
-            </div>
-
-            <div className="pt-2 border-t border-border flex justify-end">
+            <div className="pt-2 border-t border-border flex justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => setIsBackupCodesModalOpen(false)}

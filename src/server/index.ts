@@ -563,8 +563,10 @@ export async function startServer() {
 
   // Initialize Webhook listener, Scheduled Backups, Auto-Maintenance, and Multi-Node Cluster
   webhookService.init();
-  backupScheduler.start();
-  jobSchedulerService.start();
+  if (config.nodeRole !== 'worker') {
+    backupScheduler.start();
+    jobSchedulerService.start();
+  }
   maintenanceWorker.start();
   clusterService.start();
 

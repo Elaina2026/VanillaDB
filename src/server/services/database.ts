@@ -18,10 +18,12 @@ export class DatabaseService {
     // Check user database quota if ownerId is specified
     if (ownerId) {
       const user = metaDb.prepare('SELECT role, max_databases FROM users WHERE id = ?').get(ownerId) as { role: string; max_databases: number } | undefined;
-      if (user && !isOwnerRole(user.role)) {
-        const countRow = metaDb.prepare('SELECT COUNT(*) as count FROM databases WHERE owner_id = ?').get(ownerId) as { count: number };
-        if (countRow.count >= user.max_databases) {
-          throw new Error(`Database creation limit reached. Max allowed databases for your account is ${user.max_databases}.`);
+      if (user && !isAdminRole(user.role)) {
+        if (user.max_databases > 0) {
+          const countRow = metaDb.prepare('SELECT COUNT(*) as count FROM databases WHERE owner_id = ?').get(ownerId) as { count: number };
+          if (countRow.count >= user.max_databases) {
+            throw new Error(`Database creation limit reached. Max allowed databases for your account is ${user.max_databases}.`);
+          }
         }
       }
     }
@@ -133,7 +135,7 @@ export class DatabaseService {
 
   public listDatabases(userId?: string, role?: string): DatabaseRecord[] {
     const metaDb = getMetadataDb();
-    if (userId && role === 'user') {
+    if (userId && !isAdminRole(role)) {
       const rows = metaDb.prepare(`
         SELECT d.id, d.name, d.slug, d.description, d.filename, d.max_size_mb, d.owner_id, d.node_id, d.created_at, d.updated_at, d.last_accessed_at,
                d.backup_schedule,

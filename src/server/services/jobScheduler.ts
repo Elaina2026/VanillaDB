@@ -20,11 +20,14 @@ export function parseNextRunTime(cronExpr: string, fromTime = Date.now()): numbe
   if (trimmed === '@every_15m' || trimmed === '*/15 * * * *') {
     return fromTime + 15 * 60 * 1000;
   }
+  if (trimmed === '@every_30m' || trimmed === '*/30 * * * *') {
+    return fromTime + 30 * 60 * 1000;
+  }
   if (trimmed === '@hourly' || trimmed === '0 * * * *') {
     date.setHours(date.getHours() + 1, 0, 0, 0);
     return date.getTime();
   }
-  if (trimmed === '@daily' || trimmed === '0 0 * * *') {
+  if (trimmed === '@daily' || trimmed === '@midnight' || trimmed === '0 0 * * *') {
     date.setDate(date.getDate() + 1);
     date.setHours(0, 0, 0, 0);
     return date.getTime();
@@ -33,6 +36,76 @@ export function parseNextRunTime(cronExpr: string, fromTime = Date.now()): numbe
     date.setDate(date.getDate() + (7 - date.getDay()));
     date.setHours(0, 0, 0, 0);
     return date.getTime();
+  }
+  if (trimmed === '@monthly' || trimmed === '0 0 1 * *') {
+    date.setMonth(date.getMonth() + 1, 1);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+  }
+
+  // */N * * * * (every N minutes)
+  const everyNMin = trimmed.match(/^\*\/(\d+)\s+\*\s+\*\s+\*\s+\*$/);
+  if (everyNMin) {
+    const min = parseInt(everyNMin[1], 10);
+    if (min > 0 && min <= 1440) {
+      return fromTime + min * 60 * 1000;
+    }
+  }
+
+  // 0 */N * * * (every N hours)
+  const everyNHour = trimmed.match(/^(?:0|\*)\s+\*\/(\d+)\s+\*\s+\*\s+\*$/);
+  if (everyNHour) {
+    const hr = parseInt(everyNHour[1], 10);
+    if (hr > 0 && hr <= 168) {
+      return fromTime + hr * 60 * 60 * 1000;
+    }
+  }
+
+  // M * * * * (every hour at minute M)
+  const hourlyAtMin = trimmed.match(/^(\d{1,2})\s+\*\s+\*\s+\*\s+\*$/);
+  if (hourlyAtMin) {
+    const min = parseInt(hourlyAtMin[1], 10);
+    if (min >= 0 && min < 60) {
+      const next = new Date(fromTime);
+      next.setMinutes(min, 0, 0);
+      if (next.getTime() <= fromTime) {
+        next.setHours(next.getHours() + 1);
+      }
+      return next.getTime();
+    }
+  }
+
+  // M H * * * (daily at specific hour and minute)
+  const dailyAtTime = trimmed.match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
+  if (dailyAtTime) {
+    const min = parseInt(dailyAtTime[1], 10);
+    const hr = parseInt(dailyAtTime[2], 10);
+    if (min >= 0 && min < 60 && hr >= 0 && hr < 24) {
+      const next = new Date(fromTime);
+      next.setHours(hr, min, 0, 0);
+      if (next.getTime() <= fromTime) {
+        next.setDate(next.getDate() + 1);
+      }
+      return next.getTime();
+    }
+  }
+
+  // M H * * D (weekly on day D 0-6 at hour H and minute M)
+  const weeklyAtDay = trimmed.match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+(\d)$/);
+  if (weeklyAtDay) {
+    const min = parseInt(weeklyAtDay[1], 10);
+    const hr = parseInt(weeklyAtDay[2], 10);
+    const targetDay = parseInt(weeklyAtDay[3], 10);
+    if (min >= 0 && min < 60 && hr >= 0 && hr < 24 && targetDay >= 0 && targetDay <= 6) {
+      const next = new Date(fromTime);
+      next.setHours(hr, min, 0, 0);
+      let daysAhead = (targetDay - next.getDay() + 7) % 7;
+      if (daysAhead === 0 && next.getTime() <= fromTime) {
+        daysAhead = 7;
+      }
+      next.setDate(next.getDate() + daysAhead);
+      return next.getTime();
+    }
   }
 
   // Default fallback: 1 hour later
@@ -73,7 +146,11 @@ export class JobSchedulerService {
       `).all(now) as any[];
 
       for (const rawJob of dueJobs) {
-        await this.runJob(rawJob);
+        try {
+          await this.runJob(rawJob);
+        } catch (jobErr) {
+          logger.warn({ err: jobErr, jobId: rawJob.id }, 'Error executing scheduled job');
+        }
       }
     } catch (err) {
       logger.warn({ err }, 'Error in job scheduler tick');

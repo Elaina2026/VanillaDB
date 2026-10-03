@@ -87,6 +87,10 @@ export const DatabasesPage: React.FC<{
       queryClient.invalidateQueries({ queryKey: ['databases'] });
       setDeletingDb(null);
     },
+    onError: (err: any) => {
+      alert(err?.message || 'Failed to delete database');
+      setDeletingDb(null);
+    },
   });
 
   const leaveDbMutation = useMutation({
@@ -96,6 +100,9 @@ export const DatabasesPage: React.FC<{
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['databases'] });
+    },
+    onError: (err: any) => {
+      alert(err?.message || 'Failed to leave database');
     },
   });
 
@@ -129,7 +136,7 @@ export const DatabasesPage: React.FC<{
 
   const canDeleteDb = (db: DatabaseRecord) => {
     if (isAdminRole(currentUser?.role)) return true;
-    if (db.owner_id === currentUser?.userId) return true;
+    if (currentUser?.userId && db.owner_id === currentUser.userId) return true;
     if ((db as any).access_role === 'owner') return true;
     return false;
   };

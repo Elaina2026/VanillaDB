@@ -17,6 +17,25 @@ interface CachedHandle {
   lastUsed: number;
 }
 
+export function isReadOnlySql(sql: string): boolean {
+  if (!sql || typeof sql !== 'string') return false;
+  // Strip SQL comments to prevent comment-based evasions
+  const stripped = sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\r\n]*/g, ' ').trim();
+  const isCte = /^WITH\b/i.test(stripped);
+  const isMutatingCte = isCte && /\b(INSERT\s+(OR\s+[A-Z]+\s+)?INTO|UPDATE\s+|DELETE\s+FROM|REPLACE\s+INTO)\b/i.test(stripped);
+  const isExplicitMutation = /^\s*(INSERT|UPDATE|DELETE|REPLACE|DROP|ALTER|CREATE|VACUUM)\b/i.test(stripped);
+  if (isMutatingCte || isExplicitMutation) return false;
+
+  if (/^\s*PRAGMA\b/i.test(stripped)) {
+    // If PRAGMA contains an assignment '=', or is a mutating/maintenance pragma, it is NOT read-only
+    if (stripped.includes('=')) return false;
+    if (/\bPRAGMA\s+(optimize|wal_checkpoint|incremental_vacuum)\b/i.test(stripped)) return false;
+    return true;
+  }
+
+  return (/^\s*(SELECT|EXPLAIN)\b/i.test(stripped) || (isCte && !isMutatingCte));
+}
+
 export class DatabaseManager {
   private handles: Map<string, CachedHandle> = new Map();
   private cleanupInterval: NodeJS.Timeout | null = null;
@@ -260,10 +279,7 @@ export class DatabaseManager {
     const startTime = performance.now();
 
     // Accurately distinguish read vs write, including mutating CTEs and SQLite conflict clauses
-    const isCte = /^WITH\b/i.test(stripped);
-    const isMutatingCte = isCte && /\b(INSERT\s+(OR\s+[A-Z]+\s+)?INTO|UPDATE\s+|DELETE\s+FROM|REPLACE\s+INTO)\b/i.test(stripped);
-    const isExplicitMutation = /^\s*(INSERT|UPDATE|DELETE|REPLACE|DROP|ALTER|CREATE|VACUUM)\b/i.test(stripped);
-    const isSelect = (/^\s*(SELECT|EXPLAIN|PRAGMA)\b/i.test(stripped) || isCte) && !isMutatingCte && !isExplicitMutation;
+    const isSelect = isReadOnlySql(stripped);
 
     let params: any[] | Record<string, any> = [];
     if (Array.isArray(paramsInput)) {
@@ -450,7 +466,11 @@ export class DatabaseManager {
 
   public validateSqlSafety(sql: string, options?: { readonly?: boolean; allowedTables?: string[] | null; deniedTables?: string[] | null }): void {
     // Strip SQL comments to prevent comment-based filter evasion (/* ... */ and -- ...)
-    const stripped = sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\r\n]*/g, ' ');
+    const stripped = sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\r\n]*/g, ' ').trim();
+
+    if (options?.readonly && !isReadOnlySql(stripped)) {
+      throw new Error('Write operation or mutating query is not permitted in read-only mode.');
+    }
 
     if (/\bATTACH(\s+DATABASE)?\b/i.test(stripped)) {
       throw new Error('ATTACH DATABASE is forbidden for security reasons.');

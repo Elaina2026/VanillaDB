@@ -38,7 +38,7 @@ export const RowModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-lg bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90dvh] flex flex-col">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             {isEditing ? <Edit2 className="w-4 h-4 text-blue-500" /> : <Plus className="w-4 h-4 text-blue-500" />}
@@ -46,7 +46,7 @@ export const RowModal: React.FC<{
               {isEditing ? `${t('rowModal.editTitle', 'Edit Row')} ("${tableSchema.name}")` : `${t('rowModal.insertTitle', 'Insert Row')} ("${tableSchema.name}")`}
             </h2>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-accent rounded text-muted-foreground">
+          <button onClick={onClose} disabled={isSaving} className="p-1 hover:bg-accent rounded text-muted-foreground disabled:opacity-50">
             <X className="w-4 h-4" />
           </button>
         </div>

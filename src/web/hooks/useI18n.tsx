@@ -403,6 +403,8 @@ const translations: Record<Language, Record<string, string>> = {
     'danger.deleteDesc': 'Permanently delete this SQLite database and all associated media files, tokens, and backups.',
     'danger.deleteButton': 'Delete Database Permanently',
     'danger.confirmDelete': 'Type database name to confirm deletion:',
+    'danger.memberNoticeTitle': 'Database Ownership',
+    'danger.memberNoticeDesc': 'You are a collaborator on this database. Only the platform owner or database creator can permanently delete this database.',
 
     // Database Maintenance & Optimization
     'maint.title': 'Database Maintenance & Performance Tuning',
@@ -1831,6 +1833,8 @@ const translations: Record<Language, Record<string, string>> = {
     'danger.deleteDesc': 'Xóa hoàn toàn tệp SQLite, toàn bộ tập tin media, token và các bản sao lưu liên quan.',
     'danger.deleteButton': 'Xác nhận xóa vĩnh viễn',
     'danger.confirmDelete': 'Nhập đúng tên cơ sở dữ liệu để xác nhận xóa:',
+    'danger.memberNoticeTitle': 'Quyền sở hữu cơ sở dữ liệu',
+    'danger.memberNoticeDesc': 'Bạn là thành viên cộng tác trên database này. Chỉ chủ sở hữu hoặc quản trị viên hệ thống mới có quyền xóa vĩnh viễn cơ sở dữ liệu.',
 
     // Database Maintenance & Optimization
     'maint.title': 'Bảo trì & Tinh chỉnh hiệu năng Database',

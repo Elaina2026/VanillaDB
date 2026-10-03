@@ -10,6 +10,7 @@ import { dbManager } from '../db/manager.js';
 import { requireAdminAuth } from '../middleware/auth.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { activityService } from '../services/activity.js';
+import { storageService } from '../services/storage.js';
 import { isAdminRole } from '../../../shared/index.js';
 
 const addNodeSchema = z.object({
@@ -266,6 +267,11 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
     if (fs.existsSync(`${dbPath}-shm`)) {
       try { fs.unlinkSync(`${dbPath}-shm`); } catch {}
     }
+
+    // Clean up media and file storage for this database on worker node
+    try {
+      storageService.deleteDatabaseFiles(safeId);
+    } catch {}
 
     return reply.send({ success: true });
   });

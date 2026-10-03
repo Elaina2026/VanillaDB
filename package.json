@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "admin:reset": "node --no-warnings dist/src/server/cli.js",
     "benchmark": "tsx src/server/benchmark.ts",
+    "workflow:exec": "vitest run tests/workflowLaunchExec.test.ts --fileParallelism=false",
     "test:audit": "npm run typecheck && npm run test:security && npm test && npm run build"
   },
   "dependencies": {

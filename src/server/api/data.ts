@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { Readable } from 'stream';
 import { config } from '../config/index.js';
-import { dbManager } from '../db/manager.js';
+import { dbManager, isReadOnlySql } from '../db/manager.js';
 import { authService } from '../services/auth.js';
 import { activityService } from '../services/activity.js';
 import { storageService } from '../services/storage.js';
@@ -164,10 +164,10 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
           let requiredPermission: 'database:read' | 'database:write' = isWrite ? 'database:write' : 'database:read';
 
-          // For /query: read is acceptable if it's a SELECT/PRAGMA/EXPLAIN query
+          // For /query: read is acceptable if it's a non-mutating query
           if (rawUrl.endsWith('/query') && req.body && typeof (req.body as any).sql === 'string') {
-            const sqlTrim = (req.body as any).sql.trim();
-            if (/^(SELECT|WITH|EXPLAIN|PRAGMA)\b/i.test(sqlTrim)) {
+            const sqlTrim = (req.body as any).sql;
+            if (isReadOnlySql(sqlTrim)) {
               requiredPermission = 'database:read';
             } else {
               requiredPermission = 'database:write';
@@ -276,8 +276,8 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const trimmed = parsed.data.sql.trim();
-    const isSelect = /^(SELECT|WITH|EXPLAIN|PRAGMA)\b/i.test(trimmed);
-    const isDdl = /^(CREATE|ALTER|DROP)\b/i.test(trimmed);
+    const isSelect = isReadOnlySql(trimmed);
+    const isDdl = /^\s*(CREATE|ALTER|DROP)\b/i.test(trimmed);
 
     // If writing or executing DDL with API token, enforce token scope
     let hasWrite = true;

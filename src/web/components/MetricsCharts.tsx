@@ -706,8 +706,9 @@ export const DatabaseOperationsTimelineChart: React.FC<{
           })}
 
           {/* X Axis Labels */}
-          {timeline.filter((_, idx) => idx % Math.ceil(timeline.length / 6) === 0).map((d) => {
-            const idx = timeline.indexOf(d);
+          {timeline.map((d, idx) => {
+            const step = Math.ceil(timeline.length / 6);
+            if (idx % step !== 0 && idx !== timeline.length - 1) return null;
             return (
               <text key={idx} x={getX(idx)} y={height - 8} textAnchor="middle" className="fill-muted-foreground text-[9px] font-mono">
                 {d.timeLabel}

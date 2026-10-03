@@ -1751,8 +1751,8 @@ export const SettingsPage: React.FC = () => {
           {/* Modal Kích hoạt 2FA */}
           {is2faModalOpen && qrCodeData && (
             <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150">
-                <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150 max-h-[90dvh] flex flex-col">
+                <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-5 h-5 text-blue-500" />
                     <h3 className="text-sm font-bold text-foreground">{t('settings.activate2faModalTitle', 'Activate Google Authenticator / Authy')}</h3>
@@ -1765,77 +1765,79 @@ export const SettingsPage: React.FC = () => {
                   </button>
                 </div>
 
-                {totpStatus && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-md">
-                    {totpStatus.message}
-                  </div>
-                )}
+                <div className="flex-1 overflow-y-auto pr-1 space-y-3">
+                  {totpStatus && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-md">
+                      {totpStatus.message}
+                    </div>
+                  )}
 
-                <div className="flex flex-col items-center justify-center p-3 bg-white rounded-lg border border-border">
-                  <img src={qrCodeData.qrDataUrl} alt="2FA QR Code" className="w-44 h-44" />
-                  <p className="text-[10px] text-zinc-500 mt-1 font-mono select-all">{t('settings.secretLabel', 'Secret:')} {qrCodeData.secret}</p>
-                </div>
-
-                <form onSubmit={handleActivate2fa} className="space-y-3 text-xs">
-                  <input
-                    type="text"
-                    name="username"
-                    autoComplete="username"
-                    value={currentUser?.username || ''}
-                    readOnly
-                    tabIndex={-1}
-                    aria-hidden="true"
-                    className="sr-only pointer-events-none hidden"
-                  />
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      {t('settings.stepPassword', '1. Account Password (Required verification)')}
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      autoComplete="current-password"
-                      value={totpVerifyPassword}
-                      onChange={(e) => setTotpVerifyPassword(e.target.value)}
-                      placeholder={t('settings.enterCurrentPasswordPlaceholder', 'Enter current password...')}
-                      className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
-                    />
+                  <div className="flex flex-col items-center justify-center p-3 bg-white rounded-lg border border-border">
+                    <img src={qrCodeData.qrDataUrl} alt="2FA QR Code" className="w-44 h-44" />
+                    <p className="text-[10px] text-zinc-500 mt-1 font-mono select-all">{t('settings.secretLabel', 'Secret:')} {qrCodeData.secret}</p>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      {t('settings.stepTotpCode', '2. 6-digit code on Authenticator app')}
-                    </label>
+                  <form onSubmit={handleActivate2fa} className="space-y-3 text-xs">
                     <input
                       type="text"
-                      required
-                      maxLength={6}
-                      pattern="[0-9]{6}"
-                      autoComplete="one-time-code"
-                      value={totpVerifyCode}
-                      onChange={(e) => setTotpVerifyCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="000000"
-                      className="w-full px-3 py-2 text-center text-lg font-mono font-bold tracking-widest bg-background border border-border rounded-md text-foreground"
+                      name="username"
+                      autoComplete="username"
+                      value={currentUser?.username || ''}
+                      readOnly
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      className="sr-only pointer-events-none hidden"
                     />
-                  </div>
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        {t('settings.stepPassword', '1. Account Password (Required verification)')}
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        autoComplete="current-password"
+                        value={totpVerifyPassword}
+                        onChange={(e) => setTotpVerifyPassword(e.target.value)}
+                        placeholder={t('settings.enterCurrentPasswordPlaceholder', 'Enter current password...')}
+                        className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
+                      />
+                    </div>
 
-                  <div className="flex items-center justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setIs2faModalOpen(false)}
-                      className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded"
-                    >
-                      {t('common.cancel', 'Cancel')}
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={!totpVerifyPassword || totpVerifyCode.length !== 6}
-                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-semibold"
-                    >
-                      {t('settings.confirmAndEnable2fa', 'Confirm & Enable 2FA')}
-                    </button>
-                  </div>
-                </form>
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        {t('settings.stepTotpCode', '2. 6-digit code on Authenticator app')}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={6}
+                        pattern="[0-9]{6}"
+                        autoComplete="one-time-code"
+                        value={totpVerifyCode}
+                        onChange={(e) => setTotpVerifyCode(e.target.value.replace(/\D/g, ''))}
+                        placeholder="000000"
+                        className="w-full px-3 py-2 text-center text-lg font-mono font-bold tracking-widest bg-background border border-border rounded-md text-foreground"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIs2faModalOpen(false)}
+                        className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded"
+                      >
+                        {t('common.cancel', 'Cancel')}
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={!totpVerifyPassword || totpVerifyCode.length !== 6}
+                        className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-xs font-semibold cursor-pointer"
+                      >
+                        {t('settings.confirmAndEnable2fa', 'Confirm & Enable 2FA')}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>
           )}
@@ -1843,75 +1845,77 @@ export const SettingsPage: React.FC = () => {
           {/* Modal Tắt 2FA */}
           {isDisable2faModalOpen && (
             <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-sm space-y-4 animate-in zoom-in-95 duration-150">
-                <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-sm space-y-4 animate-in zoom-in-95 duration-150 max-h-[90dvh] flex flex-col">
+                <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
                   <h3 className="text-sm font-bold text-foreground">{t('settings.disable2faModalTitle', 'Disable Two-Factor Authentication (2FA)')}</h3>
                   <button onClick={() => setIsDisable2faModalOpen(false)} className="text-muted-foreground hover:text-foreground">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
-                {totpStatus && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-md">
-                    {totpStatus.message}
-                  </div>
-                )}
+                <div className="flex-1 overflow-y-auto pr-1">
+                  {totpStatus && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-md mb-3">
+                      {totpStatus.message}
+                    </div>
+                  )}
 
-                <form onSubmit={handleDisable2fa} className="space-y-3 text-xs">
-                  <input
-                    type="text"
-                    name="username"
-                    autoComplete="username"
-                    value={currentUser?.username || ''}
-                    readOnly
-                    tabIndex={-1}
-                    aria-hidden="true"
-                    className="sr-only pointer-events-none hidden"
-                  />
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.accountPassword', 'Account password')}</label>
-                    <input
-                      type="password"
-                      required
-                      autoComplete="current-password"
-                      value={totpVerifyPassword}
-                      onChange={(e) => setTotpVerifyPassword(e.target.value)}
-                      placeholder={t('settings.yourPasswordPlaceholder', 'Your password...')}
-                      className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.currentTotpCode', 'Current 6-digit code')}</label>
+                  <form onSubmit={handleDisable2fa} className="space-y-3 text-xs">
                     <input
                       type="text"
-                      required
-                      maxLength={6}
-                      autoComplete="one-time-code"
-                      value={totpVerifyCode}
-                      onChange={(e) => setTotpVerifyCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="000000"
-                      className="w-full px-3 py-1.5 text-center font-mono font-bold text-foreground bg-background border border-border rounded-md"
+                      name="username"
+                      autoComplete="username"
+                      value={currentUser?.username || ''}
+                      readOnly
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      className="sr-only pointer-events-none hidden"
                     />
-                  </div>
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.accountPassword', 'Account password')}</label>
+                      <input
+                        type="password"
+                        required
+                        autoComplete="current-password"
+                        value={totpVerifyPassword}
+                        onChange={(e) => setTotpVerifyPassword(e.target.value)}
+                        placeholder={t('settings.yourPasswordPlaceholder', 'Your password...')}
+                        className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
+                      />
+                    </div>
 
-                  <div className="flex items-center justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsDisable2faModalOpen(false)}
-                      className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded"
-                    >
-                      {t('common.cancel', 'Cancel')}
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={!totpVerifyPassword || totpVerifyCode.length !== 6}
-                      className="px-4 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs font-semibold"
-                    >
-                      {t('settings.confirmDisable', 'Confirm Disable')}
-                    </button>
-                  </div>
-                </form>
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">{t('settings.currentTotpCode', 'Current 6-digit code')}</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={6}
+                        autoComplete="one-time-code"
+                        value={totpVerifyCode}
+                        onChange={(e) => setTotpVerifyCode(e.target.value.replace(/\D/g, ''))}
+                        placeholder="000000"
+                        className="w-full px-3 py-1.5 text-center font-mono font-bold text-foreground bg-background border border-border rounded-md"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsDisable2faModalOpen(false)}
+                        className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded"
+                      >
+                        {t('common.cancel', 'Cancel')}
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={!totpVerifyPassword || totpVerifyCode.length !== 6}
+                        className="px-4 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded text-xs font-semibold cursor-pointer"
+                      >
+                        {t('settings.confirmDisable', 'Confirm Disable')}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>
           )}
@@ -1919,8 +1923,8 @@ export const SettingsPage: React.FC = () => {
           {/* Modal Hiển Thị 6 Mã Dự Phòng Khi Kích Hoạt 2FA Thành Công */}
           {isBackupCodesModalOpen && (
             <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150">
-                <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150 max-h-[90dvh] flex flex-col">
+                <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                     <h3 className="text-sm font-bold text-foreground">{t('settings.activate2faSuccessTitle', '2FA Activated Successfully!')}</h3>

@@ -87,8 +87,12 @@ export class BackupService {
       }
     } else {
       const db = dbManager.get(databaseId);
-      // Flush WAL to ensure complete snapshot
-      db.exec('PRAGMA wal_checkpoint(FULL);');
+      // Flush and truncate WAL to ensure a complete, non-torn snapshot
+      try {
+        db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+      } catch {
+        db.exec('PRAGMA wal_checkpoint(FULL);');
+      }
 
       const sourcePath = dbManager.resolveDatabasePath(databaseId);
 

@@ -342,6 +342,9 @@ export const DatabaseDetailPage: React.FC<{
       setWebhookTable('');
       refetchWebhooks();
     },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to create webhook');
+    },
   });
 
   const deleteWebhookMutation = useMutation({
@@ -351,6 +354,9 @@ export const DatabaseDetailPage: React.FC<{
       }),
     onSuccess: () => {
       refetchWebhooks();
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to delete webhook');
     },
   });
 
@@ -362,6 +368,9 @@ export const DatabaseDetailPage: React.FC<{
       }),
     onSuccess: () => {
       refetchWebhooks();
+    },
+    onError: (err: any) => {
+      showError(err.message || 'Failed to update webhook status');
     },
   });
 
@@ -1115,6 +1124,10 @@ export const DatabaseDetailPage: React.FC<{
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['databases'] });
       onBack();
+    },
+    onError: (err: any) => {
+      setNotificationMessage(err?.message || 'Failed to delete database');
+      setTimeout(() => setNotificationMessage(null), 4000);
     },
   });
 
@@ -3267,20 +3280,22 @@ export const DatabaseDetailPage: React.FC<{
                 </p>
               </div>
 
-              <button
-                onClick={() => setIsCreateWebhookOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                {t('webhooks.addWebhook', 'Add Webhook')}
-              </button>
+              {canAdmin && (
+                <button
+                  onClick={() => setIsCreateWebhookOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {t('webhooks.addWebhook', 'Add Webhook')}
+                </button>
+              )}
             </div>
 
             {/* Create Webhook Form Modal */}
             {isCreateWebhookOpen && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4">
-                  <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4 max-h-[90dvh] flex flex-col">
+                  <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
                     <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                       <WebhookIcon className="w-4 h-4 text-purple-500" />
                       {t('webhooks.configureTitle', 'Configure New Webhook')}
@@ -3294,7 +3309,7 @@ export const DatabaseDetailPage: React.FC<{
                     </button>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-1">
                         {t('webhooks.nameLabel', 'Webhook Name')}
@@ -3451,60 +3466,68 @@ export const DatabaseDetailPage: React.FC<{
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => toggleWebhookMutation.mutate({ webhookId: wh.id, active: !wh.active })}
-                        disabled={toggleWebhookMutation.isPending}
-                        className={`px-2 py-1 text-xs border border-border hover:bg-accent rounded font-medium transition-colors flex items-center gap-1 cursor-pointer ${
-                          wh.active ? 'text-emerald-500' : 'text-muted-foreground'
-                        }`}
-                        title={wh.active ? t('webhooks.disableTooltip', 'Disable webhook') : t('webhooks.enableTooltip', 'Enable webhook')}
-                      >
-                        {wh.active ? <ToggleRight className="w-4 h-4 text-emerald-500" /> : <ToggleLeft className="w-4 h-4 text-muted-foreground" />}
-                        <span>{wh.active ? t('common.active', 'Active') : t('webhooks.paused', 'Paused')}</span>
-                      </button>
+                      {canAdmin ? (
+                        <>
+                          <button
+                            onClick={() => toggleWebhookMutation.mutate({ webhookId: wh.id, active: !wh.active })}
+                            disabled={toggleWebhookMutation.isPending}
+                            className={`px-2 py-1 text-xs border border-border hover:bg-accent rounded font-medium transition-colors flex items-center gap-1 cursor-pointer ${
+                              wh.active ? 'text-emerald-500' : 'text-muted-foreground'
+                            }`}
+                            title={wh.active ? t('webhooks.disableTooltip', 'Disable webhook') : t('webhooks.enableTooltip', 'Enable webhook')}
+                          >
+                            {wh.active ? <ToggleRight className="w-4 h-4 text-emerald-500" /> : <ToggleLeft className="w-4 h-4 text-muted-foreground" />}
+                            <span>{wh.active ? t('common.active', 'Active') : t('webhooks.paused', 'Paused')}</span>
+                          </button>
 
-                      <button
-                        onClick={async () => {
-                          try {
-                            await apiRequest(`/api/admin/webhooks/${wh.id}/test`, { method: 'POST' });
-                            refetchWebhooks();
-                            showSuccess(t('webhooks.testSuccess', 'Test webhook sent successfully'));
-                          } catch (err: any) {
-                            showError(err.message || t('webhooks.testFailed', 'Failed to send test webhook'));
-                          }
-                        }}
-                        className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-muted-foreground hover:text-foreground font-medium transition-colors cursor-pointer"
-                        title={t('webhooks.testTooltip', 'Send test ping to webhook URL')}
-                      >
-                        {t('webhooks.testBtn', 'Test')}
-                      </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await apiRequest(`/api/admin/webhooks/${wh.id}/test`, { method: 'POST' });
+                                refetchWebhooks();
+                                showSuccess(t('webhooks.testSuccess', 'Test webhook sent successfully'));
+                              } catch (err: any) {
+                                showError(err.message || t('webhooks.testFailed', 'Failed to send test webhook'));
+                              }
+                            }}
+                            className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-muted-foreground hover:text-foreground font-medium transition-colors cursor-pointer"
+                            title={t('webhooks.testTooltip', 'Send test ping to webhook URL')}
+                          >
+                            {t('webhooks.testBtn', 'Test')}
+                          </button>
 
-                      {wh.failure_count > 0 && (
-                        <button
-                          onClick={async () => {
-                            try {
-                              await apiRequest(`/api/admin/webhooks/${wh.id}/reset-failures`, { method: 'POST' });
-                              refetchWebhooks();
-                              showSuccess(t('webhooks.resetSuccess', 'Webhook failure count reset to 0'));
-                            } catch (err: any) {
-                              showError(err.message || t('webhooks.resetFailed', 'Failed to reset failure count'));
-                            }
-                          }}
-                          className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-amber-500 hover:text-amber-400 font-medium transition-colors cursor-pointer"
-                          title={t('webhooks.resetTooltip', 'Reset failure count to 0')}
-                        >
-                          {t('webhooks.resetFailures', 'Reset Failures')}
-                        </button>
+                          {wh.failure_count > 0 && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await apiRequest(`/api/admin/webhooks/${wh.id}/reset-failures`, { method: 'POST' });
+                                  refetchWebhooks();
+                                  showSuccess(t('webhooks.resetSuccess', 'Webhook failure count reset to 0'));
+                                } catch (err: any) {
+                                  showError(err.message || t('webhooks.resetFailed', 'Failed to reset failure count'));
+                                }
+                              }}
+                              className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-amber-500 hover:text-amber-400 font-medium transition-colors cursor-pointer"
+                              title={t('webhooks.resetTooltip', 'Reset failure count to 0')}
+                            >
+                              {t('webhooks.resetFailures', 'Reset Failures')}
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => deleteWebhookMutation.mutate(wh.id)}
+                            disabled={deleteWebhookMutation.isPending}
+                            className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
+                            title={t('webhooks.deleteTooltip', 'Delete webhook')}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <span className={`px-2 py-1 text-xs rounded border border-border font-medium ${wh.active ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                          {wh.active ? t('common.active', 'Active') : t('webhooks.paused', 'Paused')}
+                        </span>
                       )}
-
-                      <button
-                        onClick={() => deleteWebhookMutation.mutate(wh.id)}
-                        disabled={deleteWebhookMutation.isPending}
-                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
-                        title={t('webhooks.deleteTooltip', 'Delete webhook')}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
                 ))
@@ -3989,7 +4012,6 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
         )}
 
         {/* SCHEDULED JOBS TAB */}
-        {/* SCHEDULED JOBS TAB */}
         {activeTab === 'jobs' && (
           <div className="max-w-5xl mx-auto space-y-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2">
@@ -3997,20 +4019,22 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 <h3 className="text-sm font-bold text-foreground">{t('jobs.title', 'Scheduled SQL Jobs (Cron)')}</h3>
                 <p className="text-xs text-muted-foreground">{t('jobs.desc', 'Automated database routines, log purges, and maintenance tasks.')}</p>
               </div>
-              <button
-                onClick={() => setIsCreateJobOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                {t('jobs.create', 'Create Job')}
-              </button>
+              {canAdmin && (
+                <button
+                  onClick={() => setIsCreateJobOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {t('jobs.create', 'Create Job')}
+                </button>
+              )}
             </div>
 
             {/* Create Job Modal */}
             {isCreateJobOpen && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4 animate-in fade-in zoom-in-95">
-                  <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4 animate-in fade-in zoom-in-95 max-h-[90dvh] flex flex-col">
+                  <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
                     <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                       <Clock className="w-4 h-4 text-blue-500" />
                       {t('jobs.create', 'Configure Scheduled SQL Job')}
@@ -4020,7 +4044,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     </button>
                   </div>
 
-                  <div className="space-y-3 text-xs">
+                  <div className="space-y-3 text-xs flex-1 overflow-y-auto pr-1">
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-1">{t('jobs.name', 'Job Name')}</label>
                       <input
@@ -4058,7 +4082,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     </div>
                   </div>
 
-                  <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                  <div className="flex justify-end gap-2 pt-2 border-t border-border shrink-0">
                     <button
                       onClick={() => setIsCreateJobOpen(false)}
                       className="px-3 py-1.5 border border-border hover:bg-accent rounded text-muted-foreground text-xs"
@@ -4113,23 +4137,25 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => runJobMutation.mutate(job.id)}
-                        disabled={runJobMutation.isPending}
-                        className="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded font-medium transition-colors flex items-center gap-1 cursor-pointer"
-                      >
-                        <Play className="w-3 h-3 fill-current" />
-                        {runJobMutation.isPending ? t('jobs.running', 'Running...') : t('jobs.runNow', 'Run Now')}
-                      </button>
-                      <button
-                        onClick={() => deleteJobMutation.mutate(job.id)}
-                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
-                        title={t('common.delete', 'Delete Job')}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {canAdmin && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => runJobMutation.mutate(job.id)}
+                          disabled={runJobMutation.isPending}
+                          className="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <Play className="w-3 h-3 fill-current" />
+                          {runJobMutation.isPending ? t('jobs.running', 'Running...') : t('jobs.runNow', 'Run Now')}
+                        </button>
+                        <button
+                          onClick={() => deleteJobMutation.mutate(job.id)}
+                          className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
+                          title={t('common.delete', 'Delete Job')}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -4158,8 +4184,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     onChange={(e) => {
                       updateDbMutation.mutate({ backupSchedule: e.target.value as any });
                     }}
-                    disabled={updateDbMutation.isPending}
-                    className="px-2.5 py-1.5 bg-background border border-border rounded-md text-xs font-medium focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                    disabled={!canAdmin || updateDbMutation.isPending}
+                    className="px-2.5 py-1.5 bg-background border border-border rounded-md text-xs font-medium focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <option value="inherit">{t('backups.schedInherit', 'Mặc định hệ thống')}</option>
                     <option value="hourly">{t('backups.schedHourly', 'Hàng giờ (Hourly)')}</option>
@@ -4183,14 +4209,16 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 <h3 className="text-sm font-bold text-foreground">{t('backups.title', 'Database Backups & Snapshots')}</h3>
                 <p className="text-xs text-muted-foreground">{t('backups.desc', 'Safe WAL-consistent backup and restore points.')}</p>
               </div>
-              <button
-                onClick={() => createBackupMutation.mutate()}
-                disabled={createBackupMutation.isPending}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-medium transition-colors cursor-pointer"
-              >
-                <Archive className="w-3.5 h-3.5" />
-                {t('backups.create', 'Create Snapshot')}
-              </button>
+              {canAdmin && (
+                <button
+                  onClick={() => createBackupMutation.mutate()}
+                  disabled={createBackupMutation.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-medium transition-colors cursor-pointer"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                  {t('backups.create', 'Create Snapshot')}
+                </button>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -4227,46 +4255,50 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                       >
                         <Download className="w-3.5 h-3.5" />
                       </a>
-                      <button
-                        onClick={() => {
-                          setConfirmConfig({
-                            isOpen: true,
-                            title: t('backups.restore', 'Restore Database Snapshot?'),
-                            message: t('backups.confirmRestore', `Are you sure you want to restore snapshot "${bkp.filename}"? Current database data will be overwritten with this backup snapshot.`),
-                            confirmText: t('backups.restore', 'Restore Backup'),
-                            variant: 'warning',
-                            isLoading: restoreBackupMutation.isPending,
-                            onConfirm: () => {
-                              restoreBackupMutation.mutate(bkp.id);
-                              setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
-                            },
-                          });
-                        }}
-                        disabled={restoreBackupMutation.isPending}
-                        className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-foreground flex items-center gap-1 transition-colors cursor-pointer"
-                      >
-                        <RotateCcw className="w-3 h-3" />
-                        {t('backups.restore', 'Restore')}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setConfirmConfig({
-                            isOpen: true,
-                            title: t('backups.deleteTitle', 'Delete Backup Snapshot?'),
-                            message: `${t('common.delete', 'Delete')} "${bkp.filename}"?`,
-                            confirmText: t('common.delete', 'Delete'),
-                            variant: 'danger',
-                            isLoading: deleteBackupMutation.isPending,
-                            onConfirm: () => {
-                              deleteBackupMutation.mutate(bkp.id);
-                              setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
-                            },
-                          });
-                        }}
-                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {canAdmin && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setConfirmConfig({
+                                isOpen: true,
+                                title: t('backups.restore', 'Restore Database Snapshot?'),
+                                message: t('backups.confirmRestore', `Are you sure you want to restore snapshot "${bkp.filename}"? Current database data will be overwritten with this backup snapshot.`),
+                                confirmText: t('backups.restore', 'Restore Backup'),
+                                variant: 'warning',
+                                isLoading: restoreBackupMutation.isPending,
+                                onConfirm: () => {
+                                  restoreBackupMutation.mutate(bkp.id);
+                                  setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+                                },
+                              });
+                            }}
+                            disabled={restoreBackupMutation.isPending}
+                            className="px-2.5 py-1 text-xs border border-border hover:bg-accent rounded text-foreground flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            {t('backups.restore', 'Restore')}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setConfirmConfig({
+                                isOpen: true,
+                                title: t('backups.deleteTitle', 'Delete Backup Snapshot?'),
+                                message: `${t('common.delete', 'Delete')} "${bkp.filename}"?`,
+                                confirmText: t('common.delete', 'Delete'),
+                                variant: 'danger',
+                                isLoading: deleteBackupMutation.isPending,
+                                onConfirm: () => {
+                                  deleteBackupMutation.mutate(bkp.id);
+                                  setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+                                },
+                              });
+                            }}
+                            className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))
@@ -4278,6 +4310,13 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
         {/* SETTINGS, MAINTENANCE & DANGER ZONE TAB */}
         {activeTab === 'settings' && (
           <div className="max-w-4xl mx-auto space-y-6">
+            {!canAdmin && (
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs rounded-xl flex items-center gap-2 font-medium">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{t('settings.readOnlyNotice', 'Chỉ Quản trị viên (Admin/Owner) mới có quyền chỉnh sửa thuộc tính, chạy bảo trì và nhân bản database.')}</span>
+              </div>
+            )}
+
             {/* 0. Database Information & Metadata Settings */}
             <div className="bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
               <div className="flex items-center justify-between border-b border-border pb-3">
@@ -4295,7 +4334,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (!editDbName.trim()) return;
+                  if (!editDbName.trim() || !canAdmin) return;
                   updateDbInfoMutation.mutate({
                     name: editDbName.trim(),
                     description: editDbDescription.trim() || null,
@@ -4309,9 +4348,10 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   <input
                     type="text"
                     required
+                    disabled={!canAdmin || updateDbInfoMutation.isPending}
                     value={editDbName}
                     onChange={(e) => setEditDbName(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -4319,10 +4359,11 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   <label className="block text-xs font-medium text-muted-foreground mb-1">{t('common.description', 'Description')}</label>
                   <textarea
                     rows={2}
+                    disabled={!canAdmin || updateDbInfoMutation.isPending}
                     value={editDbDescription}
                     onChange={(e) => setEditDbDescription(e.target.value)}
                     placeholder="Provide context or instructions for this database instance..."
-                    className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -4331,23 +4372,26 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   <input
                     type="number"
                     min={1}
+                    disabled={!canAdmin || updateDbInfoMutation.isPending}
                     value={editDbMaxSizeMb}
                     onChange={(e) => setEditDbMaxSizeMb(e.target.value)}
                     placeholder="Leave empty for unlimited size"
-                    className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground font-mono focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground font-mono focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                   <p className="text-[10px] text-muted-foreground mt-0.5">{t('db.maxSizeMbDesc', 'Limits maximum SQLite database and WAL file size.')}</p>
                 </div>
 
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="submit"
-                    disabled={updateDbInfoMutation.isPending || !editDbName.trim()}
-                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
-                  >
-                    {updateDbInfoMutation.isPending ? t('common.saving', 'Saving...') : t('db.saveProperties', 'Save Properties')}
-                  </button>
-                </div>
+                {canAdmin && (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="submit"
+                      disabled={updateDbInfoMutation.isPending || !editDbName.trim()}
+                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                    >
+                      {updateDbInfoMutation.isPending ? t('common.saving', 'Saving...') : t('db.saveProperties', 'Save Properties')}
+                    </button>
+                  </div>
+                )}
               </form>
             </div>
 
@@ -4388,8 +4432,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   </div>
                   <button
                     onClick={() => maintenanceMutation.mutate('vacuum')}
-                    disabled={maintenanceMutation.isPending}
-                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
+                    disabled={!canAdmin || maintenanceMutation.isPending}
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t('maint.runVacuum', 'Run VACUUM')}
                   </button>
@@ -4405,8 +4449,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   </div>
                   <button
                     onClick={() => maintenanceMutation.mutate('integrity_check')}
-                    disabled={maintenanceMutation.isPending}
-                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
+                    disabled={!canAdmin || maintenanceMutation.isPending}
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t('maint.runIntegrity', 'Run Integrity Check')}
                   </button>
@@ -4427,8 +4471,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   </div>
                   <button
                     onClick={() => maintenanceMutation.mutate('wal_checkpoint')}
-                    disabled={maintenanceMutation.isPending}
-                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
+                    disabled={!canAdmin || maintenanceMutation.isPending}
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t('maint.runWal', 'Flush & Truncate WAL')}
                   </button>
@@ -4444,8 +4488,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   </div>
                   <button
                     onClick={() => maintenanceMutation.mutate('reindex')}
-                    disabled={maintenanceMutation.isPending}
-                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
+                    disabled={!canAdmin || maintenanceMutation.isPending}
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t('maint.runReindex', 'Run REINDEX')}
                   </button>
@@ -4461,8 +4505,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   </div>
                   <button
                     onClick={() => maintenanceMutation.mutate('analyze')}
-                    disabled={maintenanceMutation.isPending}
-                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
+                    disabled={!canAdmin || maintenanceMutation.isPending}
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t('maint.runAnalyze', 'Run ANALYZE')}
                   </button>
@@ -4478,8 +4522,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   </div>
                   <button
                     onClick={() => maintenanceMutation.mutate('optimize')}
-                    disabled={maintenanceMutation.isPending}
-                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer"
+                    disabled={!canAdmin || maintenanceMutation.isPending}
+                    className="w-full py-1.5 px-3 bg-card border border-border hover:bg-accent text-foreground text-xs font-semibold rounded-md shadow-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t('maint.runOptimize', 'Run PRAGMA optimize')}
                   </button>
@@ -4499,51 +4543,65 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                     {t('maint.cloneDesc', 'Duplicate this database instance to create development or staging branches.')}
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    setCloneNewName(`${currentDbName} (Dev Branch)`);
-                    setIsCloneModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  {t('maint.cloneButton', 'Clone Database')}
-                </button>
+                {canAdmin && (
+                  <button
+                    onClick={() => {
+                      setCloneNewName(`${currentDbName} (Dev Branch)`);
+                      setIsCloneModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {t('maint.cloneButton', 'Clone Database')}
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* 3. Danger Zone */}
-            <div className="bg-card border border-red-500/30 rounded-xl p-5 space-y-4 shadow-sm">
-              <div className="flex items-center gap-2 text-red-500 font-semibold text-sm">
-                <AlertTriangle className="w-4 h-4" />
-                {t('danger.title', 'Danger Zone')}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {t('danger.deleteDesc', 'Permanently delete this SQLite database instance, all associated WAL files, backups, and API tokens.')}
-              </p>
+            {/* 3. Danger Zone (Owners & Administrators only) */}
+            {isOwner ? (
+              <div className="bg-card border border-red-500/30 rounded-xl p-5 space-y-4 shadow-sm">
+                <div className="flex items-center gap-2 text-red-500 font-semibold text-sm">
+                  <AlertTriangle className="w-4 h-4" />
+                  {t('danger.title', 'Danger Zone')}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t('danger.deleteDesc', 'Permanently delete this SQLite database instance, all associated WAL files, backups, and API tokens.')}
+                </p>
 
-              <div className="pt-3 border-t border-border space-y-3">
-                <label className="block text-xs font-medium">
-                  {t('danger.confirmDelete', 'Type database name to confirm deletion:')} <strong className="text-red-500">{currentDbName}</strong>
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    value={deleteConfirmName}
-                    onChange={(e) => setDeleteConfirmName(e.target.value)}
-                    placeholder={currentDbName}
-                    className="flex-1 px-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-red-500 text-foreground"
-                  />
-                  <button
-                    disabled={deleteConfirmName !== currentDbName || deleteDbMutation.isPending}
-                    onClick={() => deleteDbMutation.mutate()}
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold transition-colors cursor-pointer"
-                  >
-                    {t('danger.deleteButton', 'Delete Database')}
-                  </button>
+                <div className="pt-3 border-t border-border space-y-3">
+                  <label className="block text-xs font-medium">
+                    {t('danger.confirmDelete', 'Type database name to confirm deletion:')} <strong className="text-red-500">{currentDbName}</strong>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="text"
+                      value={deleteConfirmName}
+                      onChange={(e) => setDeleteConfirmName(e.target.value)}
+                      placeholder={currentDbName}
+                      className="flex-1 px-3 py-1.5 text-xs bg-background border border-border rounded-md focus:ring-1 focus:ring-red-500 text-foreground"
+                    />
+                    <button
+                      disabled={deleteConfirmName.trim() !== currentDbName.trim() || deleteDbMutation.isPending}
+                      onClick={() => deleteDbMutation.mutate()}
+                      className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold transition-colors cursor-pointer"
+                    >
+                      {deleteDbMutation.isPending ? t('common.deleting', 'Deleting...') : t('danger.deleteButton', 'Delete Database')}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-card border border-amber-500/30 rounded-xl p-5 space-y-3 shadow-sm">
+                <div className="flex items-center gap-2 text-amber-500 font-semibold text-sm">
+                  <AlertTriangle className="w-4 h-4" />
+                  {t('danger.memberNoticeTitle', 'Database Ownership')}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t('danger.memberNoticeDesc', 'You are a collaborator on this database. Only the platform owner or database creator can permanently delete this database.')}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -4737,8 +4795,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
       {/* Invite Member Modal */}
       {isInviteModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md space-y-4 animate-in zoom-in-95 duration-150 max-h-[90dvh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-blue-500" />
                 <h3 className="text-sm font-bold text-foreground">{t('members.modalTitle', 'Invite Collaboration Member')}</h3>
@@ -4752,7 +4810,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
             </div>
 
             {inviteStatus && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-md">
+              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-md shrink-0">
                 {inviteStatus}
               </div>
             )}
@@ -4766,7 +4824,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   role: inviteRole,
                 });
               }}
-              className="space-y-4 text-xs"
+              className="space-y-4 text-xs flex-1 overflow-y-auto pr-1 flex flex-col"
             >
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
@@ -4798,7 +4856,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 </select>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border mt-auto shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsInviteModalOpen(false)}
@@ -4822,8 +4880,8 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
       {/* Clone Database Modal */}
       {isCloneModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4 max-h-[90dvh] flex flex-col animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                 <Layers className="w-4 h-4 text-purple-500" />
                 Clone / Branch Database
@@ -4833,7 +4891,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
               </button>
             </div>
 
-            <div>
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3">
               <label className="block text-xs font-medium text-muted-foreground mb-1">New Database Name</label>
               <input
                 type="text"
@@ -4848,7 +4906,7 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
               </p>
             </div>
 
-            <div className="pt-3 border-t border-border flex justify-end gap-2">
+            <div className="pt-3 border-t border-border flex justify-end gap-2 shrink-0">
               <button
                 onClick={() => setIsCloneModalOpen(false)}
                 className="px-3 py-1.5 text-xs border border-border hover:bg-accent rounded-md"

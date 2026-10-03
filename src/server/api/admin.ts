@@ -3,7 +3,7 @@ import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { config } from '../config/index.js';
-import { dbManager } from '../db/manager.js';
+import { dbManager, isReadOnlySql } from '../db/manager.js';
 import { databaseService } from '../services/database.js';
 import { tokenService } from '../services/tokens.js';
 import { backupService } from '../services/backup.js';
@@ -309,17 +309,25 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const db = requireDatabaseAccess(req, reply, id, 'owner');
     if (!db) return;
 
-    databaseService.deleteDatabase(id);
-    activityService.recordAudit({
-      user: req.adminUser!.username,
-      action: 'database.delete',
-      resource: id,
-      result: 'success',
-      requestId: req.id,
-      details: JSON.stringify({ name: db.name }),
-    });
+    try {
+      databaseService.deleteDatabase(id);
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'database.delete',
+        resource: id,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ name: db.name }),
+      });
 
-    return reply.send({ success: true });
+      return reply.send({ success: true, message: 'Database deleted successfully' });
+    } catch (err: any) {
+      logger.error({ err, id }, 'Error deleting database');
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'DATABASE_DELETE_ERROR', message: err.message || 'Failed to delete database' },
+      });
+    }
   });
 
   fastify.post('/databases/:id/clone', async (req, reply) => {
@@ -801,8 +809,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       const memberRole = databaseMembersService.getUserDatabaseRole(id, user.userId, user.role);
       if (memberRole === 'viewer') {
         isViewer = true;
-        const cleanSql = parsed.data.sql.trim().toUpperCase();
-        if (!cleanSql.startsWith('SELECT') && !cleanSql.startsWith('WITH') && !cleanSql.startsWith('EXPLAIN')) {
+        if (!isReadOnlySql(parsed.data.sql)) {
           return reply.status(403).send({
             success: false,
             error: { code: 'FORBIDDEN', message: 'Viewer role can only execute read-only queries (SELECT)' },
