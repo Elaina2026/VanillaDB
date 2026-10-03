@@ -23,7 +23,7 @@ import { stringify } from 'csv-stringify/sync';
 import { clusterService } from '../services/cluster.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { logger } from '../utils/logger.js';
-import { TokenPermissionSchema, type MemberRole } from '../../../shared/index.js';
+import { TokenPermissionSchema, type MemberRole, isOwnerRole, isAdminRole } from '../../../shared/index.js';
 
 const IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -55,7 +55,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const user = req.adminUser;
     if (!user) return null;
 
-    if (user.role === 'super_admin' || user.role === 'admin') {
+    if (isAdminRole(user.role)) {
       return db;
     }
 
@@ -198,12 +198,15 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      const isSuperAdmin = req.adminUser?.role === 'super_admin';
-      const isSystemAdmin = isSuperAdmin || req.adminUser?.role === 'admin';
-      const maxUserDiskMb = systemService.getSettings().default_user_max_disk_mb ?? 200;
+      const isSuperAdmin = isOwnerRole(req.adminUser?.role);
+      const isSystemAdmin = isAdminRole(req.adminUser?.role);
+      const userRoleRecord = rolesService.getRole(req.adminUser?.role || 'user');
+      const maxUserDiskMb = (userRoleRecord?.max_storage_mb !== undefined && userRoleRecord.max_storage_mb !== null)
+        ? userRoleRecord.max_storage_mb
+        : (systemService.getSettings().default_user_max_disk_mb ?? 200);
 
       let effectiveMaxSizeMb: number | null = null;
-      if (isSystemAdmin) {
+      if (isSystemAdmin || maxUserDiskMb === 0) {
         effectiveMaxSizeMb = parsed.data.maxSizeMb !== undefined ? parsed.data.maxSizeMb : null;
       } else {
         if (typeof parsed.data.maxSizeMb === 'number' && parsed.data.maxSizeMb > maxUserDiskMb) {
@@ -281,7 +284,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     // Prevent regular users from inflating disk quotas beyond the platform limit
-    if (parsed.data.maxSizeMb !== undefined && req.adminUser?.role !== 'super_admin' && req.adminUser?.role !== 'admin') {
+    if (parsed.data.maxSizeMb !== undefined && !isAdminRole(req.adminUser?.role)) {
       const maxAllowed = systemService.getSettings().default_user_max_disk_mb ?? 200;
       if (parsed.data.maxSizeMb === null || parsed.data.maxSizeMb > maxAllowed) {
         return reply.status(403).send({
@@ -794,7 +797,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     // Role enforcement: viewer can only run SELECT statements
     const user = req.adminUser!;
     let isViewer = false;
-    if (user.role !== 'super_admin' && user.role !== 'admin') {
+    if (!isAdminRole(user.role)) {
       const memberRole = databaseMembersService.getUserDatabaseRole(id, user.userId, user.role);
       if (memberRole === 'viewer') {
         isViewer = true;
@@ -1178,7 +1181,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     let allowedDatabaseIds: string[] | undefined = undefined;
 
     // Regular users can only see activity for databases they own or are invited to
-    if (user.role !== 'super_admin' && user.role !== 'admin') {
+    if (!isAdminRole(user.role)) {
       const userDatabases = databaseService.listDatabases(user.userId, user.role);
       allowedDatabaseIds = userDatabases.map(d => d.id);
     }
@@ -1200,12 +1203,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const format = (query.format || 'csv').toLowerCase();
     const type = (query.type || 'activity').toLowerCase();
 
-    if (type === 'audit' && user.role !== 'super_admin' && user.role !== 'admin') {
+    if (type === 'audit' && !isAdminRole(user.role)) {
       return reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Admin role required' } });
     }
 
     let allowedDatabaseIds: string[] | undefined = undefined;
-    if (user.role !== 'super_admin' && user.role !== 'admin') {
+    if (!isAdminRole(user.role)) {
       const userDatabases = databaseService.listDatabases(user.userId, user.role);
       allowedDatabaseIds = userDatabases.map(d => d.id);
     }
@@ -1358,7 +1361,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const dbRecord = requireDatabaseAccess(req, reply, id, 'viewer');
     if (!dbRecord) return;
     const userRole = req.adminUser?.role;
-    const isElevated = userRole === 'super_admin' || userRole === 'admin';
+    const isElevated = isAdminRole(userRole);
     const memberRole = databaseMembersService.getUserDatabaseRole(id, req.adminUser!.userId, req.adminUser!.role);
     const canSeeSecret = isElevated || memberRole === 'owner' || memberRole === 'admin';
 
@@ -1858,8 +1861,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const description = (data.fields?.description as any)?.value;
     const dbName = (explicitName || filename.replace(/\.[^/.]+$/, '')).trim();
 
-    const isSuperAdmin = req.adminUser?.role === 'super_admin';
-    const isSystemAdmin = isSuperAdmin || req.adminUser?.role === 'admin';
+    const isSuperAdmin = isOwnerRole(req.adminUser?.role);
+    const isSystemAdmin = isAdminRole(req.adminUser?.role);
     const defaultDiskMb = isSystemAdmin ? null : (systemService.getSettings().default_user_max_disk_mb ?? 200);
 
     if (defaultDiskMb && buffer.length > defaultDiskMb * 1024 * 1024) {
@@ -1953,6 +1956,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       name: z.string().min(2).max(100),
       description: z.string().max(500).optional().nullable(),
       permissions: z.array(z.string()).default([]),
+      max_storage_mb: z.number().int().min(0).optional().default(500),
+      max_databases: z.number().int().min(0).optional().default(5),
+      rate_limit_per_minute: z.number().int().min(0).optional().default(180),
     });
 
     const parsed = Schema.safeParse(req.body);
@@ -1969,6 +1975,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         name: parsed.data.name,
         description: parsed.data.description,
         permissions: parsed.data.permissions,
+        max_storage_mb: parsed.data.max_storage_mb,
+        max_databases: parsed.data.max_databases,
+        rate_limit_per_minute: parsed.data.rate_limit_per_minute,
       });
 
       activityService.recordAudit({
@@ -1977,7 +1986,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         resource: created.id,
         result: 'success',
         requestId: req.id,
-        details: JSON.stringify({ name: created.name, description: created.description }),
+        details: JSON.stringify({
+          name: created.name,
+          description: created.description,
+          max_storage_mb: created.max_storage_mb,
+          max_databases: created.max_databases,
+          rate_limit_per_minute: created.rate_limit_per_minute,
+        }),
       });
 
       return reply.status(201).send({ success: true, data: created });
@@ -1989,7 +2004,46 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.delete('/roles/:roleId', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+  fastify.put('/roles/:roleId', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
+    const { roleId } = req.params as { roleId: string };
+    const Schema = z.object({
+      name: z.string().min(2).max(100).optional(),
+      description: z.string().max(500).optional().nullable(),
+      permissions: z.array(z.string()).optional(),
+      max_storage_mb: z.number().int().min(0).optional(),
+      max_databases: z.number().int().min(0).optional(),
+      rate_limit_per_minute: z.number().int().min(0).optional(),
+    });
+
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid role update payload' },
+      });
+    }
+
+    try {
+      const updated = rolesService.updateRole(roleId, parsed.data);
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'role.update',
+        resource: roleId,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify(parsed.data),
+      });
+
+      return reply.send({ success: true, data: updated });
+    } catch (err: any) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'ROLE_UPDATE_ERROR', message: err.message },
+      });
+    }
+  });
+
+  fastify.delete('/roles/:roleId', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
     const { roleId } = req.params as { roleId: string };
     try {
       rolesService.deleteRole(roleId);
@@ -2015,15 +2069,15 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true, data: users });
   });
 
-  fastify.post('/users', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+  fastify.post('/users', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
     const settings = systemService.getSettings();
     const Schema = z.object({
       username: z.string().min(3).max(50),
       password: z.string().min(6).max(128),
       email: z.string().email().optional().or(z.literal('')).nullable(),
       role: z.string().min(1).max(50).default('user'),
-      maxDatabases: z.number().int().min(0).default(settings.default_user_max_databases ?? 2),
-      rateLimitPerMinute: z.number().int().min(0).default(settings.default_user_rate_limit ?? 180),
+      maxDatabases: z.number().int().min(0).optional(),
+      rateLimitPerMinute: z.number().int().min(0).optional(),
       status: z.enum(['active', 'disabled']).default('active'),
     });
 
@@ -2037,22 +2091,40 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     const availableRoles = rolesService.listRoles().map(r => r.id);
     const targetRole = parsed.data.role;
-    if (availableRoles.length > 0 && !availableRoles.includes(targetRole) && !['super_admin', 'admin', 'developer', 'user'].includes(targetRole)) {
+    if (availableRoles.length > 0 && !availableRoles.includes(targetRole) && !['system_owner', 'system_admin', 'super_admin', 'admin', 'developer', 'user'].includes(targetRole)) {
       return reply.status(400).send({
         success: false,
         error: { code: 'INVALID_ROLE', message: `Role "${targetRole}" does not exist in the system` },
       });
     }
 
+    if (!isOwnerRole(req.adminUser?.role) && isOwnerRole(targetRole)) {
+      return reply.status(403).send({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Only Platform Owner can create Platform Owner accounts' },
+      });
+    }
+
     try {
+      const roleRecord = rolesService.getRole(targetRole);
+      const defaultMaxDb = roleRecord?.max_databases !== undefined && roleRecord.max_databases !== null
+        ? roleRecord.max_databases
+        : (settings.default_user_max_databases ?? 2);
+      const defaultRateLimit = roleRecord?.rate_limit_per_minute !== undefined && roleRecord.rate_limit_per_minute !== null
+        ? roleRecord.rate_limit_per_minute
+        : (settings.default_user_rate_limit ?? 180);
+
+      const effectiveMaxDatabases = parsed.data.maxDatabases !== undefined ? parsed.data.maxDatabases : defaultMaxDb;
+      const effectiveRateLimit = parsed.data.rateLimitPerMinute !== undefined ? parsed.data.rateLimitPerMinute : defaultRateLimit;
+
       const cleanEmail = parsed.data.email ? parsed.data.email.trim().toLowerCase() : undefined;
       const newUser = await authService.createUser({
         username: parsed.data.username,
         password: parsed.data.password,
         email: cleanEmail,
         role: targetRole as any,
-        maxDatabases: parsed.data.maxDatabases,
-        rateLimitPerMinute: parsed.data.rateLimitPerMinute,
+        maxDatabases: effectiveMaxDatabases,
+        rateLimitPerMinute: effectiveRateLimit,
         status: parsed.data.status,
       });
 
@@ -2078,7 +2150,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.patch('/users/:userId', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+  fastify.patch('/users/:userId', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
     const { userId } = req.params as { userId: string };
     const Schema = z.object({
       email: z.string().email().optional().or(z.literal('')).nullable(),
@@ -2097,9 +2169,17 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    const targetUser = authService.getUserById(userId);
+    if (!targetUser) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'User not found' },
+      });
+    }
+
     if (parsed.data.role) {
       const availableRoles = rolesService.listRoles().map(r => r.id);
-      if (availableRoles.length > 0 && !availableRoles.includes(parsed.data.role) && !['super_admin', 'admin', 'developer', 'user'].includes(parsed.data.role)) {
+      if (availableRoles.length > 0 && !availableRoles.includes(parsed.data.role) && !['system_owner', 'system_admin', 'super_admin', 'admin', 'developer', 'user'].includes(parsed.data.role)) {
         return reply.status(400).send({
           success: false,
           error: { code: 'INVALID_ROLE', message: `Role "${parsed.data.role}" does not exist in the system` },
@@ -2107,11 +2187,26 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
+    if (!isOwnerRole(req.adminUser?.role)) {
+      if (isOwnerRole(targetUser.role)) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Platform Owner can modify a Platform Owner account' },
+        });
+      }
+      if (parsed.data.role && isOwnerRole(parsed.data.role)) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Platform Owner can assign the Platform Owner role' },
+        });
+      }
+    }
+
     if (req.adminUser?.userId === userId) {
-      if (parsed.data.role && parsed.data.role !== 'super_admin') {
+      if (parsed.data.role && !isOwnerRole(parsed.data.role) && isOwnerRole(req.adminUser?.role)) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'CANNOT_DEMOTE_SELF', message: 'You cannot demote your own super_admin account' },
+          error: { code: 'CANNOT_DEMOTE_SELF', message: 'You cannot demote your own account' },
         });
       }
       if (parsed.data.status === 'disabled') {
@@ -2149,12 +2244,27 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.delete('/users/:userId', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+  fastify.delete('/users/:userId', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
     const { userId } = req.params as { userId: string };
     if (req.adminUser?.userId === userId) {
       return reply.status(400).send({
         success: false,
         error: { code: 'CANNOT_DELETE_SELF', message: 'You cannot delete your own account' },
+      });
+    }
+
+    const targetUser = authService.getUserById(userId);
+    if (!targetUser) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'User not found' },
+      });
+    }
+
+    if (!isOwnerRole(req.adminUser?.role) && isOwnerRole(targetUser.role)) {
+      return reply.status(403).send({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Only Platform Owner can delete a Platform Owner account' },
       });
     }
 
@@ -2177,13 +2287,20 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.post('/users/:userId/revoke-sessions', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+  fastify.post('/users/:userId/revoke-sessions', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
     const { userId } = req.params as { userId: string };
     const user = authService.getUserById(userId);
     if (!user) {
       return reply.status(404).send({
         success: false,
         error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+      });
+    }
+
+    if (!isOwnerRole(req.adminUser?.role) && isOwnerRole(user.role)) {
+      return reply.status(403).send({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Only Platform Owner can revoke sessions for Platform Owner accounts' },
       });
     }
 
@@ -2215,11 +2332,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.post('/users/bulk', { preHandler: [requireRole(['super_admin'])] }, async (req, reply) => {
+  fastify.post('/users/bulk', { preHandler: [requireRole(['super_admin', 'admin'])] }, async (req, reply) => {
     const BulkSchema = z.object({
       userIds: z.array(z.string().min(1)).min(1),
       action: z.enum(['activate', 'disable', 'revoke_sessions', 'set_role']),
-      role: z.enum(['super_admin', 'admin', 'user']).optional(),
+      role: z.string().min(1).max(50).optional(),
     });
 
     const parsed = BulkSchema.safeParse(req.body);
@@ -2231,11 +2348,26 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const { userIds, action, role } = parsed.data;
-    if (action === 'set_role' && !role) {
-      return reply.status(400).send({
-        success: false,
-        error: { code: 'ROLE_REQUIRED', message: 'Role parameter is required for set_role action' },
-      });
+    if (action === 'set_role') {
+      if (!role) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'ROLE_REQUIRED', message: 'Role parameter is required for set_role action' },
+        });
+      }
+      const availableRoles = rolesService.listRoles().map(r => r.id);
+      if (availableRoles.length > 0 && !availableRoles.includes(role) && !['system_owner', 'system_admin', 'super_admin', 'admin', 'developer', 'user'].includes(role)) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_ROLE', message: `Role "${role}" does not exist in the system` },
+        });
+      }
+      if (!isOwnerRole(req.adminUser?.role) && isOwnerRole(role)) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Platform Owner can assign the Platform Owner role' },
+        });
+      }
     }
 
     // Always exclude calling user to prevent accidental self-lockout/self-modification
@@ -2249,21 +2381,34 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     const metaDb = (await import('../db/metadata.js')).getMetadataDb();
 
-    // Guard: Prevent disabling or demoting all super_admins
-    if (action === 'disable' || (action === 'set_role' && role !== 'super_admin')) {
+    if (!isOwnerRole(req.adminUser?.role)) {
+      const ph = targetIds.map(() => '?').join(', ');
+      const superAdminCount = metaDb.prepare(
+        `SELECT COUNT(*) as count FROM users WHERE id IN (${ph}) AND role IN ('system_owner', 'super_admin')`
+      ).get(...targetIds) as { count: number };
+      if (superAdminCount.count > 0) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Platform Owner can modify Platform Owner accounts' },
+        });
+      }
+    }
+
+    // Guard: Prevent disabling or demoting all super_admins / platform owners
+    if (action === 'disable' || (action === 'set_role' && !isOwnerRole(role))) {
       const ph = targetIds.map(() => '?').join(', ');
       const affectedSuperAdmins = metaDb.prepare(
-        `SELECT COUNT(*) as count FROM users WHERE id IN (${ph}) AND role = 'super_admin'`
+        `SELECT COUNT(*) as count FROM users WHERE id IN (${ph}) AND role IN ('system_owner', 'super_admin')`
       ).get(...targetIds) as { count: number };
 
       const totalSuperAdmins = metaDb.prepare(
-        `SELECT COUNT(*) as count FROM users WHERE role = 'super_admin' AND status = 'active'`
+        `SELECT COUNT(*) as count FROM users WHERE role IN ('system_owner', 'super_admin') AND status = 'active'`
       ).get() as { count: number };
 
       if (totalSuperAdmins.count - affectedSuperAdmins.count < 1) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'CANNOT_DISABLE_LAST_SUPER_ADMIN', message: 'Cannot disable or demote the last active super_admin' },
+          error: { code: 'CANNOT_DISABLE_LAST_SUPER_ADMIN', message: 'Cannot disable or demote the last active Platform Owner' },
         });
       }
     }
@@ -2638,7 +2783,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     `).all(user.userId, user.userId) as any[];
 
     // 6. User storage quota limit
-    const isSuperAdmin = user.role === 'super_admin';
+    const isSuperAdmin = isOwnerRole(user.role);
     const defaultUserDiskMb = systemService.getSettings().default_user_max_disk_mb ?? 200;
     const maxStorageMb = isSuperAdmin ? null : defaultUserDiskMb;
 
@@ -2727,7 +2872,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/announcements', async (req, reply) => {
     const user = req.adminUser;
-    if (!user || (user.role !== 'super_admin' && user.role !== 'admin')) {
+    if (!user || !isAdminRole(user.role)) {
       return reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Admin role required to create announcements' } });
     }
     const Schema = z.object({
@@ -2764,7 +2909,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete('/announcements/:id', async (req, reply) => {
     const user = req.adminUser;
-    if (!user || (user.role !== 'super_admin' && user.role !== 'admin')) {
+    if (!user || !isAdminRole(user.role)) {
       return reply.status(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Admin role required' } });
     }
     const { id } = req.params as { id: string };

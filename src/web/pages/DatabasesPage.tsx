@@ -30,7 +30,7 @@ import { formatTimeAgo } from '../lib/utils.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
-import type { DatabaseRecord, UserDashboardStats, UserInboxResponse } from '@shared/index.js';
+import { type DatabaseRecord, type UserDashboardStats, type UserInboxResponse, isAdminRole } from '@shared/index.js';
 
 export const DatabasesPage: React.FC<{
   onSelectDatabase: (id: string) => void;
@@ -56,7 +56,7 @@ export const DatabasesPage: React.FC<{
   const { data: clusterStatus } = useQuery<{ nodes: Array<{ id: string; name: string }> }>({
     queryKey: ['clusterStatusSummary'],
     queryFn: () => apiRequest('/api/admin/cluster/status'),
-    enabled: currentUser?.role === 'super_admin' || currentUser?.role === 'admin',
+    enabled: isAdminRole(currentUser?.role),
     staleTime: 60000,
   });
 
@@ -128,7 +128,7 @@ export const DatabasesPage: React.FC<{
   });
 
   const canDeleteDb = (db: DatabaseRecord) => {
-    if (currentUser?.role === 'super_admin' || currentUser?.role === 'admin') return true;
+    if (isAdminRole(currentUser?.role)) return true;
     if (db.owner_id === currentUser?.userId) return true;
     if ((db as any).access_role === 'owner') return true;
     return false;

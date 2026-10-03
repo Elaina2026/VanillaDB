@@ -48,14 +48,14 @@ import {
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
-import type { SystemSettings, SystemStatus } from '@shared/index.js';
+import { type SystemSettings, type SystemStatus, isAdminRole } from '@shared/index.js';
 
 export const SettingsPage: React.FC = () => {
   const { user: currentUser, refetchStatus: refetchAuthStatus } = useAuth();
   const { language, setLanguage, t } = useI18n();
   const queryClient = useQueryClient();
 
-  const isSuperAdminOrAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
+  const isSuperAdminOrAdmin = isAdminRole(currentUser?.role);
 
   const [activeTab, setActiveTab] = useState<'general' | 'engine' | 'backups' | 'quotas' | 'alerts' | 'debug' | 'account'>(
     isSuperAdminOrAdmin ? 'general' : 'account'

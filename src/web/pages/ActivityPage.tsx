@@ -5,12 +5,12 @@ import { apiRequest } from '../api/client.js';
 import { formatDate } from '../lib/utils.js';
 import { useI18n } from '../hooks/useI18n.js';
 import { useAuth } from '../hooks/useAuth.js';
-import type { ActivityRecord, AuditRecord } from '@shared/index.js';
+import { type ActivityRecord, type AuditRecord, isAdminRole } from '@shared/index.js';
 
 export const ActivityPage: React.FC = () => {
   const { t } = useI18n();
   const { user } = useAuth();
-  const isSuperAdminOrAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+  const isSuperAdminOrAdmin = isAdminRole(user?.role);
   const [activeTab, setActiveTab] = useState<'activity' | 'audit'>('activity');
   const [filterSearch, setFilterSearch] = useState('');
   const [page, setPage] = useState(1);

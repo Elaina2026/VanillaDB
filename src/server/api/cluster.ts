@@ -10,6 +10,7 @@ import { dbManager } from '../db/manager.js';
 import { requireAdminAuth } from '../middleware/auth.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { activityService } from '../services/activity.js';
+import { isAdminRole } from '../../../shared/index.js';
 
 const addNodeSchema = z.object({
   name: z.string().min(1).max(100),
@@ -287,7 +288,7 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     adminScope.post('/admin/cluster/nodes', async (req, reply) => {
-      if (req.adminUser?.role !== 'super_admin' && req.adminUser?.role !== 'admin') {
+      if (!isAdminRole(req.adminUser?.role)) {
         return reply.status(403).send({ success: false, error: { message: 'Admin role required to manage cluster nodes' } });
       }
 
@@ -314,7 +315,7 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     adminScope.delete('/admin/cluster/nodes/:id', async (req, reply) => {
-      if (req.adminUser?.role !== 'super_admin' && req.adminUser?.role !== 'admin') {
+      if (!isAdminRole(req.adminUser?.role)) {
         return reply.status(403).send({ success: false, error: { message: 'Admin role required to delete cluster nodes' } });
       }
 
@@ -337,7 +338,7 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     adminScope.post('/admin/cluster/migrate', async (req, reply) => {
-      if (req.adminUser?.role !== 'super_admin' && req.adminUser?.role !== 'admin') {
+      if (!isAdminRole(req.adminUser?.role)) {
         return reply.status(403).send({ success: false, error: { message: 'Admin role required to trigger database migration' } });
       }
 
@@ -371,7 +372,7 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Reassign an orphaned or offline database to 'local' or another worker node
     adminScope.post('/admin/cluster/reassign-database', async (req, reply) => {
-      if (req.adminUser?.role !== 'super_admin' && req.adminUser?.role !== 'admin') {
+      if (!isAdminRole(req.adminUser?.role)) {
         return reply.status(403).send({ success: false, error: { message: 'Admin role required to reassign database host node' } });
       }
 

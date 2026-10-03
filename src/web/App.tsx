@@ -11,6 +11,7 @@ import { CreateTokenModal } from './components/CreateTokenModal.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { useI18n } from './hooks/useI18n.js';
 import { useTheme } from './hooks/useTheme.js';
+import { isAdminRole } from '@shared/index.js';
 
 // Heavy pages lazy-loaded to reduce initial bundle parse time
 const TelemetryPage = lazy(() => import('./pages/TelemetryPage.js').then(m => ({ default: m.TelemetryPage })));
@@ -84,7 +85,7 @@ export const App: React.FC = () => {
     }
   }, [authenticated, route.authSubRoute, route.tab]);
 
-  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const adminOnlyTabs = ['telemetry', 'users', 'cluster'];
 
   // Guard admin-only routes against unprivileged users
@@ -223,7 +224,7 @@ export const App: React.FC = () => {
         const is7 = key === '7' || code === 'Digit7' || code === 'Numpad7';
         const is8 = key === '8' || code === 'Digit8' || code === 'Numpad8';
 
-        const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+        const isAdmin = isAdminRole(user?.role);
 
         if (isAdmin) {
           if (is1) { e.preventDefault(); navigateTo('overview'); return; }

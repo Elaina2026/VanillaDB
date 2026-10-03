@@ -25,7 +25,7 @@ import { apiRequest } from '../api/client.js';
 import { formatDate, formatTimeAgo } from '../lib/utils.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
-import type { UserInboxResponse, UserInboxInvite, SystemAnnouncement, MemberRole } from '@shared/index.js';
+import { type UserInboxResponse, type UserInboxInvite, type SystemAnnouncement, type MemberRole, isAdminRole } from '@shared/index.js';
 
 export const InboxPage: React.FC<{
   onSelectDatabase: (id: string) => void;
@@ -149,7 +149,7 @@ export const InboxPage: React.FC<{
     },
   });
 
-  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const pendingInvites = inbox?.invites || [];
   const announcements = inbox?.announcements || [];
   const unreadAnnouncementsCount = announcements.filter((a) => !a.is_read).length;

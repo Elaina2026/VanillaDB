@@ -9,7 +9,22 @@ export const TokenPermissionSchema = z.enum([
   'database:admin'
 ]);
 
-export type UserRole = 'super_admin' | 'admin' | 'developer' | 'user' | (string & {});
+export type UserRole =
+  | 'super_admin'
+  | 'admin'
+  | 'developer'
+  | 'user'
+  | 'system_owner' // Alias for backward compatibility
+  | 'system_admin' // Alias for backward compatibility
+  | (string & {});
+
+export function isOwnerRole(role?: string | null): boolean {
+  return role === 'super_admin' || role === 'system_owner';
+}
+
+export function isAdminRole(role?: string | null): boolean {
+  return isOwnerRole(role) || role === 'admin' || role === 'system_admin';
+}
 
 export type MemberRole = 'owner' | 'admin' | 'editor' | 'viewer';
 
@@ -19,9 +34,40 @@ export interface RoleRecord {
   description?: string | null;
   is_system: boolean;
   permissions: string[];
+  max_storage_mb?: number | null; // Max disk quota per DB in MB (0 = unlimited)
+  max_databases?: number | null; // Max databases allowed (0 = unlimited)
+  rate_limit_per_minute?: number | null; // Rate limit req/min (0 = unlimited)
   created_at: number;
   updated_at?: number;
 }
+
+export interface PermissionDefinition {
+  id: string;
+  label: string;
+  category: 'Databases' | 'API Tokens' | 'Backups & Storage' | 'Administration';
+  description: string;
+}
+
+export const SYSTEM_PERMISSIONS: PermissionDefinition[] = [
+  // Database Operations
+  { id: 'databases:create', label: 'Create Databases', category: 'Databases', description: 'Create new SQLite databases' },
+  { id: 'databases:read', label: 'Read Data', category: 'Databases', description: 'Query and view database tables and rows' },
+  { id: 'databases:write', label: 'Write Data', category: 'Databases', description: 'Insert, update, and delete row records' },
+  { id: 'databases:delete', label: 'Delete Databases', category: 'Databases', description: 'Drop and remove owned databases' },
+  { id: 'databases:query', label: 'Raw SQL Execution', category: 'Databases', description: 'Run custom DDL & SQL in query editor' },
+  // API Tokens
+  { id: 'tokens:create', label: 'Create API Tokens', category: 'API Tokens', description: 'Generate API tokens with database scopes' },
+  { id: 'tokens:manage', label: 'Manage API Tokens', category: 'API Tokens', description: 'List, inspect, and revoke API tokens' },
+  // Backups & Storage
+  { id: 'backups:create', label: 'Create Backups', category: 'Backups & Storage', description: 'Trigger manual backup snapshots' },
+  { id: 'backups:restore', label: 'Restore Backups', category: 'Backups & Storage', description: 'Restore database state from snapshots' },
+  { id: 'storage:upload', label: 'Storage & Uploads', category: 'Backups & Storage', description: 'Upload attachments and files' },
+  // Integration & Management
+  { id: 'webhooks:manage', label: 'Manage Webhooks', category: 'Administration', description: 'Configure realtime database webhooks' },
+  { id: 'users:manage', label: 'Manage Users', category: 'Administration', description: 'Create, update, lock user accounts' },
+  { id: 'settings:manage', label: 'Manage System Settings', category: 'Administration', description: 'Configure engine & cluster settings' },
+  { id: 'cluster:view', label: 'View Cluster Telemetry', category: 'Administration', description: 'Inspect worker nodes, CPU & RAM' },
+];
 
 export interface UserRecord {
   id: string;

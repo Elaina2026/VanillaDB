@@ -62,21 +62,23 @@ import { StorageUploadManager } from '../components/StorageUploadManager.js';
 import { exportQueryResults } from '../lib/exportUtils.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
-import type {
-  DatabaseOverviewStats,
-  DatabaseStorageStats,
-  DatabaseMetricsStats,
-  TableSchemaDetail,
-  ApiTokenRecord,
-  BackupRecord,
-  FileRecord,
-  WebhookRecord,
-  SqlQueryResult,
-  SqlWriteResult,
-  ScheduledJobRecord,
-  DatabaseMemberRecord,
-  DatabaseInviteRecord,
-  UserDashboardStats
+import {
+  isOwnerRole,
+  isAdminRole,
+  type DatabaseOverviewStats,
+  type DatabaseStorageStats,
+  type DatabaseMetricsStats,
+  type TableSchemaDetail,
+  type ApiTokenRecord,
+  type BackupRecord,
+  type FileRecord,
+  type WebhookRecord,
+  type SqlQueryResult,
+  type SqlWriteResult,
+  type ScheduledJobRecord,
+  type DatabaseMemberRecord,
+  type DatabaseInviteRecord,
+  type UserDashboardStats,
 } from '@shared/index.js';
 
 export const DatabaseDetailPage: React.FC<{
@@ -139,8 +141,8 @@ export const DatabaseDetailPage: React.FC<{
     retry: 1,
   });
 
-  const isSuperAdmin = currentUser?.role === 'super_admin';
-  const isSystemAdmin = isSuperAdmin || currentUser?.role === 'admin';
+  const isSuperAdmin = isOwnerRole(currentUser?.role);
+  const isSystemAdmin = isAdminRole(currentUser?.role);
   const dbAccessRole = stats?.database?.access_role;
   const isNodeOffline = Boolean(
     stats?.database?.isNodeOffline ||

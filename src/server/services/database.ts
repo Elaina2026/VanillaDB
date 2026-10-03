@@ -9,7 +9,7 @@ import { dbManager } from '../db/manager.js';
 import { logger } from '../utils/logger.js';
 import { storageService } from './storage.js';
 import { clusterService } from './cluster.js';
-import type { DatabaseRecord, DatabaseOverviewStats, BackupRecord, DatabaseStorageStats, DatabaseMetricsStats } from '../../../shared/index.js';
+import { isOwnerRole, isAdminRole, type DatabaseRecord, type DatabaseOverviewStats, type BackupRecord, type DatabaseStorageStats, type DatabaseMetricsStats } from '../../../shared/index.js';
 
 export class DatabaseService {
   public createDatabase(name: string, description?: string | null, ownerId?: string | null, maxSizeMb?: number | null): DatabaseRecord {
@@ -18,7 +18,7 @@ export class DatabaseService {
     // Check user database quota if ownerId is specified
     if (ownerId) {
       const user = metaDb.prepare('SELECT role, max_databases FROM users WHERE id = ?').get(ownerId) as { role: string; max_databases: number } | undefined;
-      if (user && user.role !== 'super_admin') {
+      if (user && !isOwnerRole(user.role)) {
         const countRow = metaDb.prepare('SELECT COUNT(*) as count FROM databases WHERE owner_id = ?').get(ownerId) as { count: number };
         if (countRow.count >= user.max_databases) {
           throw new Error(`Database creation limit reached. Max allowed databases for your account is ${user.max_databases}.`);
@@ -377,7 +377,7 @@ export class DatabaseService {
     if (!dbRecord) throw new Error(`Database not found: ${databaseId}`);
 
     if (userId) {
-      if (systemRole === 'super_admin' || systemRole === 'admin' || dbRecord.owner_id === userId) {
+      if (isAdminRole(systemRole) || dbRecord.owner_id === userId) {
         dbRecord.access_role = 'owner';
         dbRecord.is_shared = false;
       } else {

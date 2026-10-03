@@ -25,6 +25,8 @@ export class HealthService {
   private lastGatewayCheckTime = 0;
   private lastGatewayWarnLogTime = 0;
   private cachedGatewayUrl: string | null = null;
+  private cachedGatewayResult: { statusCode: number; body: HealthCheckResult } | null = null;
+  private lastGatewayResultTime = 0;
 
   /**
    * Evaluate system health status adhering to ProjectStatus standard
@@ -34,6 +36,8 @@ export class HealthService {
     nodeRole?: 'worker' | 'gateway';
     gatewayUrl?: string | null;
     serviceName?: string | null;
+    skipWorkerPing?: boolean;
+    fromClusterPeer?: boolean;
   }): Promise<{ statusCode: number; body: HealthCheckResult }> {
     const role = overrides?.nodeRole || config.nodeRole;
     const isWorker = role === 'worker' || (config.nodeId !== 'local' && role !== 'gateway');
@@ -77,114 +81,146 @@ export class HealthService {
     let workerStats: { total: number; healthy: number; offline: number } | undefined = undefined;
 
     if (isWorker) {
-      const targetGatewayUrl = overrides?.gatewayUrl !== undefined ? overrides.gatewayUrl : config.gatewayUrl;
-      if (targetGatewayUrl) {
-        const now = Date.now();
-        const isSameTarget = this.cachedGatewayUrl === targetGatewayUrl;
-        const cacheAgeMs = now - this.lastGatewayCheckTime;
+      if (overrides?.fromClusterPeer) {
+        // Direct probe from Gateway: Gateway is communicating with this worker right now!
+        gatewayCheck = 'connected';
+        this.lastGatewayCheckResult = 'connected';
+        this.lastGatewayCheckTime = Date.now();
+      } else {
+        const targetGatewayUrl = overrides?.gatewayUrl !== undefined ? overrides.gatewayUrl : config.gatewayUrl;
+        if (targetGatewayUrl) {
+          const now = Date.now();
+          const isSameTarget = this.cachedGatewayUrl === targetGatewayUrl;
+          const cacheAgeMs = now - this.lastGatewayCheckTime;
 
-        // Cache gateway check for 15s when running in production to avoid log spam & connection timeouts
-        if (isSameTarget && cacheAgeMs < 15_000 && overrides?.gatewayUrl === undefined) {
-          gatewayCheck = this.lastGatewayCheckResult;
-        } else {
-          this.cachedGatewayUrl = targetGatewayUrl;
-          try {
-            const pingUrl = `${targetGatewayUrl.replace(/\/+$/, '')}/health`;
-            const res = await fetch(pingUrl, {
-              method: 'HEAD',
-              headers: {
-                'x-cluster-secret': config.clusterSecret,
-              },
-              signal: AbortSignal.timeout(7000),
-            });
-            if (res.ok || res.status === 503) {
-              gatewayCheck = 'connected';
-              this.lastGatewayCheckResult = 'connected';
-              this.lastGatewayCheckTime = now;
-            } else {
+          // Cache gateway check for 15s when running in production to avoid log spam & connection timeouts
+          if (isSameTarget && cacheAgeMs < 15_000 && overrides?.gatewayUrl === undefined) {
+            gatewayCheck = this.lastGatewayCheckResult;
+          } else {
+            this.cachedGatewayUrl = targetGatewayUrl;
+            try {
+              const pingUrl = `${targetGatewayUrl.replace(/\/+$/, '')}/health`;
+              const res = await fetch(pingUrl, {
+                method: 'HEAD',
+                headers: {
+                  'x-cluster-secret': config.clusterSecret,
+                },
+                signal: AbortSignal.timeout(5000),
+              });
+              if (res.ok || res.status === 503) {
+                gatewayCheck = 'connected';
+                this.lastGatewayCheckResult = 'connected';
+                this.lastGatewayCheckTime = now;
+              } else {
+                gatewayCheck = 'unreachable';
+                this.lastGatewayCheckResult = 'unreachable';
+                this.lastGatewayCheckTime = now;
+                if (now - this.lastGatewayWarnLogTime > 300_000) {
+                  logger.warn({ gatewayUrl: targetGatewayUrl, status: res.status }, 'Worker failed to reach Gateway during health check (throttled)');
+                  this.lastGatewayWarnLogTime = now;
+                }
+              }
+            } catch (err: any) {
               gatewayCheck = 'unreachable';
               this.lastGatewayCheckResult = 'unreachable';
               this.lastGatewayCheckTime = now;
               if (now - this.lastGatewayWarnLogTime > 300_000) {
-                logger.warn({ gatewayUrl: targetGatewayUrl, status: res.status }, 'Worker failed to reach Gateway during health check (throttled)');
+                logger.warn({ err: err?.message || String(err), gatewayUrl: targetGatewayUrl }, 'Worker failed to reach Gateway during health check (throttled)');
                 this.lastGatewayWarnLogTime = now;
               }
             }
-          } catch (err: any) {
-            gatewayCheck = 'unreachable';
-            this.lastGatewayCheckResult = 'unreachable';
-            this.lastGatewayCheckTime = now;
-            if (now - this.lastGatewayWarnLogTime > 300_000) {
-              logger.warn({ err: err?.message || String(err), gatewayUrl: targetGatewayUrl }, 'Worker failed to reach Gateway during health check (throttled)');
-              this.lastGatewayWarnLogTime = now;
-            }
           }
+        } else {
+          // When no remote gateway URL is provided, worker node functions in standalone/direct mode
+          gatewayCheck = 'connected';
         }
-      } else {
-        // When no remote gateway URL is provided, worker node functions in standalone/direct mode
-        gatewayCheck = 'connected';
       }
     } else {
       // Primary gateway is connected
       gatewayCheck = 'connected';
 
-      try {
-        const metaDb = getMetadataDb();
-        const nodes = metaDb.prepare('SELECT id, name, base_url, auth_token, status FROM storage_nodes').all() as Array<{
-          id: string;
-          name: string;
-          base_url: string;
-          auth_token?: string | null;
-          status: string;
-        }>;
-
-        if (nodes.length > 0) {
-          let healthyCount = 0;
-          let offlineCount = 0;
-
-          await Promise.all(
-            nodes.map(async (node) => {
-              try {
-                const pingUrl = `${node.base_url.replace(/\/+$/, '')}/health`;
-                const res = await fetch(pingUrl, {
-                  method: 'GET',
-                  headers: {
-                    'x-cluster-secret': node.auth_token || config.clusterSecret,
-                  },
-                  signal: AbortSignal.timeout(7000), // Upgraded to 7000ms
-                });
-
-                if (res.ok) {
-                  const json = (await res.json()) as any;
-                  if (json.status === 'operational' || json.status === 'degraded') {
-                    healthyCount++;
-                    clusterService.recordNodeSuccess(node.id);
-                    return;
-                  }
-                }
-                offlineCount++;
-                clusterService.recordNodeFailure(node.id, `Worker responded HTTP ${res.status}`);
-              } catch (err: any) {
-                offlineCount++;
-                clusterService.recordNodeFailure(node.id, err?.message || 'Health probe failed');
-              }
-            })
-          );
-
-          workerStats = { total: nodes.length, healthy: healthyCount, offline: offlineCount };
-
-          if (offlineCount === 0) {
-            workersCheck = 'ok';
-          } else if (healthyCount > 0) {
-            workersCheck = 'degraded';
-            isDegraded = true;
-          } else {
-            workersCheck = 'offline';
-            isDegraded = true;
+      // Fast-path: if skipWorkerPing requested (e.g. HEAD or cluster probe from worker), return gateway status without cascading network pings
+      if (overrides?.skipWorkerPing) {
+        try {
+          const metaDb = getMetadataDb();
+          const counts = metaDb.prepare(`
+            SELECT
+              count(*) as total,
+              sum(case when status = 'healthy' then 1 else 0 end) as healthy,
+              sum(case when status = 'offline' then 1 else 0 end) as offline
+            FROM storage_nodes
+          `).get() as any;
+          if (counts && counts.total > 0) {
+            workerStats = { total: counts.total, healthy: counts.healthy || 0, offline: counts.offline || 0 };
+            workersCheck = workerStats.offline === 0 ? 'ok' : (workerStats.healthy > 0 ? 'degraded' : 'offline');
+            if (workersCheck !== 'ok') isDegraded = true;
           }
+        } catch {}
+      } else {
+        const now = Date.now();
+        // Cache full gateway cluster probe in production when overrides are absent
+        if (!overrides && this.cachedGatewayResult && (now - this.lastGatewayResultTime < 15_000)) {
+          return this.cachedGatewayResult;
         }
-      } catch (err) {
-        logger.warn({ err }, 'Error checking worker nodes health from Gateway');
+
+        try {
+          const metaDb = getMetadataDb();
+          const nodes = metaDb.prepare('SELECT id, name, base_url, auth_token, status FROM storage_nodes').all() as Array<{
+            id: string;
+            name: string;
+            base_url: string;
+            auth_token?: string | null;
+            status: string;
+          }>;
+
+          if (nodes.length > 0) {
+            let healthyCount = 0;
+            let offlineCount = 0;
+
+            await Promise.all(
+              nodes.map(async (node) => {
+                try {
+                  const pingUrl = `${node.base_url.replace(/\/+$/, '')}/health`;
+                  const res = await fetch(pingUrl, {
+                    method: 'GET',
+                    headers: {
+                      'x-cluster-secret': node.auth_token || config.clusterSecret,
+                    },
+                    signal: AbortSignal.timeout(5000),
+                  });
+
+                  if (res.ok) {
+                    const json = (await res.json()) as any;
+                    if (json.status === 'operational' || json.status === 'degraded') {
+                      healthyCount++;
+                      clusterService.recordNodeSuccess(node.id);
+                      return;
+                    }
+                  }
+                  offlineCount++;
+                  clusterService.recordNodeFailure(node.id, `Worker responded HTTP ${res.status}`);
+                } catch (err: any) {
+                  offlineCount++;
+                  clusterService.recordNodeFailure(node.id, err?.message || 'Health probe failed');
+                }
+              })
+            );
+
+            workerStats = { total: nodes.length, healthy: healthyCount, offline: offlineCount };
+
+            if (offlineCount === 0) {
+              workersCheck = 'ok';
+            } else if (healthyCount > 0) {
+              workersCheck = 'degraded';
+              isDegraded = true;
+            } else {
+              workersCheck = 'offline';
+              isDegraded = true;
+            }
+          }
+        } catch (err) {
+          logger.warn({ err }, 'Error checking worker nodes health from Gateway');
+        }
       }
     }
 
@@ -208,7 +244,7 @@ export class HealthService {
 
     const statusCode = status === 'outage' ? 503 : 200;
 
-    return {
+    const result = {
       statusCode,
       body: {
         status,
@@ -228,6 +264,13 @@ export class HealthService {
         version: '1.3.2',
       },
     };
+
+    if (!isWorker && !overrides) {
+      this.cachedGatewayResult = result;
+      this.lastGatewayResultTime = timestamp;
+    }
+
+    return result;
   }
 }
 

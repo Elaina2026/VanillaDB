@@ -20,7 +20,7 @@ import { apiRequest } from '../api/client.js';
 import { formatBytes, formatDate } from '../lib/utils.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
-import type { SystemStatus, DatabaseRecord } from '@shared/index.js';
+import { type SystemStatus, type DatabaseRecord, isOwnerRole } from '@shared/index.js';
 
 export const OverviewPage: React.FC<{
   onSelectDatabase: (id: string) => void;
@@ -98,7 +98,7 @@ export const OverviewPage: React.FC<{
           </div>
           <div className="text-2xl font-bold tracking-tight text-foreground flex items-baseline gap-1.5">
             <span>{status?.databaseCount ?? databases.length}</span>
-            {currentUser?.role === 'super_admin' && (
+            {isOwnerRole(currentUser?.role) && (
               <span className="text-sm font-normal text-muted-foreground">
                 / {t('overview.unlimited', 'Unlimited')}
               </span>
@@ -133,7 +133,7 @@ export const OverviewPage: React.FC<{
           </div>
           <div className="text-2xl font-bold tracking-tight text-foreground flex items-baseline gap-1.5">
             <span>{formatBytes(totalStorage)}</span>
-            {currentUser?.role === 'super_admin' && status?.diskSpace?.totalBytes ? (
+            {isOwnerRole(currentUser?.role) && status?.diskSpace?.totalBytes ? (
               <span className="text-sm font-normal text-muted-foreground">
                 / {formatBytes(status.diskSpace.totalBytes)}
               </span>

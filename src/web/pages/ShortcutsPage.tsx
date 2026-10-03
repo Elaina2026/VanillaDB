@@ -34,6 +34,7 @@ import {
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
 import { useTheme } from '../hooks/useTheme.js';
+import { isAdminRole } from '@shared/index.js';
 
 interface ShortcutItem {
   keys: string[];
@@ -57,7 +58,7 @@ export const ShortcutsPage: React.FC<{
   const { language, toggleLanguage } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const isVi = language === 'vi';
-  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
 
   // Navigation shortcuts: explicitly separated by role
   const navShortcuts: ShortcutItem[] = isAdmin

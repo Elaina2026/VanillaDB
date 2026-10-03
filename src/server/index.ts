@@ -371,8 +371,14 @@ export async function buildApp() {
     reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
     reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
 
-    const { statusCode, body } = await healthService.getHealthStatus();
-    if (req.method === 'HEAD') {
+    const isHead = req.method === 'HEAD';
+    const isClusterPeer = Boolean(req.headers['x-cluster-secret']);
+
+    const { statusCode, body } = await healthService.getHealthStatus({
+      skipWorkerPing: isHead || isClusterPeer,
+      fromClusterPeer: isClusterPeer,
+    });
+    if (isHead) {
       return reply.status(statusCode).send();
     }
     return reply.status(statusCode).send(body);

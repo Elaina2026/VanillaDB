@@ -233,11 +233,11 @@ export class AuthService {
     const user = this.getUserById(userId);
     if (!user) throw new Error(`User not found: ${userId}`);
 
-    // Prevent deleting the last super admin
-    if (user.role === 'super_admin') {
-      const superAdminCount = metaDb.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'super_admin'").get() as { count: number };
+    // Prevent deleting the last super admin / platform owner
+    if (user.role === 'system_owner' || user.role === 'super_admin') {
+      const superAdminCount = metaDb.prepare("SELECT COUNT(*) as count FROM users WHERE role IN ('system_owner', 'super_admin')").get() as { count: number };
       if (superAdminCount.count <= 1) {
-        throw new Error('Cannot delete the only Super Administrator account');
+        throw new Error('Cannot delete the only Platform Owner account');
       }
     }
 

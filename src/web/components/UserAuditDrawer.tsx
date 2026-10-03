@@ -18,7 +18,7 @@ import {
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatDate } from '../lib/utils.js';
 import { useI18n } from '../hooks/useI18n.js';
-import type { UserSummaryResponse, UserRecord } from '../../../shared/index.js';
+import { isOwnerRole, isAdminRole, type UserSummaryResponse, type UserRecord } from '@shared/index.js';
 
 interface UserAuditDrawerProps {
   userId: string | null;
@@ -164,10 +164,12 @@ export const UserAuditDrawer: React.FC<UserAuditDrawerProps> = ({
 
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                   <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider ${
-                    user.role === 'super_admin'
+                    isOwnerRole(user.role)
                       ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                      : user.role === 'admin'
+                      : isAdminRole(user.role)
                       ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                      : user.role === 'developer'
+                      ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20'
                       : 'bg-muted text-muted-foreground border border-border'
                   }`}>
                     {user.role}

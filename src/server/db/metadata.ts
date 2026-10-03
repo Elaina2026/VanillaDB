@@ -402,6 +402,47 @@ function runMigrations(db: DatabaseSync): void {
           ('developer', 'Developer', 'Full database lifecycle, API tokens, DDL/SQL execution & SDK access', 1, '["databases:create", "databases:query", "tokens:create", "backups:create"]', 1787821216000, 1787821216000),
           ('user', 'User', 'Standard user with assigned database access & read/write quotas', 1, '["databases:read", "databases:write"]', 1787821216000, 1787821216000);
       `
+    },
+    {
+      version: 17,
+      name: 'add_quotas_to_roles',
+      sql: `
+        ALTER TABLE roles ADD COLUMN max_storage_mb INTEGER DEFAULT 500;
+        ALTER TABLE roles ADD COLUMN max_databases INTEGER DEFAULT 5;
+        ALTER TABLE roles ADD COLUMN rate_limit_per_minute INTEGER DEFAULT 180;
+        UPDATE roles SET max_storage_mb = 0, max_databases = 0, rate_limit_per_minute = 0 WHERE id = 'super_admin';
+        UPDATE roles SET max_storage_mb = 10240, max_databases = 100, rate_limit_per_minute = 1000 WHERE id = 'admin';
+        UPDATE roles SET max_storage_mb = 2048, max_databases = 20, rate_limit_per_minute = 600 WHERE id = 'developer';
+        UPDATE roles SET max_storage_mb = 500, max_databases = 5, rate_limit_per_minute = 180 WHERE id = 'user';
+      `
+    },
+    {
+      version: 18,
+      name: 'upgrade_role_identifiers_to_enterprise',
+      sql: `
+        UPDATE roles SET name = 'Platform Owner', description = 'Full sovereignty over cluster infrastructure, root sandboxing & security policies' WHERE id = 'super_admin';
+        UPDATE roles SET name = 'Platform Administrator', description = 'Platform operations, tenant orchestration, resource quotas & telemetry analytics' WHERE id = 'admin';
+        UPDATE roles SET name = 'Database Engineer' WHERE id = 'developer';
+        UPDATE roles SET name = 'Standard Member' WHERE id = 'user';
+        DELETE FROM roles WHERE id IN ('system_owner', 'system_admin');
+      `
+    },
+    {
+      version: 19,
+      name: 'restore_role_identifiers_to_super_admin_and_admin',
+      sql: `
+        INSERT OR IGNORE INTO roles (id, name, description, is_system, permissions, max_storage_mb, max_databases, rate_limit_per_minute, created_at, updated_at)
+        VALUES
+          ('super_admin', 'Platform Owner', 'Full sovereignty over cluster infrastructure, root sandboxing & security policies', 1, '["*"]', 0, 0, 0, 1787821216000, 1787821216000),
+          ('admin', 'Platform Administrator', 'Platform operations, tenant orchestration, resource quotas & telemetry analytics', 1, '["users:manage", "databases:manage", "settings:manage"]', 10240, 100, 1000, 1787821216000, 1787821216000);
+        UPDATE roles SET name = 'Platform Owner', description = 'Full sovereignty over cluster infrastructure, root sandboxing & security policies' WHERE id = 'super_admin';
+        UPDATE roles SET name = 'Platform Administrator', description = 'Platform operations, tenant orchestration, resource quotas & telemetry analytics' WHERE id = 'admin';
+        UPDATE roles SET name = 'Database Engineer' WHERE id = 'developer';
+        UPDATE roles SET name = 'Standard Member' WHERE id = 'user';
+        UPDATE users SET role = 'super_admin' WHERE role = 'system_owner';
+        UPDATE users SET role = 'admin' WHERE role = 'system_admin';
+        DELETE FROM roles WHERE id IN ('system_owner', 'system_admin');
+      `
     }
   ];
 

@@ -4,6 +4,7 @@ import { authService, type SessionUser } from '../services/auth.js';
 import { tokenService } from '../services/tokens.js';
 import { config } from '../config/index.js';
 import type { ApiTokenRecord, TokenPermission, UserRole } from '../../../shared/index.js';
+import { isOwnerRole, isAdminRole } from '../../../shared/index.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -87,7 +88,7 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
     return;
   }
 
-  if (fullUser && fullUser.role !== 'super_admin') {
+  if (fullUser && !isOwnerRole(fullUser.role)) {
     const targetDbId = (request.params as any)?.id || (request.params as any)?.databaseId || request.databaseId;
     if (targetDbId) {
       const limit = fullUser.rate_limit_per_minute > 0 ? fullUser.rate_limit_per_minute : 180;
@@ -195,7 +196,15 @@ export function requireRole(allowedRoles: UserRole[]) {
     }
     if (!request.adminUser) return;
 
-    if (!allowedRoles.includes(request.adminUser.role)) {
+    const userRole = request.adminUser.role;
+    const hasRole = allowedRoles.some((allowed) => {
+      if (allowed === userRole) return true;
+      if ((allowed === 'system_owner' || allowed === 'super_admin') && isOwnerRole(userRole)) return true;
+      if ((allowed === 'system_admin' || allowed === 'admin') && isAdminRole(userRole)) return true;
+      return false;
+    });
+
+    if (!hasRole) {
       reply.status(403).send({
         success: false,
         error: {
@@ -279,7 +288,7 @@ export function requireTokenPermission(permission: TokenPermission) {
         };
 
         // Enforce tenant boundary: regular users can only access databases they own or are invited to
-        if (user.role !== 'super_admin' && user.role !== 'admin') {
+        if (!isAdminRole(user.role)) {
           const { databaseMembersService } = await import('../services/members.js');
           const memberRole = databaseMembersService.getUserDatabaseRole(databaseId, user.userId, user.role);
           if (!memberRole) {
@@ -299,7 +308,7 @@ export function requireTokenPermission(permission: TokenPermission) {
           }
         }
 
-        if (user.role !== 'super_admin') {
+        if (!isOwnerRole(user.role)) {
           const fullUser = authService.getUserById(user.userId);
           const limit = (fullUser?.rate_limit_per_minute && fullUser.rate_limit_per_minute > 0)
             ? fullUser.rate_limit_per_minute

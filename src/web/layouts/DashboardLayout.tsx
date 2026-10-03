@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../api/client.js';
-import type { UserInboxResponse } from '@shared/index.js';
+import { type UserInboxResponse, isOwnerRole, isAdminRole } from '@shared/index.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useTheme } from '../hooks/useTheme.js';
 import { useI18n } from '../hooks/useI18n.js';
@@ -86,6 +86,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     enabled: !!user,
   });
   const unreadCount = inbox?.unreadCount || 0;
+  const isAdmin = isAdminRole(user?.role);
+
+  const getRoleLabel = (role?: string) => {
+    if (isOwnerRole(role)) return t('users.roles.superAdmin', 'Platform Owner');
+    if (isAdminRole(role)) return t('users.roles.admin', 'Platform Administrator');
+    if (role === 'developer') return t('users.roles.developer', 'Database Engineer');
+    if (role === 'user') return t('users.roles.user', 'Standard Member');
+    return role || 'User';
+  };
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
@@ -358,19 +367,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                   isSidebarCollapsed ? 'justify-center px-0' : ''
                 )}
-                title={user?.role === 'user' ? t('nav.userDashboard', 'User Dashboard') : t('nav.overview', 'Overview')}
+                title={!isAdmin ? t('nav.userDashboard', 'User Dashboard') : t('nav.overview', 'Overview')}
               >
-                {user?.role === 'user' ? (
+                {!isAdmin ? (
                   <LayoutDashboard className="w-4 h-4 shrink-0" />
                 ) : (
                   <Server className="w-4 h-4 shrink-0" />
                 )}
                 {!isSidebarCollapsed && (
-                  <span>{user?.role === 'user' ? t('nav.userDashboard', 'User Dashboard') : t('nav.overview', 'Overview')}</span>
+                  <span>{!isAdmin ? t('nav.userDashboard', 'User Dashboard') : t('nav.overview', 'Overview')}</span>
                 )}
               </button>
 
-              {(user?.role === 'super_admin' || user?.role === 'admin') && (
+              {isAdmin && (
                 <button
                   onClick={() => {
                     setSelectedDatabaseId(null);
@@ -470,7 +479,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 {!isSidebarCollapsed && <span>{t('nav.activity', 'Activity Logs')}</span>}
               </button>
 
-              {(user?.role === 'super_admin' || user?.role === 'admin') && (
+              {isAdmin && (
                 <button
                   onClick={() => {
                     setSelectedDatabaseId(null);
@@ -491,7 +500,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </button>
               )}
 
-              {(user?.role === 'super_admin' || user?.role === 'admin') && (
+              {isAdmin && (
                 <button
                   onClick={() => {
                     setSelectedDatabaseId(null);
@@ -588,7 +597,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               {!isSidebarCollapsed && (
                 <div className="truncate">
                   <span className="truncate font-medium text-foreground block group-hover:text-blue-500 transition-colors">{user?.username}</span>
-                  <span className="text-[10px] text-muted-foreground block capitalize">{user?.role || 'user'}</span>
+                  <span className="text-[10px] text-muted-foreground block">{getRoleLabel(user?.role)}</span>
                 </div>
               )}
             </button>

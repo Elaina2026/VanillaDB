@@ -13,6 +13,7 @@ import { clusterService } from '../services/cluster.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { requireTokenPermission } from '../middleware/auth.js';
 import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
+import { isAdminRole } from '../../../shared/index.js';
 
 function resolveTokenRestrictions(req: FastifyRequest) {
   let allowed: string[] | null = (req as any).apiToken?.allowed_tables || null;
@@ -183,7 +184,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
             if (!req.headers.authorization && req.cookies?.vdb_session) {
               const user = authService.verifySessionCookie(req.cookies.vdb_session, config.sessionSecret);
               if (user) {
-                if (user.role !== 'super_admin' && user.role !== 'admin') {
+                if (!isAdminRole(user.role)) {
                   const { databaseMembersService } = await import('../services/members.js');
                   const role = databaseMembersService.getUserDatabaseRole(databaseId, user.userId, user.role);
                   if (!role) {
@@ -298,7 +299,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
           error: { code: 'FORBIDDEN', message: 'Token does not have write permissions', requestId: req.id },
         });
       }
-    } else if (sessionUser && sessionUser.role !== 'super_admin' && sessionUser.role !== 'admin') {
+    } else if (sessionUser && !isAdminRole(sessionUser.role)) {
       const { databaseMembersService } = await import('../services/members.js');
       const memberRole = databaseMembersService.getUserDatabaseRole(databaseId, sessionUser.userId, sessionUser.role);
       if (memberRole === 'viewer') {
@@ -406,7 +407,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
       }
-    } else if (sessionUser && sessionUser.role !== 'super_admin' && sessionUser.role !== 'admin') {
+    } else if (sessionUser && !isAdminRole(sessionUser.role)) {
       const { databaseMembersService } = await import('../services/members.js');
       const memberRole = databaseMembersService.getUserDatabaseRole(databaseId, sessionUser.userId, sessionUser.role);
       if (memberRole === 'viewer') {
@@ -769,7 +770,7 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
         const user = authService.verifySessionCookie(req.cookies.vdb_session, config.sessionSecret);
         if (user) {
           const targetDbId = (req.params as any).databaseId;
-          if (user.role !== 'super_admin' && user.role !== 'admin') {
+          if (!isAdminRole(user.role)) {
             const { databaseMembersService } = await import('../services/members.js');
             const role = databaseMembersService.getUserDatabaseRole(targetDbId, user.userId, user.role);
             if (!role) {

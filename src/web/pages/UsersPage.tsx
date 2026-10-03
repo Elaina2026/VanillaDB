@@ -25,6 +25,8 @@ import {
   Zap,
   Sparkles,
   Layers,
+  HardDrive,
+  Info,
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatDate } from '../lib/utils.js';
@@ -32,13 +34,14 @@ import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
 import { UserAuditDrawer, getAvatarStyle, getInitials } from '../components/UserAuditDrawer.js';
-import type { UserRecord, UserRole, RoleRecord } from '@shared/index.js';
+import { SYSTEM_PERMISSIONS, isOwnerRole, isAdminRole, type UserRecord, type UserRole, type RoleRecord } from '@shared/index.js';
 
 export const UsersPage: React.FC = () => {
   const { user: currentUser } = useAuth();
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isSuperAdmin = isOwnerRole(currentUser?.role);
+  const canManageUsers = isAdminRole(currentUser?.role);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
@@ -47,27 +50,80 @@ export const UsersPage: React.FC = () => {
 
   // Roles Management state
   const [isRolesModalOpen, setIsRolesModalOpen] = useState(false);
-  const [roleForm, setRoleForm] = useState({ id: '', name: '', description: '' });
+  const [editingRole, setEditingRole] = useState<RoleRecord | null>(null);
+  const [roleForm, setRoleForm] = useState<{
+    id: string;
+    name: string;
+    description: string;
+    max_storage_mb: number;
+    max_databases: number;
+    rate_limit_per_minute: number;
+    permissions: string[];
+  }>({
+    id: '',
+    name: '',
+    description: '',
+    max_storage_mb: 500,
+    max_databases: 5,
+    rate_limit_per_minute: 180,
+    permissions: ['databases:read', 'databases:write', 'databases:query'],
+  });
   const [roleFormError, setRoleFormError] = useState<string | null>(null);
 
-  const { data: roles = [], refetch: refetchRoles } = useQuery<RoleRecord[]>({
+  const resetRoleForm = () => {
+    setRoleForm({
+      id: '',
+      name: '',
+      description: '',
+      max_storage_mb: 500,
+      max_databases: 5,
+      rate_limit_per_minute: 180,
+      permissions: ['databases:read', 'databases:write', 'databases:query'],
+    });
+    setEditingRole(null);
+    setRoleFormError(null);
+  };
+
+  const { data: roles = [], isFetching: isRolesFetching, refetch: refetchRoles } = useQuery<RoleRecord[]>({
     queryKey: ['roles'],
     queryFn: () => apiRequest('/api/admin/roles'),
   });
 
   const createRoleMutation = useMutation({
-    mutationFn: (data: { id?: string; name: string; description?: string }) =>
+    mutationFn: (data: {
+      id?: string;
+      name: string;
+      description?: string;
+      max_storage_mb?: number;
+      max_databases?: number;
+      rate_limit_per_minute?: number;
+      permissions?: string[];
+    }) =>
       apiRequest('/api/admin/roles', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['roles'] });
-      setRoleForm({ id: '', name: '', description: '' });
-      setRoleFormError(null);
+      resetRoleForm();
     },
     onError: (err: any) => {
       setRoleFormError(err.message || 'Failed to create role');
+    },
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: ({ roleId, data }: { roleId: string; data: any }) =>
+      apiRequest(`/api/admin/roles/${roleId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      resetRoleForm();
+    },
+    onError: (err: any) => {
+      setRoleFormError(err.message || 'Failed to update role');
     },
   });
 
@@ -116,10 +172,29 @@ export const UsersPage: React.FC = () => {
 
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { data: users = [], isLoading, refetch } = useQuery<UserRecord[]>({
+  const { data: users = [], isLoading: isUsersLoading, isFetching: isUsersFetching, refetch: refetchUsers } = useQuery<UserRecord[]>({
     queryKey: ['users'],
     queryFn: () => apiRequest('/api/admin/users'),
   });
+
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsManualRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['users'] }),
+        queryClient.invalidateQueries({ queryKey: ['roles'] }),
+        queryClient.invalidateQueries({ queryKey: ['user-summary'] }),
+        refetchUsers(),
+        refetchRoles(),
+      ]);
+    } finally {
+      setTimeout(() => setIsManualRefreshing(false), 450);
+    }
+  };
+
+  const isRefreshing = isManualRefreshing || isUsersFetching || isRolesFetching;
 
   const createUserMutation = useMutation({
     mutationFn: (data: typeof formData) =>
@@ -309,13 +384,16 @@ export const UsersPage: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => refetch()}
-            disabled={isLoading}
-            className="px-3 py-1.5 bg-card border border-border hover:bg-accent text-muted-foreground hover:text-foreground rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="px-3 py-1.5 bg-card border border-border hover:bg-accent text-muted-foreground hover:text-foreground rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
             title={t('common.refresh', 'Refresh')}
+            aria-label={t('common.refresh', 'Refresh')}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">{t('common.refresh', 'Refresh')}</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
+            <span className="hidden sm:inline">
+              {isRefreshing ? t('common.refreshing', 'Refreshing...') : t('common.refresh', 'Refresh')}
+            </span>
           </button>
 
           <button
@@ -327,7 +405,7 @@ export const UsersPage: React.FC = () => {
             <span>{t('users.manageRoles', 'Manage Roles')}</span>
           </button>
 
-          {isSuperAdmin && (
+          {canManageUsers && (
             <button
               onClick={() => {
                 resetForm();
@@ -366,9 +444,9 @@ export const UsersPage: React.FC = () => {
             <Shield className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-[11px] font-medium text-muted-foreground">{t('users.superAdmins', 'Super Admins')}</div>
+            <div className="text-[11px] font-medium text-muted-foreground">{t('users.superAdmins', 'Platform Owners')}</div>
             <div className="text-lg font-bold text-foreground mt-0.5">
-              {users.filter(u => u.role === 'super_admin').length}
+              {users.filter(u => isOwnerRole(u.role)).length}
             </div>
           </div>
         </div>
@@ -378,7 +456,7 @@ export const UsersPage: React.FC = () => {
             <Zap className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-[11px] font-medium text-muted-foreground">{t('users.roleDeveloper', 'Developers')}</div>
+            <div className="text-[11px] font-medium text-muted-foreground">{t('users.roleDeveloper', 'Database Engineers')}</div>
             <div className="text-lg font-bold text-foreground mt-0.5">
               {users.filter(u => u.role === 'developer').length}
             </div>
@@ -390,7 +468,7 @@ export const UsersPage: React.FC = () => {
             <Key className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-[11px] font-medium text-muted-foreground">{t('users.standardUsers', 'Standard Users')}</div>
+            <div className="text-[11px] font-medium text-muted-foreground">{t('users.standardUsers', 'Standard Members')}</div>
             <div className="text-lg font-bold text-foreground mt-0.5">
               {users.filter(u => u.role === 'user').length}
             </div>
@@ -417,7 +495,7 @@ export const UsersPage: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-border bg-muted/40 text-muted-foreground font-semibold">
-                {isSuperAdmin && (
+                {canManageUsers && (
                   <th className="py-3 px-3 w-10 text-center">
                     <button
                       type="button"
@@ -448,7 +526,7 @@ export const UsersPage: React.FC = () => {
             <tbody className="divide-y divide-border">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={isSuperAdmin ? 8 : 7} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={canManageUsers ? 8 : 7} className="py-8 text-center text-muted-foreground">
                     {t('users.noMatchingUsers', 'No users matching search criteria.')}
                   </td>
                 </tr>
@@ -480,7 +558,7 @@ export const UsersPage: React.FC = () => {
                       className={`hover:bg-muted/30 transition-colors ${isSelected ? 'bg-primary/5' : ''}`}
                     >
                       {/* Checkbox Column */}
-                      {isSuperAdmin && (
+                      {canManageUsers && (
                         <td className="py-3 px-3 text-center">
                           <button
                             type="button"
@@ -537,17 +615,62 @@ export const UsersPage: React.FC = () => {
 
                       {/* Role Column */}
                       <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase ${
-                          u.role === 'super_admin'
-                            ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                            : u.role === 'admin'
-                            ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
-                            : u.role === 'developer'
-                            ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20'
-                            : 'bg-muted text-muted-foreground border border-border'
-                        }`}>
-                          {u.role}
-                        </span>
+                        {canManageUsers ? (
+                          <div className="relative inline-block">
+                            <select
+                              value={u.role}
+                              disabled={isCurrent && u.role === 'super_admin'}
+                              onChange={(e) => {
+                                const newRole = e.target.value as UserRole;
+                                if (newRole === u.role) return;
+                                if (confirm(`Change role of user "${u.username}" to "${newRole}"?`)) {
+                                  updateUserMutation.mutate({
+                                    id: u.id,
+                                    data: { role: newRole },
+                                  });
+                                }
+                              }}
+                              className={`cursor-pointer pl-2.5 pr-6 py-1 rounded text-[11px] font-bold uppercase tracking-wider border focus:outline-none focus:ring-1 focus:ring-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isOwnerRole(u.role)
+                                  ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 hover:bg-amber-500/20'
+                                  : isAdminRole(u.role)
+                                  ? 'bg-blue-500/10 text-blue-500 border-blue-500/30 hover:bg-blue-500/20'
+                                  : u.role === 'developer'
+                                  ? 'bg-purple-500/10 text-purple-500 border-purple-500/30 hover:bg-purple-500/20'
+                                  : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
+                              }`}
+                              title={isCurrent && isOwnerRole(u.role) ? t('users.cannotDemoteSelf', 'Cannot change your own role') : t('users.changeUserRole', 'Click to change role')}
+                            >
+                              {roles && roles.length > 0 ? (
+                                roles.map((r) => (
+                                  <option key={r.id} value={r.id} className="bg-card text-foreground normal-case font-normal text-xs">
+                                    {r.name} ({r.id})
+                                  </option>
+                                ))
+                              ) : (
+                                <>
+                                  <option value="super_admin" className="bg-card text-foreground normal-case font-normal text-xs">{t('users.roleSuperAdmin', 'Platform Owner')}</option>
+                                  <option value="admin" className="bg-card text-foreground normal-case font-normal text-xs">{t('users.roleAdmin', 'Platform Administrator')}</option>
+                                  <option value="developer" className="bg-card text-foreground normal-case font-normal text-xs">{t('users.roleDeveloper', 'Database Engineer')}</option>
+                                  <option value="user" className="bg-card text-foreground normal-case font-normal text-xs">{t('users.roleUserStandard', 'Standard Member')}</option>
+                                </>
+                              )}
+                            </select>
+                            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-[8px] opacity-60">▼</span>
+                          </div>
+                        ) : (
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase ${
+                            isOwnerRole(u.role)
+                              ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                              : isAdminRole(u.role)
+                              ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                              : u.role === 'developer'
+                              ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20'
+                              : 'bg-muted text-muted-foreground border border-border'
+                          }`}>
+                            {roles.find(r => r.id === u.role)?.name || u.role}
+                          </span>
+                        )}
                       </td>
 
                       {/* Visual Quota Usage Bars */}
@@ -621,12 +744,12 @@ export const UsersPage: React.FC = () => {
                             <Activity className="w-3.5 h-3.5 text-primary" />
                           </button>
 
-                          {isSuperAdmin ? (
+                          {canManageUsers ? (
                             <>
                               {/* Force Revoke Sessions */}
                               <button
                                 onClick={() => setRevokingUser({ id: u.id, username: u.username })}
-                                disabled={isCurrent}
+                                disabled={isCurrent || (!isSuperAdmin && isOwnerRole(u.role))}
                                 className="p-1.5 hover:bg-amber-500/10 rounded text-muted-foreground hover:text-amber-500 disabled:opacity-30 transition-colors"
                                 title={t('users.revokeSessions', 'Force Revoke Sessions')}
                                 aria-label={`${t('users.revokeSessions', 'Force Revoke Sessions')}: ${u.username}`}
@@ -637,7 +760,8 @@ export const UsersPage: React.FC = () => {
                               {/* Edit User */}
                               <button
                                 onClick={() => handleOpenEdit(u)}
-                                className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors"
+                                disabled={!isSuperAdmin && isOwnerRole(u.role)}
+                                className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
                                 title={t('users.editUser', 'Edit User')}
                                 aria-label={`${t('users.editUser', 'Edit User')}: ${u.username}`}
                               >
@@ -647,7 +771,7 @@ export const UsersPage: React.FC = () => {
                               {/* Delete User */}
                               <button
                                 onClick={() => setDeletingUserId(u.id)}
-                                disabled={isCurrent}
+                                disabled={isCurrent || (!isSuperAdmin && isOwnerRole(u.role))}
                                 className="p-1.5 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-500 disabled:opacity-30 transition-colors"
                                 title={t('users.deleteUser', 'Delete User')}
                                 aria-label={`${t('users.deleteUser', 'Delete User')}: ${u.username}`}
@@ -670,7 +794,7 @@ export const UsersPage: React.FC = () => {
       </div>
 
       {/* Floating Bulk Actions Toolbar */}
-      {isSuperAdmin && selectedUserIds.size > 0 && (
+      {canManageUsers && selectedUserIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-card/95 backdrop-blur-md border border-primary/40 rounded-xl px-4 py-2.5 shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200 max-w-[calc(100vw-2rem)] overflow-x-auto">
           <div className="text-xs font-bold text-foreground flex items-center gap-2 pr-3 border-r border-border">
             <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px]">
@@ -749,42 +873,65 @@ export const UsersPage: React.FC = () => {
               Select the new role to assign to all selected user accounts:
             </p>
 
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => bulkActionMutation.mutate({ userIds: [...selectedUserIds], action: 'set_role', role: 'user' })}
-                className="w-full p-2.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/50 text-left text-xs font-semibold flex items-center justify-between transition-colors"
-              >
-                <span>{t('users.roleUserStandard', 'User (Standard)')}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">user</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => bulkActionMutation.mutate({ userIds: [...selectedUserIds], action: 'set_role', role: 'developer' })}
-                className="w-full p-2.5 rounded-lg border border-purple-500/20 bg-purple-500/10 hover:bg-purple-500/20 text-left text-xs font-semibold text-purple-600 dark:text-purple-400 flex items-center justify-between transition-colors"
-              >
-                <span>{t('users.roleDeveloper', 'Developer')}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-500 font-mono">developer</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => bulkActionMutation.mutate({ userIds: [...selectedUserIds], action: 'set_role', role: 'admin' })}
-                className="w-full p-2.5 rounded-lg border border-blue-500/20 bg-blue-500/10 hover:bg-blue-500/20 text-left text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center justify-between transition-colors"
-              >
-                <span>{t('users.roleAdmin', 'Admin')}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-500 font-mono">admin</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => bulkActionMutation.mutate({ userIds: [...selectedUserIds], action: 'set_role', role: 'super_admin' })}
-                className="w-full p-2.5 rounded-lg border border-amber-500/20 bg-amber-500/10 hover:bg-amber-500/20 text-left text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center justify-between transition-colors"
-              >
-                <span>{t('users.roleSuperAdmin', 'Super Admin')}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-mono">super_admin</span>
-              </button>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {roles && roles.length > 0 ? (
+                roles.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => bulkActionMutation.mutate({ userIds: [...selectedUserIds], action: 'set_role', role: r.id as any })}
+                    disabled={bulkActionMutation.isPending || (!isSuperAdmin && isOwnerRole(r.id))}
+                    className="w-full p-2.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/50 disabled:opacity-40 text-left text-xs font-semibold flex items-center justify-between transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground">{r.name}</span>
+                      {r.is_system ? (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-muted text-muted-foreground font-normal">System</span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-500 font-normal">Custom</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">{r.id}</span>
+                  </button>
+                ))
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => bulkActionMutation.mutate({ userIds: [...selectedUserIds], action: 'set_role', role: 'user' })}
+                    className="w-full p-2.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/50 text-left text-xs font-semibold flex items-center justify-between transition-colors"
+                  >
+                    <span>{t('users.roleUserStandard', 'Standard Member')}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">user</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => bulkActionMutation.mutate({ userIds: [...selectedUserIds], action: 'set_role', role: 'developer' })}
+                    className="w-full p-2.5 rounded-lg border border-purple-500/20 bg-purple-500/10 hover:bg-purple-500/20 text-left text-xs font-semibold text-purple-600 dark:text-purple-400 flex items-center justify-between transition-colors"
+                  >
+                    <span>{t('users.roleDeveloper', 'Database Engineer')}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-500 font-mono">developer</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => bulkActionMutation.mutate({ userIds: [...selectedUserIds], action: 'set_role', role: 'admin' })}
+                    className="w-full p-2.5 rounded-lg border border-blue-500/20 bg-blue-500/10 hover:bg-blue-500/20 text-left text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center justify-between transition-colors"
+                  >
+                    <span>{t('users.roleAdmin', 'Platform Administrator')}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-500 font-mono">admin</span>
+                  </button>
+                  {isSuperAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => bulkActionMutation.mutate({ userIds: [...selectedUserIds], action: 'set_role', role: 'super_admin' })}
+                      className="w-full p-2.5 rounded-lg border border-amber-500/20 bg-amber-500/10 hover:bg-amber-500/20 text-left text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center justify-between transition-colors"
+                    >
+                      <span>{t('users.roleSuperAdmin', 'Platform Owner')}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-mono">super_admin</span>
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -925,28 +1072,58 @@ export const UsersPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="user-role" className="block text-muted-foreground font-medium mb-1">
-                    {t('users.role', 'Role')}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="user-role" className="block text-muted-foreground font-medium">
+                      {t('users.role', 'Role')}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const matchedRole = roles.find((r) => r.id === formData.role);
+                        if (matchedRole) {
+                          setFormData({
+                            ...formData,
+                            maxDatabases: matchedRole.max_databases ?? 2,
+                            rateLimitPerMinute: matchedRole.rate_limit_per_minute ?? 180,
+                          });
+                        }
+                      }}
+                      className="text-[10px] text-primary hover:underline font-semibold"
+                      title={t('users.applyRoleQuotas', 'Sync Quotas from Role')}
+                    >
+                      {t('users.applyRoleQuotas', 'Sync Quotas from Role')}
+                    </button>
+                  </div>
                   <select
                     id="user-role"
                     name="role"
                     value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
+                    onChange={(e) => {
+                      const newRole = e.target.value as UserRole;
+                      const matchedRole = roles.find((r) => r.id === newRole);
+                      setFormData({
+                        ...formData,
+                        role: newRole,
+                        ...(matchedRole ? {
+                          maxDatabases: matchedRole.max_databases ?? formData.maxDatabases,
+                          rateLimitPerMinute: matchedRole.rate_limit_per_minute ?? formData.rateLimitPerMinute,
+                        } : {}),
+                      });
+                    }}
                     className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   >
                     {roles && roles.length > 0 ? (
                       roles.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name} ({r.id})
+                        <option key={r.id} value={r.id} disabled={!isSuperAdmin && isOwnerRole(r.id)}>
+                          {r.name} ({r.id}) {!isSuperAdmin && isOwnerRole(r.id) ? '— Platform Owner only' : ''}
                         </option>
                       ))
                     ) : (
                       <>
-                        <option value="user">{t('users.roleUserStandard', 'User (Standard)')}</option>
-                        <option value="developer">{t('users.roleDeveloper', 'Developer')}</option>
-                        <option value="admin">{t('users.roleAdmin', 'Admin')}</option>
-                        <option value="super_admin">{t('users.roleSuperAdmin', 'Super Admin')}</option>
+                        {isSuperAdmin && <option value="super_admin">{t('users.roleSuperAdmin', 'Platform Owner')}</option>}
+                        <option value="admin">{t('users.roleAdmin', 'Platform Administrator')}</option>
+                        <option value="developer">{t('users.roleDeveloper', 'Database Engineer')}</option>
+                        <option value="user">{t('users.roleUserStandard', 'Standard Member')}</option>
                       </>
                     )}
                   </select>
@@ -1119,14 +1296,14 @@ export const UsersPage: React.FC = () => {
         }}
         onRevokeSessions={(id, username) => setRevokingUser({ id, username })}
         onEditUser={(u) => handleOpenEdit(u)}
-        isSuperAdmin={isSuperAdmin}
+        isSuperAdmin={canManageUsers}
       />
 
       {/* Role Management Modal */}
       {isRolesModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-xs">
-          <div className="bg-card border border-border rounded-xl max-w-xl w-full p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-background/80 backdrop-blur-xs">
+          <div className="bg-card border border-border rounded-xl max-w-2xl w-full p-4 sm:p-6 shadow-xl max-h-[90dvh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-border shrink-0">
               <div className="flex items-center gap-2">
                 <Shield className="w-5 h-5 text-primary" />
                 <div>
@@ -1141,7 +1318,7 @@ export const UsersPage: React.FC = () => {
               <button
                 onClick={() => {
                   setIsRolesModalOpen(false);
-                  setRoleFormError(null);
+                  resetRoleForm();
                 }}
                 className="p-1 rounded text-muted-foreground hover:text-foreground"
               >
@@ -1149,129 +1326,431 @@ export const UsersPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Existing Roles List */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                {t('roles.existingRoles', 'Active Platform Roles')} ({roles.length})
-              </h3>
-              <div className="divide-y divide-border border border-border rounded-lg overflow-hidden bg-muted/10">
-                {roles.map((r) => (
-                  <div key={r.id} className="p-3 flex items-start justify-between gap-3 text-xs">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-foreground">{r.name}</span>
-                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                          {r.id}
-                        </span>
-                        {r.is_system ? (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-medium">
-                            {t('roles.systemRole', 'System')}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-4 pt-1">
+              {/* Existing Roles List */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {t('roles.existingRoles', 'Active Platform Roles')} ({roles.length})
+                </h3>
+                <div className="divide-y divide-border border border-border rounded-lg overflow-hidden bg-muted/10">
+                  {roles.map((r) => (
+                    <div key={r.id} className="p-3 flex flex-col sm:flex-row sm:items-start justify-between gap-3 text-xs">
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-foreground">{r.name}</span>
+                          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                            {r.id}
                           </span>
-                        ) : (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20 font-medium">
-                            {t('roles.customRole', 'Custom')}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-muted-foreground text-[11px] mt-0.5">{r.description || 'No description'}</p>
-                    </div>
+                          {r.is_system ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-medium">
+                              {t('roles.systemRole', 'System')}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20 font-medium">
+                              {t('roles.customRole', 'Custom')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-muted-foreground text-[11px]">{r.description || 'No description'}</p>
 
-                    {!r.is_system && isSuperAdmin && (
+                        {/* Quota badges */}
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap pt-0.5">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/40 border border-border font-mono">
+                            <HardDrive className="w-3 h-3 text-primary" />
+                            {r.max_storage_mb === 0 ? '∞ Unlimited' : `${r.max_storage_mb ?? 500} MB`}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/40 border border-border font-mono">
+                            <Database className="w-3 h-3 text-primary" />
+                            {r.max_databases === 0 ? '∞ Unlimited' : `${r.max_databases ?? 5} DBs`}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/40 border border-border font-mono">
+                            <Gauge className="w-3 h-3 text-primary" />
+                            {r.rate_limit_per_minute === 0 ? '∞ Unlimited' : `${r.rate_limit_per_minute ?? 180} req/m`}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/40 border border-border font-mono">
+                            <Shield className="w-3 h-3 text-primary" />
+                            {r.permissions?.includes('*')
+                              ? 'All (*)'
+                              : `${r.permissions?.length || 0} perms`}
+                          </span>
+                        </div>
+                      </div>
+
+                      {canManageUsers && (
+                        <div className="flex items-center gap-1 shrink-0 self-end sm:self-start">
+                          <button
+                            onClick={() => {
+                              setEditingRole(r);
+                              setRoleForm({
+                                id: r.id,
+                                name: r.name,
+                                description: r.description || '',
+                                max_storage_mb: r.max_storage_mb ?? 500,
+                                max_databases: r.max_databases ?? 5,
+                                rate_limit_per_minute: r.rate_limit_per_minute ?? 180,
+                                permissions: r.permissions || [],
+                              });
+                              setRoleFormError(null);
+                            }}
+                            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors"
+                            title={t('roles.editRole', 'Edit Role')}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          {!r.is_system && (
+                            <button
+                              onClick={() => {
+                                if (confirm(`Delete custom role "${r.name}"?`)) {
+                                  deleteRoleMutation.mutate(r.id);
+                                }
+                              }}
+                              disabled={deleteRoleMutation.isPending}
+                              className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                              title="Delete Role"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Create or Edit Role Form */}
+              {canManageUsers && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!roleForm.name.trim()) return;
+                    if (editingRole) {
+                      updateRoleMutation.mutate({
+                        roleId: editingRole.id,
+                        data: {
+                          name: roleForm.name.trim(),
+                          description: roleForm.description.trim() || null,
+                          max_storage_mb: roleForm.max_storage_mb,
+                          max_databases: roleForm.max_databases,
+                          rate_limit_per_minute: roleForm.rate_limit_per_minute,
+                          permissions: roleForm.permissions,
+                        },
+                      });
+                    } else {
+                      createRoleMutation.mutate({
+                        id: roleForm.id.trim() || undefined,
+                        name: roleForm.name.trim(),
+                        description: roleForm.description.trim() || undefined,
+                        max_storage_mb: roleForm.max_storage_mb,
+                        max_databases: roleForm.max_databases,
+                        rate_limit_per_minute: roleForm.rate_limit_per_minute,
+                        permissions: roleForm.permissions,
+                      });
+                    }
+                  }}
+                  className="space-y-4 pt-3 border-t border-border"
+                >
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      {editingRole ? (
+                        <>
+                          <Edit2 className="w-3.5 h-3.5 text-primary" />
+                          {t('roles.editRole', 'Edit Role')}: <span className="font-mono text-primary">{editingRole.id}</span>
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="w-3.5 h-3.5 text-primary" />
+                          {t('roles.createNew', 'Create New Role')}
+                        </>
+                      )}
+                    </h3>
+                    {editingRole && (
                       <button
-                        onClick={() => {
-                          if (confirm(`Delete custom role "${r.name}"?`)) {
-                            deleteRoleMutation.mutate(r.id);
-                          }
-                        }}
-                        disabled={deleteRoleMutation.isPending}
-                        className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors shrink-0"
-                        title="Delete Role"
+                        type="button"
+                        onClick={resetRoleForm}
+                        className="text-xs text-muted-foreground hover:text-foreground underline"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        {t('common.cancel', 'Cancel Edit')}
                       </button>
                     )}
                   </div>
-                ))}
-              </div>
-            </div>
 
-            {/* Create New Role Form */}
-            {isSuperAdmin && (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!roleForm.name.trim()) return;
-                  createRoleMutation.mutate({
-                    id: roleForm.id.trim() || undefined,
-                    name: roleForm.name.trim(),
-                    description: roleForm.description.trim() || undefined,
-                  });
-                }}
-                className="space-y-3 pt-3 border-t border-border"
-              >
-                <h3 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <UserPlus className="w-3.5 h-3.5 text-primary" />
-                  {t('roles.createNew', 'Create New Role')}
-                </h3>
+                  {roleFormError && (
+                    <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded text-red-500 text-xs">
+                      {roleFormError}
+                    </div>
+                  )}
 
-                {roleFormError && (
-                  <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded text-red-500 text-xs">
-                    {roleFormError}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-medium text-muted-foreground mb-1">
+                        {t('roles.roleName', 'Role Display Name')} *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={roleForm.name}
+                        onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+                        placeholder="e.g. QA Engineer"
+                        className="w-full bg-muted/40 border border-border rounded px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-muted-foreground mb-1">
+                        {t('roles.roleId', 'Role Identifier (slug)')}
+                      </label>
+                      <input
+                        type="text"
+                        disabled={Boolean(editingRole)}
+                        value={roleForm.id}
+                        onChange={(e) => setRoleForm({ ...roleForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') })}
+                        placeholder="e.g. qa_engineer"
+                        className="w-full bg-muted/40 border border-border rounded px-3 py-1.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                      />
+                    </div>
                   </div>
-                )}
 
-                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-medium text-muted-foreground mb-1">
-                      {t('roles.roleName', 'Role Display Name')} *
+                      {t('roles.roleDesc', 'Description')}
                     </label>
                     <input
                       type="text"
-                      required
-                      value={roleForm.name}
-                      onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
-                      placeholder="e.g. QA Engineer"
+                      value={roleForm.description}
+                      onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
+                      placeholder="e.g. Quality assurance tester with read and query inspection rights"
                       className="w-full bg-muted/40 border border-border rounded px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-muted-foreground mb-1">
-                      {t('roles.roleId', 'Role Identifier (slug)')}
-                    </label>
-                    <input
-                      type="text"
-                      value={roleForm.id}
-                      onChange={(e) => setRoleForm({ ...roleForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') })}
-                      placeholder="e.g. qa_engineer"
-                      className="w-full bg-muted/40 border border-border rounded px-3 py-1.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
+
+                  {/* Quotas & Limits */}
+                  <div className="p-3 bg-muted/20 border border-border rounded-lg space-y-3">
+                    <h4 className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+                      <Sliders className="w-3.5 h-3.5 text-primary" />
+                      {t('roles.quotasSummary', 'Storage & Resource Limits')}
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {/* Disk Quota */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-medium text-muted-foreground">
+                            {t('roles.diskQuota', 'Disk Quota per DB (MB)')}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setRoleForm({ ...roleForm, max_storage_mb: 0 })}
+                            className="text-[10px] text-primary hover:underline font-semibold"
+                          >
+                            {t('users.setUnlimited', 'Không giới hạn (0)')}
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          value={roleForm.max_storage_mb}
+                          onChange={(e) => setRoleForm({ ...roleForm, max_storage_mb: parseInt(e.target.value, 10) || 0 })}
+                          className="w-full bg-muted/40 border border-border rounded px-2.5 py-1.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        <div className="flex gap-1 mt-1.5 flex-wrap">
+                          {[0, 100, 500, 2048, 10240].map((num) => (
+                            <button
+                              key={num}
+                              type="button"
+                              onClick={() => setRoleForm({ ...roleForm, max_storage_mb: num })}
+                              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                                roleForm.max_storage_mb === num
+                                  ? 'bg-primary/10 border-primary text-primary font-bold'
+                                  : 'border-border text-muted-foreground hover:bg-accent'
+                              }`}
+                            >
+                              {num === 0 ? '∞' : num >= 1024 ? `${num / 1024}G` : `${num}M`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Max DBs */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-medium text-muted-foreground">
+                            {t('roles.maxDatabases', 'Max Databases')}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setRoleForm({ ...roleForm, max_databases: 0 })}
+                            className="text-[10px] text-primary hover:underline font-semibold"
+                          >
+                            {t('users.setUnlimited', 'Không giới hạn (0)')}
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          value={roleForm.max_databases}
+                          onChange={(e) => setRoleForm({ ...roleForm, max_databases: parseInt(e.target.value, 10) || 0 })}
+                          className="w-full bg-muted/40 border border-border rounded px-2.5 py-1.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        <div className="flex gap-1 mt-1.5 flex-wrap">
+                          {[0, 2, 5, 20, 50].map((num) => (
+                            <button
+                              key={num}
+                              type="button"
+                              onClick={() => setRoleForm({ ...roleForm, max_databases: num })}
+                              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                                roleForm.max_databases === num
+                                  ? 'bg-primary/10 border-primary text-primary font-bold'
+                                  : 'border-border text-muted-foreground hover:bg-accent'
+                              }`}
+                            >
+                              {num === 0 ? '∞' : `${num}`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Rate Limit */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-medium text-muted-foreground">
+                            {t('roles.rateLimit', 'Rate Limit (req/min)')}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setRoleForm({ ...roleForm, rate_limit_per_minute: 0 })}
+                            className="text-[10px] text-primary hover:underline font-semibold"
+                          >
+                            {t('users.setUnlimited', 'Không giới hạn (0)')}
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          value={roleForm.rate_limit_per_minute}
+                          onChange={(e) => setRoleForm({ ...roleForm, rate_limit_per_minute: parseInt(e.target.value, 10) || 0 })}
+                          className="w-full bg-muted/40 border border-border rounded px-2.5 py-1.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        <div className="flex gap-1 mt-1.5 flex-wrap">
+                          {[0, 60, 180, 600, 1200].map((num) => (
+                            <button
+                              key={num}
+                              type="button"
+                              onClick={() => setRoleForm({ ...roleForm, rate_limit_per_minute: num })}
+                              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                                roleForm.rate_limit_per_minute === num
+                                  ? 'bg-primary/10 border-primary text-primary font-bold'
+                                  : 'border-border text-muted-foreground hover:bg-accent'
+                              }`}
+                            >
+                              {num === 0 ? '∞' : `${num}`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground mb-1">
-                    {t('roles.roleDesc', 'Description')}
-                  </label>
-                  <input
-                    type="text"
-                    value={roleForm.description}
-                    onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
-                    placeholder="e.g. Quality assurance tester with read and query inspection rights"
-                    className="w-full bg-muted/40 border border-border rounded px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
+                  {/* Permissions Checklist */}
+                  <div className="p-3 bg-muted/20 border border-border rounded-lg space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <h4 className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+                        <Key className="w-3.5 h-3.5 text-primary" />
+                        {t('roles.permissions', 'Granular Permissions')}
+                      </h4>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setRoleForm({ ...roleForm, permissions: SYSTEM_PERMISSIONS.map(p => p.id) })}
+                          className="text-[10px] text-primary hover:underline font-medium"
+                        >
+                          {t('roles.selectAll', 'Select All')}
+                        </button>
+                        <span className="text-muted-foreground text-[10px]">•</span>
+                        <button
+                          type="button"
+                          onClick={() => setRoleForm({ ...roleForm, permissions: [] })}
+                          className="text-[10px] text-muted-foreground hover:underline font-medium"
+                        >
+                          {t('roles.deselectAll', 'Deselect All')}
+                        </button>
+                      </div>
+                    </div>
 
-                <div className="flex justify-end pt-2">
-                  <button
-                    type="submit"
-                    disabled={createRoleMutation.isPending || !roleForm.name.trim()}
-                    className="px-3 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg text-xs font-semibold shadow-xs transition-colors"
-                  >
-                    {createRoleMutation.isPending ? t('common.saving', 'Creating...') : t('roles.createNew', 'Create Role')}
-                  </button>
-                </div>
-              </form>
-            )}
+                    <div className="space-y-3">
+                      {(['Databases', 'API Tokens', 'Backups & Storage', 'Administration'] as const).map((cat) => {
+                        const perms = SYSTEM_PERMISSIONS.filter(p => p.category === cat);
+                        return (
+                          <div key={cat} className="space-y-1.5">
+                            <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                              {cat}
+                            </h5>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              {perms.map((p) => {
+                                const isChecked = roleForm.permissions.includes('*') || roleForm.permissions.includes(p.id);
+                                return (
+                                  <label
+                                    key={p.id}
+                                    className={`flex items-start gap-2 p-2 rounded border cursor-pointer transition-colors ${
+                                      isChecked
+                                        ? 'bg-primary/5 border-primary/40 text-foreground'
+                                        : 'bg-muted/10 border-border text-muted-foreground hover:bg-muted/30'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {
+                                        let updated: string[];
+                                        if (roleForm.permissions.includes('*')) {
+                                          updated = SYSTEM_PERMISSIONS.map(x => x.id).filter(id => id !== p.id);
+                                        } else if (roleForm.permissions.includes(p.id)) {
+                                          updated = roleForm.permissions.filter(id => id !== p.id);
+                                        } else {
+                                          updated = [...roleForm.permissions, p.id];
+                                        }
+                                        setRoleForm({ ...roleForm, permissions: updated });
+                                      }}
+                                      className="mt-0.5 rounded border-border text-primary focus:ring-primary"
+                                    />
+                                    <div className="text-[11px] leading-tight min-w-0">
+                                      <div className="font-semibold text-foreground">{p.label}</div>
+                                      <div className="text-[10px] text-muted-foreground mt-0.5">{p.description}</div>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    {editingRole && (
+                      <button
+                        type="button"
+                        onClick={resetRoleForm}
+                        className="px-3 py-1.5 border border-border hover:bg-accent text-foreground rounded-lg text-xs font-medium transition-colors"
+                      >
+                        {t('common.cancel', 'Cancel')}
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={createRoleMutation.isPending || updateRoleMutation.isPending || !roleForm.name.trim()}
+                      className="px-3.5 py-1.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                    >
+                      {createRoleMutation.isPending || updateRoleMutation.isPending
+                        ? t('common.saving', 'Saving...')
+                        : editingRole
+                        ? t('roles.editRole', 'Update Role')
+                        : t('roles.createNew', 'Create Role')}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}

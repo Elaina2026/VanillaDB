@@ -30,7 +30,7 @@ import { apiRequest } from '../api/client.js';
 import { useTheme } from '../hooks/useTheme.js';
 import { useI18n } from '../hooks/useI18n.js';
 import { useAuth } from '../hooks/useAuth.js';
-import type { DatabaseRecord } from '@shared/index.js';
+import { type DatabaseRecord, isAdminRole } from '@shared/index.js';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -52,7 +52,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const { theme, setTheme } = useTheme();
   const { language, setLanguage } = useI18n();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
 
   const { data: databases } = useQuery<DatabaseRecord[]>({
     queryKey: ['databases'],

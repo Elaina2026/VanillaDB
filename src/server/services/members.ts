@@ -1,12 +1,13 @@
 import { nanoid } from 'nanoid';
 import { getMetadataDb } from '../db/metadata.js';
-import type {
-  DatabaseMemberRecord,
-  DatabaseInviteRecord,
-  MemberRole,
-  UserInboxResponse,
-  UserInboxInvite,
-  SystemAnnouncement,
+import {
+  type DatabaseMemberRecord,
+  type DatabaseInviteRecord,
+  type MemberRole,
+  type UserInboxResponse,
+  type UserInboxInvite,
+  type SystemAnnouncement,
+  isAdminRole,
 } from '../../../shared/index.js';
 
 export class DatabaseMembersService {
@@ -14,7 +15,7 @@ export class DatabaseMembersService {
    * Check user's access level on a specific database
    */
   public getUserDatabaseRole(databaseId: string, userId: string, systemRole?: string): MemberRole | null {
-    if (systemRole === 'super_admin' || systemRole === 'admin') {
+    if (isAdminRole(systemRole)) {
       return 'owner';
     }
 

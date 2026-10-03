@@ -25,6 +25,7 @@ export class ClusterService {
   private cachedLocalCpuPercent: number = 0;
   private activeMigrations = new Set<string>();
   private nodeFailureCounts = new Map<string, number>();
+  private nodeOfflineWarnTime = new Map<string, number>();
 
   constructor() {
     this.lastCpuUsage = process.cpuUsage();
@@ -402,6 +403,7 @@ export class ClusterService {
    */
   public recordNodeSuccess(nodeId: string, data?: NodeMetrics): void {
     this.nodeFailureCounts.set(nodeId, 0);
+    this.nodeOfflineWarnTime.delete(nodeId);
     const metaDb = getMetadataDb();
     if (data) {
       metaDb.prepare(`
@@ -447,13 +449,26 @@ export class ClusterService {
     const currentFailures = (this.nodeFailureCounts.get(nodeId) || 0) + 1;
     this.nodeFailureCounts.set(nodeId, currentFailures);
     const metaDb = getMetadataDb();
+    const now = Date.now();
 
     if (forceOffline || currentFailures >= 3) {
-      metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), nodeId);
-      logger.warn({ nodeId, consecutiveFailures: currentFailures, reason }, 'Storage worker node marked offline after consecutive failures');
+      metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(now, nodeId);
+
+      const lastWarn = this.nodeOfflineWarnTime.get(nodeId) || 0;
+      // Only log warning if:
+      // 1. It just reached offline threshold (currentFailures === 3)
+      // 2. OR forceOffline was explicitly requested
+      // 3. OR more than 5 minutes have elapsed since the last warning log
+      if (currentFailures === 3 || forceOffline || (now - lastWarn > 300_000)) {
+        const logMsg = currentFailures >= 3
+          ? 'Storage worker node marked offline after 3 consecutive probe failures'
+          : 'Storage worker node marked offline: connection refused';
+        logger.warn({ nodeId, consecutiveFailures: currentFailures, reason }, logMsg);
+        this.nodeOfflineWarnTime.set(nodeId, now);
+      }
     } else {
       // Degraded / unhealthy state: keeps serving traffic while allowing recovery
-      metaDb.prepare("UPDATE storage_nodes SET status = 'unhealthy', updated_at = ? WHERE id = ?").run(Date.now(), nodeId);
+      metaDb.prepare("UPDATE storage_nodes SET status = 'unhealthy', updated_at = ? WHERE id = ?").run(now, nodeId);
       logger.debug({ nodeId, consecutiveFailures: currentFailures, reason }, 'Storage worker node probe hiccup, marked unhealthy (failure threshold: 3)');
     }
   }
@@ -483,13 +498,11 @@ export class ClusterService {
               return;
             }
           }
-          this.recordNodeFailure(node.id, `Worker node returned HTTP ${res.status}`);
+          this.recordNodeFailure(node.id, `Worker node returned HTTP ${res.status}`, false);
         } catch (err: any) {
-          const isConnectionRefused =
-            err.cause?.code === 'ECONNREFUSED' ||
-            err.code === 'ECONNREFUSED' ||
-            (typeof err.message === 'string' && err.message.includes('ECONNREFUSED'));
-          this.recordNodeFailure(node.id, err?.message || 'Heartbeat timeout', isConnectionRefused);
+          // In periodic background heartbeat polling: NEVER force offline on 1st failure.
+          // Allow 3 strikes (45s window) so node restarting/updating can complete cleanly!
+          this.recordNodeFailure(node.id, err?.message || 'Heartbeat timeout', false);
         }
       })
     );

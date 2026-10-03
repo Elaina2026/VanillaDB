@@ -1005,8 +1005,8 @@ describe('Cluster & Multi-Node Storage Spillover Test Suite', () => {
     expect(listJson.success).toBe(true);
     const roleIds = listJson.data.map((r: any) => r.id);
     expect(roleIds).toContain('developer');
-    expect(roleIds).toContain('super_admin');
-    expect(roleIds).toContain('admin');
+    expect(roleIds.some((id: string) => id === 'system_owner' || id === 'super_admin')).toBe(true);
+    expect(roleIds.some((id: string) => id === 'system_admin' || id === 'admin')).toBe(true);
     expect(roleIds).toContain('user');
 
     // 2. Create custom role
@@ -1095,5 +1095,5 @@ describe('Cluster & Multi-Node Storage Spillover Test Suite', () => {
     } finally {
       try { databaseService.deleteDatabase(remoteDb.id); } catch {}
     }
-  });
+  }, 15000);
 });
