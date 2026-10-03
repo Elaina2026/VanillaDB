@@ -47,7 +47,8 @@ import {
   UserPlus,
   Search,
   Maximize2,
-  Minimize2
+  Minimize2,
+  ArrowUpDown
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatTimeAgo, formatDate } from '../lib/utils.js';
@@ -1226,6 +1227,44 @@ export const DatabaseDetailPage: React.FC<{
             {formatBytes(totalDbStorage)}
           </span>
         </div>
+      </div>
+
+      {/* Mobile/Tablet Horizontal Sub-Tab Strip */}
+      <div className="md:hidden border-b border-border bg-card/60 px-3 py-1.5 overflow-x-auto flex items-center gap-1 shrink-0 no-scrollbar">
+        {[
+          { id: 'overview', label: t('db.overview', 'Overview'), icon: BarChart3 },
+          { id: 'analytics', label: t('db.analytics', 'Analytics'), icon: TrendingUp },
+          { id: 'tables', label: t('db.tables', 'Tables'), icon: TableIcon },
+          { id: 'editor', label: t('db.editor', 'SQL'), icon: Terminal },
+          { id: 'schema', label: t('db.schema', 'Schema'), icon: FileCode },
+          { id: 'storage', label: t('db.storage', 'Storage'), icon: Folder },
+          { id: 'import-export', label: t('db.importExport', 'Import/Export'), icon: ArrowUpDown },
+          { id: 'realtime', label: t('db.realtime', 'Realtime'), icon: Radio },
+          { id: 'webhooks', label: t('db.webhooks', 'Webhooks'), icon: WebhookIcon },
+          { id: 'api', label: t('db.api', 'API'), icon: Key },
+          { id: 'tokens', label: t('db.tokens', 'Tokens'), icon: Shield },
+          { id: 'jobs', label: t('db.jobs', 'Jobs'), icon: Clock },
+          { id: 'backups', label: t('db.backups', 'Backups'), icon: Archive },
+          { id: 'members', label: t('db.members', 'Members'), icon: Users },
+          { id: 'settings', label: t('db.settings', 'Settings'), icon: Sliders },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id as any)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium shrink-0 transition-colors whitespace-nowrap cursor-pointer ${
+                isActive
+                  ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5 shrink-0" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Main Tab Content */}

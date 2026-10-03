@@ -95,7 +95,7 @@ export class HealthService {
               headers: {
                 'x-cluster-secret': config.clusterSecret,
               },
-              signal: AbortSignal.timeout(5000),
+              signal: AbortSignal.timeout(7000),
             });
             if (res.ok || res.status === 503) {
               gatewayCheck = 'connected';
@@ -151,24 +151,22 @@ export class HealthService {
                   headers: {
                     'x-cluster-secret': node.auth_token || config.clusterSecret,
                   },
-                  signal: AbortSignal.timeout(2500),
+                  signal: AbortSignal.timeout(7000), // Upgraded to 7000ms
                 });
 
                 if (res.ok) {
                   const json = (await res.json()) as any;
                   if (json.status === 'operational' || json.status === 'degraded') {
                     healthyCount++;
-                    if (node.status === 'offline') {
-                      metaDb.prepare("UPDATE storage_nodes SET status = 'healthy', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
-                    }
+                    clusterService.recordNodeSuccess(node.id);
                     return;
                   }
                 }
                 offlineCount++;
-                metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
-              } catch {
+                clusterService.recordNodeFailure(node.id, `Worker responded HTTP ${res.status}`);
+              } catch (err: any) {
                 offlineCount++;
-                metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
+                clusterService.recordNodeFailure(node.id, err?.message || 'Health probe failed');
               }
             })
           );

@@ -97,8 +97,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4">
-        <div className="flex items-center justify-between border-b border-border pb-3">
+      <div className="w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4 max-h-[90dvh] flex flex-col">
+        <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
           <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
             <Layers className="w-4 h-4 text-blue-500" />
             {t('importExport.modalTitle', 'Import / Export Data')}
@@ -109,7 +109,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
         </div>
 
         {/* Tab Selector */}
-        <div className="flex bg-muted p-0.5 rounded-lg border border-border">
+        <div className="flex bg-muted p-0.5 rounded-lg border border-border shrink-0">
           <button
             onClick={() => {
               setActiveTab('export');
@@ -136,7 +136,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
 
         {/* Export Tab */}
         {activeTab === 'export' && (
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 flex-1 overflow-y-auto pr-1">
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 {t('importExport.exportFormat', 'Export Format')}
@@ -206,7 +206,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
 
         {/* Import Tab */}
         {activeTab === 'import' && (
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 flex-1 overflow-y-auto pr-1">
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 {t('importExport.selectFile', 'Select File to Import')}

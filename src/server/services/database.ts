@@ -439,9 +439,7 @@ export class DatabaseService {
         } catch (err: any) {
           logger.debug({ err: err?.message || String(err), databaseId, nodeId: dbRecord.node_id }, 'Remote SQLite overview stats unavailable from worker node, using fallback');
           dbRecord.isNodeOffline = true;
-          try {
-            metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), dbRecord.node_id);
-          } catch {}
+          clusterService.recordNodeFailure(dbRecord.node_id, 'Overview stats fetch failed', false);
         }
       }
     } else {

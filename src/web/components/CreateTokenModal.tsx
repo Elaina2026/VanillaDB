@@ -86,8 +86,8 @@ export const CreateTokenModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+      <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90dvh] flex flex-col">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <Key className="w-4 h-4 text-blue-500" />
             <h2 className="text-sm font-bold">
@@ -100,7 +100,7 @@ export const CreateTokenModal: React.FC<{
         </div>
 
         {createdSecret ? (
-          <div className="p-5 space-y-4">
+          <div className="p-5 space-y-4 flex-1 overflow-y-auto">
             <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs rounded-md space-y-1">
               <div className="font-semibold flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5" />
@@ -180,7 +180,7 @@ export const CreateTokenModal: React.FC<{
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <form onSubmit={handleSubmit} className="p-5 space-y-4 flex-1 overflow-y-auto">
             {error && (
               <div className="p-2.5 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded font-medium">
                 {error}

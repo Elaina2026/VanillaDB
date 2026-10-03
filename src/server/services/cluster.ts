@@ -24,6 +24,7 @@ export class ClusterService {
   private lastCpuSampleTime: number = Date.now();
   private cachedLocalCpuPercent: number = 0;
   private activeMigrations = new Set<string>();
+  private nodeFailureCounts = new Map<string, number>();
 
   constructor() {
     this.lastCpuUsage = process.cpuUsage();
@@ -397,6 +398,67 @@ export class ClusterService {
   }
 
   /**
+   * Centralized node health tracking: success resets consecutive failure count and sets healthy
+   */
+  public recordNodeSuccess(nodeId: string, data?: NodeMetrics): void {
+    this.nodeFailureCounts.set(nodeId, 0);
+    const metaDb = getMetadataDb();
+    if (data) {
+      metaDb.prepare(`
+        UPDATE storage_nodes
+        SET status = 'healthy',
+            last_heartbeat_at = ?,
+            updated_at = ?,
+            disk_total_bytes = ?,
+            disk_free_bytes = ?,
+            disk_available_bytes = ?,
+            cpu_percent = ?,
+            ram_percent = ?,
+            network_rate_bps = ?,
+            database_count = ?
+        WHERE id = ?
+      `).run(
+        Date.now(),
+        Date.now(),
+        data.diskTotalBytes || 0,
+        data.diskFreeBytes || 0,
+        data.diskAvailableBytes || 0,
+        data.cpuPercent || 0,
+        data.ramPercent || 0,
+        data.totalNetworkRateBps || 0,
+        data.databaseCount || 0,
+        nodeId
+      );
+    } else {
+      metaDb.prepare(`
+        UPDATE storage_nodes
+        SET status = 'healthy',
+            last_heartbeat_at = ?,
+            updated_at = ?
+        WHERE id = ?
+      `).run(Date.now(), Date.now(), nodeId);
+    }
+  }
+
+  /**
+   * Centralized node health tracking: requires 3 consecutive failures before marking offline
+   */
+  public recordNodeFailure(nodeId: string, reason?: string, forceOffline = false): void {
+    const currentFailures = (this.nodeFailureCounts.get(nodeId) || 0) + 1;
+    this.nodeFailureCounts.set(nodeId, currentFailures);
+    const metaDb = getMetadataDb();
+
+    if (forceOffline || currentFailures >= 3) {
+      metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), nodeId);
+      logger.warn({ nodeId, consecutiveFailures: currentFailures, reason }, 'Storage worker node marked offline after consecutive failures');
+    } else {
+      // Degraded / unhealthy state: keeps serving traffic while allowing recovery
+      metaDb.prepare("UPDATE storage_nodes SET status = 'unhealthy', updated_at = ? WHERE id = ?").run(Date.now(), nodeId);
+      logger.debug({ nodeId, consecutiveFailures: currentFailures, reason }, 'Storage worker node probe hiccup, marked unhealthy (failure threshold: 3)');
+    }
+  }
+
+  /**
    * Poll worker nodes for heartbeats and resource telemetry
    */
   public async pollNodesHeartbeat(): Promise<void> {
@@ -411,44 +473,23 @@ export class ClusterService {
             headers: {
               'x-cluster-secret': node.auth_token || config.clusterSecret,
             },
-            signal: AbortSignal.timeout(3000),
+            signal: AbortSignal.timeout(8000), // Upgraded to 8000ms to tolerate jitter & Event Loop lag
           });
 
           if (res.ok) {
             const json = (await res.json()) as any;
             if (json.success && json.data) {
-              const data: NodeMetrics = json.data;
-              metaDb.prepare(`
-                UPDATE storage_nodes
-                SET status = 'healthy',
-                    last_heartbeat_at = ?,
-                    updated_at = ?,
-                    disk_total_bytes = ?,
-                    disk_free_bytes = ?,
-                    disk_available_bytes = ?,
-                    cpu_percent = ?,
-                    ram_percent = ?,
-                    network_rate_bps = ?,
-                    database_count = ?
-                WHERE id = ?
-              `).run(
-                Date.now(),
-                Date.now(),
-                data.diskTotalBytes || 0,
-                data.diskFreeBytes || 0,
-                data.diskAvailableBytes || 0,
-                data.cpuPercent || 0,
-                data.ramPercent || 0,
-                data.totalNetworkRateBps || 0,
-                data.databaseCount || 0,
-                node.id
-              );
+              this.recordNodeSuccess(node.id, json.data);
               return;
             }
           }
-          metaDb.prepare("UPDATE storage_nodes SET status = 'unhealthy', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
-        } catch {
-          metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
+          this.recordNodeFailure(node.id, `Worker node returned HTTP ${res.status}`);
+        } catch (err: any) {
+          const isConnectionRefused =
+            err.cause?.code === 'ECONNREFUSED' ||
+            err.code === 'ECONNREFUSED' ||
+            (typeof err.message === 'string' && err.message.includes('ECONNREFUSED'));
+          this.recordNodeFailure(node.id, err?.message || 'Heartbeat timeout', isConnectionRefused);
         }
       })
     );
@@ -477,13 +518,16 @@ export class ClusterService {
     });
 
     if (!res.ok) {
+      this.recordNodeFailure(nodeId, `Remote overview-stats responded HTTP ${res.status}`);
       throw new Error(`Remote node responded with HTTP ${res.status}`);
     }
 
     const json = (await res.json()) as any;
     if (!json.success || !json.data) {
+      this.recordNodeFailure(nodeId, 'Invalid response structure from worker node');
       throw new Error('Invalid response structure from worker node');
     }
+    this.recordNodeSuccess(nodeId);
     return json.data;
   }
 
@@ -503,57 +547,62 @@ export class ClusterService {
     const rawUrl = req.raw.url || req.url || '';
 
     // Fast-fail if node is known to be offline (prevents blocking connection retry storms and ECONNREFUSED log flood)
+    // Cooldown window: only fast-fail if marked offline within last 15s.
+    // After 15s, allow the request to attempt probe so node can auto-recover immediately!
     if (node.status === 'offline') {
-      if (req.method === 'GET' && rawUrl.includes('/storage-stats')) {
-        return reply.send({
-          success: true,
-          data: {
-            tables: [],
-            indexes: [],
-            fileSizeBytes: 0,
-            walSizeBytes: 0,
-            totalSizeBytes: 0,
-            pageSize: 4096,
-            pageCount: 0,
-            freelistCount: 0,
-            fragmentationPercent: 0,
-            journalMode: 'wal',
-            synchronous: 'normal',
-            autoVacuum: 0,
-            cacheSize: 0,
-            schemaVersion: 0,
+      const offlineDurationMs = Date.now() - (node.updated_at || 0);
+      if (offlineDurationMs < 15_000) {
+        if (req.method === 'GET' && rawUrl.includes('/storage-stats')) {
+          return reply.send({
+            success: true,
+            data: {
+              tables: [],
+              indexes: [],
+              fileSizeBytes: 0,
+              walSizeBytes: 0,
+              totalSizeBytes: 0,
+              pageSize: 4096,
+              pageCount: 0,
+              freelistCount: 0,
+              fragmentationPercent: 0,
+              journalMode: 'wal',
+              synchronous: 'normal',
+              autoVacuum: 0,
+              cacheSize: 0,
+              schemaVersion: 0,
+              isNodeOffline: true,
+              nodeId: node.id,
+              nodeName: node.name,
+            },
+          });
+        }
+        if (req.method === 'GET' && rawUrl.includes('/schema')) {
+          return reply.send({
+            success: true,
+            data: [],
             isNodeOffline: true,
             nodeId: node.id,
             nodeName: node.name,
+          });
+        }
+        if (req.method === 'GET' && rawUrl.includes('/files')) {
+          return reply.send({
+            success: true,
+            data: [],
+            isNodeOffline: true,
+            nodeId: node.id,
+            nodeName: node.name,
+          });
+        }
+
+        return reply.status(502).send({
+          success: false,
+          error: {
+            code: 'BAD_GATEWAY',
+            message: `Worker storage node "${node.name}" (${node.base_url}) is currently offline or unreachable. Please verify worker process is running and port is open.`,
           },
         });
       }
-      if (req.method === 'GET' && rawUrl.includes('/schema')) {
-        return reply.send({
-          success: true,
-          data: [],
-          isNodeOffline: true,
-          nodeId: node.id,
-          nodeName: node.name,
-        });
-      }
-      if (req.method === 'GET' && rawUrl.includes('/files')) {
-        return reply.send({
-          success: true,
-          data: [],
-          isNodeOffline: true,
-          nodeId: node.id,
-          nodeName: node.name,
-        });
-      }
-
-      return reply.status(502).send({
-        success: false,
-        error: {
-          code: 'BAD_GATEWAY',
-          message: `Worker storage node "${node.name}" (${node.base_url}) is currently offline or unreachable. Please verify worker process is running and port is open.`,
-        },
-      });
     }
 
     const isRealtime = Boolean(rawUrl.includes('/realtime'));
@@ -671,6 +720,10 @@ export class ClusterService {
         signal: controller.signal,
       });
 
+      if (remoteRes.status < 500) {
+        this.recordNodeSuccess(node.id);
+      }
+
       reply.status(remoteRes.status);
       remoteRes.headers.forEach((value, name) => {
         const lower = name.toLowerCase();
@@ -739,10 +792,10 @@ export class ClusterService {
         (typeof err.message === 'string' && err.message.includes('ECONNREFUSED'));
       const isTimeout = err.name === 'AbortError' || (typeof err.message === 'string' && err.message.includes('timeout'));
 
-      if (isConnectionRefused || isTimeout) {
-        try {
-          metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), node.id);
-        } catch {}
+      if (isConnectionRefused) {
+        this.recordNodeFailure(node.id, err.message, true);
+      } else if (isTimeout) {
+        this.recordNodeFailure(node.id, err.message, false);
       }
 
       // For read-only stats/schema requests, provide safe offline fallback so dashboard can render cleanly

@@ -7,6 +7,7 @@ import { getMetadataDb } from '../db/metadata.js';
 import { dbManager } from '../db/manager.js';
 import { logger } from '../utils/logger.js';
 import { encryptFile, decryptFile, isEncryptedFile } from '../utils/crypto.js';
+import { clusterService } from './cluster.js';
 import type { BackupRecord } from '../../../shared/index.js';
 
 export class BackupService {
@@ -56,16 +57,19 @@ export class BackupService {
           fetchErr.code === 'ECONNREFUSED' ||
           String(fetchErr.message).includes('ECONNREFUSED')
         ) {
-          try {
-            metaDb.prepare("UPDATE storage_nodes SET status = 'offline', updated_at = ? WHERE id = ?").run(Date.now(), workerNode.id);
-          } catch {}
+          clusterService.recordNodeFailure(workerNode.id, 'Backup export ECONNREFUSED', true);
+        } else {
+          clusterService.recordNodeFailure(workerNode.id, fetchErr.message || 'Backup export failed', false);
         }
         throw new Error(`Cannot export snapshot from worker "${workerNode.name}" (${workerNode.base_url}): ${fetchErr.message}`);
       }
 
       if (!res.ok) {
+        clusterService.recordNodeFailure(workerNode.id, `Worker export responded HTTP ${res.status}`, false);
         throw new Error(`Worker node export responded with HTTP ${res.status}`);
       }
+
+      clusterService.recordNodeSuccess(workerNode.id);
 
       const rawBuffer = Buffer.from(await res.arrayBuffer());
       if (!fs.existsSync(config.tempDir)) {
