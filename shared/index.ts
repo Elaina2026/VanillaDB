@@ -367,6 +367,7 @@ export interface SystemSettings {
   backup_retention: number;
   max_upload_size_mb: number;
   default_user_rate_limit: number;
+  web_rate_limit_per_minute?: number; // Shared rate limit for web UI interactions (0 = unlimited)
   default_user_max_databases: number;
   default_user_max_disk_mb: number;
   enable_query_logging: boolean;

@@ -24,7 +24,7 @@ export class TokenService {
   private rateLimitBuckets: Map<string, { count: number; resetAt: number }> = new Map();
 
   public checkRateLimit(tokenId: string, limitPerMinute: number | null | undefined): boolean {
-    if (!limitPerMinute || limitPerMinute <= 0) return true; // Unlimited
+    if (limitPerMinute === undefined || limitPerMinute === null || limitPerMinute <= 0) return true; // 0, null, or undefined = Unlimited
 
     const now = Date.now();
     let bucket = this.rateLimitBuckets.get(tokenId);
@@ -78,7 +78,7 @@ export class TokenService {
       JSON.stringify(params.permissions),
       params.allowedTables ? JSON.stringify(params.allowedTables) : null,
       params.deniedTables ? JSON.stringify(params.deniedTables) : null,
-      params.rateLimit || null,
+      params.rateLimit !== undefined && params.rateLimit !== null ? params.rateLimit : null,
       expiresAt,
       now,
       null,
@@ -95,7 +95,7 @@ export class TokenService {
       permissions: params.permissions,
       allowed_tables: params.allowedTables || null,
       denied_tables: params.deniedTables || null,
-      rate_limit: params.rateLimit || null,
+      rate_limit: params.rateLimit !== undefined && params.rateLimit !== null ? params.rateLimit : null,
       expires_at: expiresAt,
       created_at: now,
       last_used_at: null,

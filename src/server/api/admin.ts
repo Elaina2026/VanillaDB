@@ -1011,6 +1011,26 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid token parameters' } });
     }
 
+    // Rate limit of token is determined by role
+    const userRole = req.adminUser ? rolesService.getRole(req.adminUser.role) : null;
+    const isOwner = req.adminUser ? isOwnerRole(req.adminUser.role) : false;
+    const roleLimit = userRole?.rate_limit_per_minute !== undefined && userRole.rate_limit_per_minute !== null
+      ? userRole.rate_limit_per_minute
+      : (isOwner ? 0 : 180);
+
+    let effectiveTokenRateLimit: number | null = null;
+    if (parsed.data.rateLimit === undefined || parsed.data.rateLimit === null) {
+      effectiveTokenRateLimit = roleLimit;
+    } else if (isOwner) {
+      effectiveTokenRateLimit = parsed.data.rateLimit;
+    } else {
+      if (roleLimit > 0 && (parsed.data.rateLimit === 0 || parsed.data.rateLimit > roleLimit)) {
+        effectiveTokenRateLimit = roleLimit;
+      } else {
+        effectiveTokenRateLimit = parsed.data.rateLimit;
+      }
+    }
+
     const { tokenRecord, plainSecret } = await tokenService.createToken({
       databaseId: id,
       name: parsed.data.name,
@@ -1018,7 +1038,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       permissions: parsed.data.permissions,
       allowedTables: parsed.data.allowedTables,
       deniedTables: parsed.data.deniedTables,
-      rateLimit: parsed.data.rateLimit,
+      rateLimit: effectiveTokenRateLimit,
       expiresInDays: parsed.data.expiresInDays,
       type: parsed.data.type,
     });

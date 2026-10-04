@@ -4,7 +4,7 @@ import { X, Key, Copy, Check, ShieldCheck, AlertCircle } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useI18n } from '../hooks/useI18n.js';
 import { useAuth } from '../hooks/useAuth.js';
-import type { TokenPermission } from '@shared/index.js';
+import { isOwnerRole, type TokenPermission } from '@shared/index.js';
 
 export const CreateTokenModal: React.FC<{
   isOpen: boolean;
@@ -264,21 +264,25 @@ export const CreateTokenModal: React.FC<{
                   }}
                   className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary"
                 >
-                  <option value="0">{t('tokens.unlimited', 'Không giới hạn (0 req/min)')}</option>
                   <option value="default">
-                    {t('tokens.accountDefault', 'Mặc định theo tài khoản')} ({currentUser?.rate_limit_per_minute ? `${currentUser.rate_limit_per_minute} ${t('tokens.reqPerMin', 'req/min')}` : t('tokens.unlimitedShort', '∞ Không giới hạn')})
+                    {t('tokens.roleDefault', 'Tùy theo Role')} ({currentUser?.rate_limit_per_minute ? `${currentUser.rate_limit_per_minute} ${t('tokens.reqPerMin', 'req/min')}` : t('tokens.unlimitedShort', '∞ Không giới hạn')})
                   </option>
-                  {[30, 60, 120, 180, 300, 600, 1000].map((opt) => (
-                    <option key={opt} value={String(opt)}>
-                      {opt} {t('tokens.reqPerMin', 'req/min')}
-                    </option>
-                  ))}
+                  {currentUser && isOwnerRole(currentUser.role) && (
+                    <option value="0">{t('tokens.unlimited', 'Không giới hạn (0 req/min)')}</option>
+                  )}
+                  {[30, 60, 120, 180, 300, 600, 1000]
+                    .filter((opt) => (currentUser && isOwnerRole(currentUser.role)) || !currentUser?.rate_limit_per_minute || opt <= currentUser.rate_limit_per_minute)
+                    .map((opt) => (
+                      <option key={opt} value={String(opt)}>
+                        {opt} {t('tokens.reqPerMin', 'req/min')}
+                      </option>
+                    ))}
                 </select>
                 <p className="text-[10px] text-muted-foreground mt-1">
                   {rateLimit === 0
                     ? t('tokens.unlimitedDesc', 'Token sẽ không bị giới hạn số lượng request.')
                     : (rateLimit === null
-                        ? t('tokens.defaultDesc', 'Kế thừa hạn mức mặc định của tài khoản.')
+                        ? `${t('tokens.defaultRoleDesc', 'Hạn mức token áp dụng theo Role của tài khoản')} (${currentUser?.rate_limit_per_minute || 180} req/min).`
                         : `${rateLimit} req/min`)}
                 </p>
               </div>

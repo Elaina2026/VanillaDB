@@ -440,13 +440,23 @@ export async function buildApp() {
       prefix: '/',
       wildcard: false,
       index: false,
-      setHeaders: (res, pathName) => {
+      setHeaders: (res: any, pathName: string) => {
+        const setHeader = (name: string, value: string) => {
+          if (typeof res?.setHeader === 'function') {
+            res.setHeader(name, value);
+          } else if (typeof res?.header === 'function') {
+            res.header(name, value);
+          } else if (typeof res?.raw?.setHeader === 'function') {
+            res.raw.setHeader(name, value);
+          }
+        };
+
         if (pathName.includes('assets/') || pathName.includes('assets\\')) {
-          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         } else if (pathName.endsWith('.html') || pathName.endsWith('index.html')) {
-          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-          res.setHeader('Pragma', 'no-cache');
-          res.setHeader('Expires', '0');
+          setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          setHeader('Pragma', 'no-cache');
+          setHeader('Expires', '0');
         }
       },
     });

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { authService, type SessionUser } from '../services/auth.js';
 import { tokenService } from '../services/tokens.js';
+import { systemService } from '../services/system.js';
 import { config } from '../config/index.js';
 import type { ApiTokenRecord, TokenPermission, UserRole } from '../../../shared/index.js';
 import { isOwnerRole, isAdminRole } from '../../../shared/index.js';
@@ -89,10 +90,10 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
   }
 
   if (fullUser && !isOwnerRole(fullUser.role)) {
-    const targetDbId = (request.params as any)?.id || (request.params as any)?.databaseId || request.databaseId;
-    if (targetDbId) {
-      const limit = fullUser.rate_limit_per_minute > 0 ? fullUser.rate_limit_per_minute : 180;
-      const key = `${user.userId}:${targetDbId}`;
+    const webLimit = systemService.getSettings().web_rate_limit_per_minute ?? 1200;
+    if (webLimit > 0) {
+      const targetDbId = (request.params as any)?.id || (request.params as any)?.databaseId || request.databaseId || 'web';
+      const key = `web:${user.userId}:${targetDbId}`;
       const now = Date.now();
       const tracker = userRateLimits.get(key) || { count: 0, resetAt: now + 60000 };
       if (now > tracker.resetAt) {
@@ -102,17 +103,17 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
       tracker.count++;
       userRateLimits.set(key, tracker);
 
-      if (tracker.count >= Math.floor(limit * 0.8)) {
+      if (tracker.count >= Math.floor(webLimit * 0.8)) {
         reply.header('X-RateLimit-Warning', 'approaching-limit');
-        reply.header('X-RateLimit-Remaining', Math.max(0, limit - tracker.count));
+        reply.header('X-RateLimit-Remaining', Math.max(0, webLimit - tracker.count));
       }
 
-      if (tracker.count > limit) {
+      if (tracker.count > webLimit) {
         reply.status(429).send({
           success: false,
           error: {
             code: 'RATE_LIMIT_EXCEEDED',
-            message: `Rate limit for database (${limit} req/min) exceeded. Try again in ${Math.ceil((tracker.resetAt - now) / 1000)}s.`,
+            message: `Website rate limit (${webLimit} req/min) exceeded. Try again in ${Math.ceil((tracker.resetAt - now) / 1000)}s.`,
           },
         });
         return;
@@ -133,10 +134,9 @@ export function getRateLimitWarningsForUser(userId: string): Array<{
   limit: number;
   percentage: number;
 }> {
-  const fullUser = authService.getUserById(userId);
-  const limit = (fullUser?.rate_limit_per_minute && fullUser.rate_limit_per_minute > 0)
-    ? fullUser.rate_limit_per_minute
-    : 180;
+  const webLimit = systemService.getSettings().web_rate_limit_per_minute ?? 1200;
+  if (!webLimit || webLimit <= 0) return [];
+
   const warnings: Array<{
     databaseId: string;
     currentCount: number;
@@ -145,16 +145,16 @@ export function getRateLimitWarningsForUser(userId: string): Array<{
   }> = [];
 
   const now = Date.now();
-  const prefix = `${userId}:`;
+  const prefix = `web:${userId}:`;
   for (const [key, tracker] of userRateLimits.entries()) {
     if (key.startsWith(prefix) && now <= tracker.resetAt) {
       const databaseId = key.substring(prefix.length);
-      if (databaseId && !databaseId.includes('system') && tracker.count >= Math.floor(limit * 0.8)) {
+      if (databaseId && !databaseId.includes('system') && databaseId !== 'web' && tracker.count >= Math.floor(webLimit * 0.8)) {
         warnings.push({
           databaseId,
           currentCount: tracker.count,
-          limit,
-          percentage: Math.min(100, Math.round((tracker.count / limit) * 100)),
+          limit: webLimit,
+          percentage: Math.min(100, Math.round((tracker.count / webLimit) * 100)),
         });
       }
     }
@@ -309,34 +309,33 @@ export function requireTokenPermission(permission: TokenPermission) {
         }
 
         if (!isOwnerRole(user.role)) {
-          const fullUser = authService.getUserById(user.userId);
-          const limit = (fullUser?.rate_limit_per_minute && fullUser.rate_limit_per_minute > 0)
-            ? fullUser.rate_limit_per_minute
-            : 180;
-          const key = `${user.userId}:${databaseId}`;
-          const now = Date.now();
-          const tracker = userRateLimits.get(key) || { count: 0, resetAt: now + 60000 };
-          if (now > tracker.resetAt) {
-            tracker.count = 0;
-            tracker.resetAt = now + 60000;
-          }
-          tracker.count++;
-          userRateLimits.set(key, tracker);
+          const webLimit = systemService.getSettings().web_rate_limit_per_minute ?? 1200;
+          if (webLimit > 0) {
+            const key = `web:${user.userId}:${databaseId}`;
+            const now = Date.now();
+            const tracker = userRateLimits.get(key) || { count: 0, resetAt: now + 60000 };
+            if (now > tracker.resetAt) {
+              tracker.count = 0;
+              tracker.resetAt = now + 60000;
+            }
+            tracker.count++;
+            userRateLimits.set(key, tracker);
 
-          if (tracker.count >= Math.floor(limit * 0.8)) {
-            reply.header('X-RateLimit-Warning', 'approaching-limit');
-            reply.header('X-RateLimit-Remaining', Math.max(0, limit - tracker.count));
-          }
+            if (tracker.count >= Math.floor(webLimit * 0.8)) {
+              reply.header('X-RateLimit-Warning', 'approaching-limit');
+              reply.header('X-RateLimit-Remaining', Math.max(0, webLimit - tracker.count));
+            }
 
-          if (tracker.count > limit) {
-            reply.status(429).send({
-              success: false,
-              error: {
-                code: 'RATE_LIMIT_EXCEEDED',
-                message: `Rate limit for database (${limit} req/min) exceeded. Try again in ${Math.ceil((tracker.resetAt - now) / 1000)}s.`,
-              },
-            });
-            return;
+            if (tracker.count > webLimit) {
+              reply.status(429).send({
+                success: false,
+                error: {
+                  code: 'RATE_LIMIT_EXCEEDED',
+                  message: `Website rate limit (${webLimit} req/min) exceeded. Try again in ${Math.ceil((tracker.resetAt - now) / 1000)}s.`,
+                },
+              });
+              return;
+            }
           }
         }
 
@@ -372,13 +371,17 @@ export function requireTokenPermission(permission: TokenPermission) {
       return;
     }
 
-    // Rate Limiting Check
-    if (token.rate_limit && !tokenService.checkRateLimit(token.id, token.rate_limit)) {
+    // Rate Limiting Check (Token Rate Limit - Determined by Role)
+    const tokenLimit = (token.rate_limit !== undefined && token.rate_limit !== null)
+      ? token.rate_limit
+      : 180;
+
+    if (tokenLimit > 0 && !tokenService.checkRateLimit(token.id, tokenLimit)) {
       reply.status(429).send({
         success: false,
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
-          message: `Token rate limit of ${token.rate_limit} req/min exceeded. Please try again later.`,
+          message: `Token rate limit of ${tokenLimit} req/min exceeded. Please try again later.`,
         },
       });
       return;

@@ -154,4 +154,89 @@ describe('Roles and Quota Management Suite', () => {
     const fetched = rolesService.getRole(testRoleId);
     expect(fetched).toBeNull();
   });
+
+  it('determines token rate limit from role and separates website rate limit', async () => {
+    // 1. Create a test database
+    const createDbRes = await app.inject({
+      method: 'POST',
+      url: '/api/admin/databases',
+      headers: { cookie: adminCookie },
+      payload: { name: `Test Rate Limit DB ${runId}` },
+    });
+    expect(createDbRes.statusCode).toBe(201);
+    const dbId = createDbRes.json().data.id;
+
+    // 2. Create token without rateLimit -> inherits role rate limit
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${dbId}/tokens`,
+      headers: { cookie: adminCookie },
+      payload: {
+        name: 'Auto Role Token',
+        permissions: ['database:read'],
+      },
+    });
+    expect(tokenRes.statusCode).toBe(201);
+    const tokenData = tokenRes.json().data.token;
+    // For super_admin, role rate limit is 0 (unlimited)
+    expect(tokenData.rate_limit).toBe(0);
+
+    // 3. Create regular user and verify their token inherits their role rate limit (180)
+    const userCreateRes = await app.inject({
+      method: 'POST',
+      url: '/api/admin/users',
+      headers: { cookie: adminCookie },
+      payload: {
+        username: `dev_user_${runId}`,
+        password: 'Password123!',
+        role: 'user',
+      },
+    });
+    expect(userCreateRes.statusCode).toBe(201);
+
+    const loginUserRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: {
+        username: `dev_user_${runId}`,
+        password: 'Password123!',
+      },
+    });
+    const userCookie = `vdb_session=${loginUserRes.cookies.find((c: any) => c.name === 'vdb_session').value}`;
+
+    // Create a database as the user
+    const userDbRes = await app.inject({
+      method: 'POST',
+      url: '/api/admin/databases',
+      headers: { cookie: userCookie },
+      payload: { name: `User Owned DB ${runId}` },
+    });
+    expect(userDbRes.statusCode).toBe(201);
+    const userDbId = userDbRes.json().data.id;
+
+    // Create token as standard user without specifying rateLimit -> inherits role limit 180
+    const userTokenRes = await app.inject({
+      method: 'POST',
+      url: `/api/admin/databases/${userDbId}/tokens`,
+      headers: { cookie: userCookie },
+      payload: {
+        name: 'User Role Token',
+        permissions: ['database:read'],
+      },
+    });
+    expect(userTokenRes.statusCode).toBe(201);
+    expect(userTokenRes.json().data.token.rate_limit).toBe(180);
+
+    // Clean up test databases
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/admin/databases/${dbId}`,
+      headers: { cookie: adminCookie },
+    });
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/admin/databases/${userDbId}`,
+      headers: { cookie: userCookie },
+    });
+  });
 });

@@ -358,6 +358,7 @@ export const SettingsPage: React.FC = () => {
     backup_retention: 10,
     max_upload_size_mb: 50,
     default_user_rate_limit: 180,
+    web_rate_limit_per_minute: 1200,
     default_user_max_databases: 2,
     default_user_max_disk_mb: 200,
     enable_query_logging: true,
@@ -1065,9 +1066,54 @@ export const SettingsPage: React.FC = () => {
               </span>
             </div>
 
+            {/* Website Rate Limit (Shared for Web UI) */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-medium text-muted-foreground">{t('settings.rateLimitPerUser', 'Default API Rate Limit (req/min)')}</label>
+                <label className="block text-xs font-medium text-muted-foreground">{t('settings.webRateLimit', 'Hạn mức Website (req/phút - Dùng chung)')}</label>
+                {isSuperAdminOrAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, web_rate_limit_per_minute: 0 })}
+                    className="text-[10px] text-primary hover:underline font-semibold"
+                  >
+                    {t('users.setUnlimited', 'Không giới hạn (0)')}
+                  </button>
+                )}
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={50000}
+                disabled={!isSuperAdminOrAdmin}
+                value={current.web_rate_limit_per_minute ?? 1200}
+                onChange={(e) => setForm({ ...form, web_rate_limit_per_minute: parseInt(e.target.value, 10) || 0 })}
+                className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary text-foreground font-mono disabled:opacity-50"
+              />
+              <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                {[0, 300, 600, 1200, 3000].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    disabled={!isSuperAdminOrAdmin}
+                    onClick={() => setForm({ ...form, web_rate_limit_per_minute: num })}
+                    className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                      (current.web_rate_limit_per_minute ?? 1200) === num
+                        ? 'bg-primary/10 border-primary text-primary font-bold'
+                        : 'border-border text-muted-foreground hover:bg-accent'
+                    }`}
+                  >
+                    {num === 0 ? '∞ Không giới hạn' : `${num}/m`}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[10px] text-muted-foreground mt-1 block">
+                {t('settings.webRateLimitDesc', 'Hạn mức request dùng chung cho mọi tài khoản khi thao tác trên giao diện Web (0 = không giới hạn).')}
+              </span>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-muted-foreground">{t('settings.rateLimitPerUser', 'Hạn mức Token API mặc định (req/phút)')}</label>
                 {isSuperAdminOrAdmin && (
                   <button
                     type="button"
@@ -1105,7 +1151,7 @@ export const SettingsPage: React.FC = () => {
                 ))}
               </div>
               <span className="text-[10px] text-muted-foreground mt-1 block">
-                {t('settings.rateLimitPerUserDesc', '0 = Unlimited requests per minute for standard accounts.')}
+                {t('settings.rateLimitPerUserDesc', 'Áp dụng cho Token API khi chưa gán Role riêng. Khi có Role, Token sẽ áp dụng theo Role của tài khoản.')}
               </span>
             </div>
           </div>
