@@ -438,7 +438,20 @@ export const DatabaseDetailPage: React.FC<{
       return;
     }
 
+    let isInternalDrag = false;
+
+    const handleDragStart = () => {
+      isInternalDrag = true;
+    };
+
+    const handleDragEnd = () => {
+      isInternalDrag = false;
+      setIsGlobalDragOver(false);
+      dragCounter.current = 0;
+    };
+
     const handleDragEnter = (e: DragEvent) => {
+      if (isInternalDrag) return;
       e.preventDefault();
       dragCounter.current++;
       if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
@@ -447,6 +460,10 @@ export const DatabaseDetailPage: React.FC<{
     };
 
     const handleDragOver = (e: DragEvent) => {
+      if (isInternalDrag) {
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+        return;
+      }
       e.preventDefault();
       if (e.dataTransfer) {
         e.dataTransfer.dropEffect = 'copy';
@@ -454,6 +471,7 @@ export const DatabaseDetailPage: React.FC<{
     };
 
     const handleDragLeave = (e: DragEvent) => {
+      if (isInternalDrag) return;
       e.preventDefault();
       dragCounter.current--;
       if (dragCounter.current <= 0) {
@@ -463,20 +481,30 @@ export const DatabaseDetailPage: React.FC<{
     };
 
     const handleDrop = (e: DragEvent) => {
+      if (isInternalDrag) {
+        isInternalDrag = false;
+        setIsGlobalDragOver(false);
+        dragCounter.current = 0;
+        return;
+      }
       e.preventDefault();
       dragCounter.current = 0;
       setIsGlobalDragOver(false);
       if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-        setIncomingFiles(e.dataTransfer.files);
+        setIncomingFiles(Array.from(e.dataTransfer.files));
       }
     };
 
+    window.addEventListener('dragstart', handleDragStart);
+    window.addEventListener('dragend', handleDragEnd);
     window.addEventListener('dragenter', handleDragEnter);
     window.addEventListener('dragover', handleDragOver);
     window.addEventListener('dragleave', handleDragLeave);
     window.addEventListener('drop', handleDrop);
 
     return () => {
+      window.removeEventListener('dragstart', handleDragStart);
+      window.removeEventListener('dragend', handleDragEnd);
       window.removeEventListener('dragenter', handleDragEnter);
       window.removeEventListener('dragover', handleDragOver);
       window.removeEventListener('dragleave', handleDragLeave);
@@ -484,9 +512,13 @@ export const DatabaseDetailPage: React.FC<{
     };
   }, [activeTab]);
 
-  const handleFileUpload = (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
-    setIncomingFiles(fileList);
+  const [unsupportedFilePopup, setUnsupportedFilePopup] = useState<string | null>(null);
+
+  const handleFileUpload = (fileList: FileList | File[] | null) => {
+    if (!fileList) return;
+    const filesArray = Array.from(fileList);
+    if (filesArray.length === 0) return;
+    setIncomingFiles(filesArray);
   };
 
   // Generic confirmation modal state
@@ -2905,7 +2937,9 @@ export const DatabaseDetailPage: React.FC<{
                   id="storage-file-upload-input"
                   className="hidden"
                   onChange={(e) => {
-                    handleFileUpload(e.target.files);
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleFileUpload(Array.from(e.target.files));
+                    }
                     e.target.value = '';
                   }}
                 />
@@ -2960,7 +2994,9 @@ export const DatabaseDetailPage: React.FC<{
                             <img
                               src={viewUrl}
                               alt={file.original_name}
-                              className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+                              draggable={false}
+                              onDragStart={(e) => e.preventDefault()}
+                              className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform select-none"
                               onClick={() => setSelectedFileForPreview(file)}
                               title={t('storage.previewImage', 'Click to preview image')}
                             />
@@ -3074,7 +3110,9 @@ export const DatabaseDetailPage: React.FC<{
                   <img
                     src={`${window.location.origin}/v1/files/${selectedFileForPreview.id}/view`}
                     alt={selectedFileForPreview.original_name}
-                    className="max-h-[75vh] w-auto mx-auto object-contain rounded"
+                    draggable={false}
+                    onDragStart={(e) => e.preventDefault()}
+                    className="max-h-[75vh] w-auto mx-auto object-contain rounded select-none pointer-events-auto"
                   />
                 </div>
               </div>
@@ -5162,7 +5200,42 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
             queryClient.invalidateQueries({ queryKey: ['dbStats', databaseId] });
             showSuccess(t('storage.uploadedSuccess', 'File(s) uploaded successfully'));
           }}
+          onUploadError={(msg) => {
+            showError(msg);
+          }}
+          onUnsupportedFile={(msg) => {
+            setUnsupportedFilePopup(msg);
+          }}
         />
+      )}
+
+      {/* Unsupported File Warning Popup Modal */}
+      {unsupportedFilePopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-foreground">
+                  {language === 'en' ? 'Unsupported File' : 'Tệp không được hỗ trợ'}
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {unsupportedFilePopup}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2 border-t border-border">
+              <button
+                onClick={() => setUnsupportedFilePopup(null)}
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+              >
+                {language === 'en' ? 'Understood' : 'Đã hiểu'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Global Full-Page Drag Overlay */}

@@ -29,22 +29,32 @@ export interface UploadQueueItem {
 interface StorageUploadManagerProps {
   databaseId: string;
   onUploadSuccess?: () => void;
+  onUploadError?: (message: string) => void;
+  onUnsupportedFile?: (message: string) => void;
   incomingFiles?: FileList | File[] | null;
   onClearIncomingFiles?: () => void;
 }
 
 const MAX_CONCURRENT_UPLOADS = 3;
 
+const FORBIDDEN_EXTENSIONS = new Set([
+  '.html', '.htm', '.xhtml', '.exe', '.sh', '.bat', '.cmd', '.php',
+  '.js', '.mjs', '.vbs', '.dll', '.com', '.scr', '.msi', '.apk', '.jar', '.vbe', '.wsf', '.wsh'
+]);
+
 export const StorageUploadManager: React.FC<StorageUploadManagerProps> = ({
   databaseId,
   onUploadSuccess,
+  onUploadError,
+  onUnsupportedFile,
   incomingFiles,
   onClearIncomingFiles,
 }) => {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [internalPopup, setInternalPopup] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<UploadQueueItem[]>([]);
   queueRef.current = queue;
@@ -71,9 +81,19 @@ export const StorageUploadManager: React.FC<StorageUploadManagerProps> = ({
   const enqueueFiles = useCallback((files: FileList | File[]) => {
     if (!files || files.length === 0) return;
 
+    const filesArray = Array.from(files);
     const newItems: UploadQueueItem[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    const rejectedFiles: string[] = [];
+
+    for (let i = 0; i < filesArray.length; i++) {
+      const file = filesArray[i];
+      const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+
+      if (FORBIDDEN_EXTENSIONS.has(ext)) {
+        rejectedFiles.push(file.name);
+        continue;
+      }
+
       let previewUrl: string | undefined;
       if (file.type.startsWith('image/')) {
         try {
@@ -90,10 +110,28 @@ export const StorageUploadManager: React.FC<StorageUploadManagerProps> = ({
       });
     }
 
-    setQueue((prev) => [...prev, ...newItems]);
-    setIsOpen(true);
-    setIsMinimized(false);
-  }, []);
+    if (rejectedFiles.length > 0) {
+      const rejectedNames = rejectedFiles.map((f) => `"${f}"`).join(', ');
+      const msg = language === 'en'
+        ? `Unsupported file: ${rejectedNames}. Executable and active script files (.exe, .html, .js, .sh, .bat, .php, etc.) are forbidden for security.`
+        : `Tệp không được hỗ trợ: ${rejectedNames}. Hệ thống cấm tải lên file thực thi hoặc script (.exe, .html, .js, .sh, .bat, .php,...) vì lý do an toàn.`;
+
+      if (onUnsupportedFile) {
+        onUnsupportedFile(msg);
+      } else {
+        setInternalPopup(msg);
+      }
+      if (onUploadError) {
+        onUploadError(msg);
+      }
+    }
+
+    if (newItems.length > 0) {
+      setQueue((prev) => [...prev, ...newItems]);
+      setIsOpen(true);
+      setIsMinimized(false);
+    }
+  }, [language, onUnsupportedFile, onUploadError]);
 
   // Handle incoming files from global drag & drop
   useEffect(() => {
@@ -157,7 +195,7 @@ export const StorageUploadManager: React.FC<StorageUploadManagerProps> = ({
           onUploadSuccess();
         }
       } else {
-        let errMsg = xhr.statusText || 'Upload failed';
+        let errMsg = xhr.statusText || t('storage.uploadFailed', 'Tải tệp lên thất bại');
         try {
           const res = JSON.parse(xhr.responseText);
           if (res?.error?.message) errMsg = res.error.message;
@@ -169,17 +207,24 @@ export const StorageUploadManager: React.FC<StorageUploadManagerProps> = ({
               : item
           )
         );
+        if (onUploadError) {
+          onUploadError(`${nextItem.file.name}: ${errMsg}`);
+        }
       }
     };
 
     xhr.onerror = () => {
+      const errMsg = 'Lỗi mạng khi tải file lên (Network error)';
       setQueue((prev) =>
         prev.map((item) =>
           item.id === nextItem.id
-            ? { ...item, status: 'error', errorMessage: 'Network error', xhr: undefined }
+            ? { ...item, status: 'error', errorMessage: errMsg, xhr: undefined }
             : item
         )
       );
+      if (onUploadError) {
+        onUploadError(`${nextItem.file.name}: ${errMsg}`);
+      }
     };
 
     xhr.onabort = () => {
@@ -195,7 +240,7 @@ export const StorageUploadManager: React.FC<StorageUploadManagerProps> = ({
     xhr.open('POST', `/api/admin/databases/${databaseId}/files`);
     xhr.withCredentials = true;
     xhr.send(formData);
-  }, [queue, databaseId, onUploadSuccess]);
+  }, [queue, databaseId, onUploadSuccess, onUploadError, t]);
 
   const cancelUpload = (id: string) => {
     setQueue((prev) =>
@@ -316,11 +361,10 @@ export const StorageUploadManager: React.FC<StorageUploadManagerProps> = ({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.csv,.json,*"
         className="hidden"
         onChange={(e) => {
           if (e.target.files && e.target.files.length > 0) {
-            enqueueFiles(e.target.files);
+            enqueueFiles(Array.from(e.target.files));
           }
           e.target.value = ''; // Reset to allow re-selecting same files
         }}
@@ -565,6 +609,35 @@ export const StorageUploadManager: React.FC<StorageUploadManagerProps> = ({
                   {t('storage.clearCompleted', 'Clear Completed')}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Internal Unsupported File Warning Popup Modal */}
+      {internalPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-foreground">
+                  {language === 'en' ? 'Unsupported File' : 'Tệp không được hỗ trợ'}
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {internalPopup}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2 border-t border-border">
+              <button
+                onClick={() => setInternalPopup(null)}
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+              >
+                {language === 'en' ? 'Understood' : 'Đã hiểu'}
+              </button>
             </div>
           </div>
         </div>
