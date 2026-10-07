@@ -23,7 +23,7 @@ import { stringify } from 'csv-stringify/sync';
 import { clusterService } from '../services/cluster.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { logger } from '../utils/logger.js';
-import { TokenPermissionSchema, type MemberRole, isOwnerRole, isAdminRole } from '../../../shared/index.js';
+import { TokenPermissionSchema, type MemberRole, type FileRecord, isOwnerRole, isAdminRole } from '../../../shared/index.js';
 
 const IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -38,17 +38,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       const safeId = databaseId.replace(/[^a-zA-Z0-9_-]/g, '');
       const dbPath = path.resolve(config.databasesDir, `${safeId}.sqlite`);
       if (fs.existsSync(dbPath)) {
-        db = {
-          id: safeId,
-          name: safeId,
-          slug: safeId,
-          filename: `${safeId}.sqlite`,
-          node_id: config.nodeId,
-          created_at: 0,
-          updated_at: 0,
-        } as any;
-      } else {
-        reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: `Database "${databaseId}" not found` } });
+        databaseService.ensureDatabaseRecord(safeId);
+        db = databaseService.getDatabase(safeId);
+      }
+      if (!db) {
+        reply.status(404).send({ success: false, error: { code: 'DATABASE_NOT_FOUND', message: `Database "${databaseId}" not found` } });
         return null;
       }
     }
@@ -802,17 +796,27 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    // Role enforcement: viewer can only run SELECT statements
+    // Role enforcement: viewer can only run SELECT statements; editor cannot run DDL
     const user = req.adminUser!;
     let isViewer = false;
     if (!isAdminRole(user.role)) {
       const memberRole = databaseMembersService.getUserDatabaseRole(id, user.userId, user.role);
+      const trimmed = parsed.data.sql.trim();
+      const isDdl = /^\s*(CREATE|ALTER|DROP)\b/i.test(trimmed);
+
       if (memberRole === 'viewer') {
         isViewer = true;
-        if (!isReadOnlySql(parsed.data.sql)) {
+        if (!isReadOnlySql(trimmed)) {
           return reply.status(403).send({
             success: false,
             error: { code: 'FORBIDDEN', message: 'Viewer role can only execute read-only queries (SELECT)' },
+          });
+        }
+      } else if (memberRole === 'editor') {
+        if (isDdl) {
+          return reply.status(403).send({
+            success: false,
+            error: { code: 'FORBIDDEN', message: 'Editor role cannot execute DDL queries (schema modification)' },
           });
         }
       }
@@ -1132,16 +1136,25 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id, backupId } = req.params as { id: string; backupId: string };
     const dbRecord = requireDatabaseAccess(req, reply, id, 'admin');
     if (!dbRecord) return;
-    await backupService.restoreBackup(id, backupId);
-    activityService.recordAudit({
-      user: req.adminUser!.username,
-      action: 'database.restore',
-      resource: id,
-      result: 'success',
-      requestId: req.id,
-      details: JSON.stringify({ backupId }),
-    });
-    return reply.send({ success: true, message: 'Database restored successfully' });
+
+    try {
+      await backupService.restoreBackup(id, backupId);
+      activityService.recordAudit({
+        user: req.adminUser!.username,
+        action: 'database.restore',
+        resource: id,
+        result: 'success',
+        requestId: req.id,
+        details: JSON.stringify({ backupId }),
+      });
+      return reply.send({ success: true, message: 'Database restored successfully' });
+    } catch (err: any) {
+      const msg = err.message || 'Restore failed';
+      if (msg.includes('not found')) {
+        return reply.status(404).send({ success: false, error: { code: 'BACKUP_NOT_FOUND', message: msg } });
+      }
+      return reply.status(400).send({ success: false, error: { code: 'RESTORE_ERROR', message: msg } });
+    }
   });
 
   fastify.get('/backups/:backupId/download', async (req, reply) => {
@@ -1309,7 +1322,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/databases/:id/files', async (req, reply) => {
-    const { id } = req.params as { id: string };
+    const IdSchema = z.string().min(1).max(64).regex(/^[a-zA-Z0-9_-]+$/, 'Invalid database ID format');
+    const parsedId = IdSchema.safeParse((req.params as any)?.id);
+    if (!parsedId.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_DATABASE_ID', message: parsedId.error.issues[0]?.message || 'Invalid database ID' }
+      });
+    }
+    const id = parsedId.data;
+
     const dbRecord = requireDatabaseAccess(req, reply, id, 'editor');
     if (!dbRecord) return;
 
@@ -1338,15 +1360,37 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const metadata = (data.fields?.metadata as any)?.value || null;
+    const rawMetadata = (data.fields?.metadata as any)?.value;
+    const metadata = typeof rawMetadata === 'string' && rawMetadata.trim() !== '' ? rawMetadata.trim() : null;
 
-    const fileRecord = await storageService.saveStreamFile({
-      databaseId: id,
-      originalName: data.filename,
-      mimeType: data.mimetype,
-      stream: data.file,
-      metadata,
-    });
+    let fileRecord: FileRecord;
+    try {
+      fileRecord = await storageService.saveStreamFile({
+        databaseId: id,
+        originalName: data.filename,
+        mimeType: data.mimetype,
+        stream: data.file,
+        metadata,
+      });
+    } catch (err: any) {
+      logger.error({ err, databaseId: id, filename: data.filename }, 'Failed to save uploaded file');
+      if (err.code === 'DATABASE_NOT_FOUND' || err.statusCode === 404 || err.errcode === 787 || err.message?.includes('FOREIGN KEY constraint failed')) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'DATABASE_NOT_FOUND', message: err.message || `Database "${id}" not found` }
+        });
+      }
+      if (err.message?.includes('exceeds maximum upload size limit')) {
+        return reply.status(413).send({
+          success: false,
+          error: { code: 'FILE_TOO_LARGE', message: err.message }
+        });
+      }
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'STORAGE_ERROR', message: err.message || 'Failed to save file' }
+      });
+    }
 
     activityService.recordAudit({
       user: req.adminUser!.username,
@@ -1844,8 +1888,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      const db = dbManager.get(id);
-      db.exec(executableSql);
+      dbManager.executeMultiStatements(id, executableSql);
 
       realtimeService.emitEvent({
         databaseId: id,
@@ -1947,8 +1990,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         let execSql = rawSql;
         if (dialect === 'mysql') execSql = SqlTranslator.translateMySql(rawSql);
         if (dialect === 'postgres') execSql = SqlTranslator.translatePostgres(rawSql);
-        const db = dbManager.get(id);
-        db.exec(execSql);
+        dbManager.executeMultiStatements(id, execSql);
       }
 
       activityService.recordAudit({

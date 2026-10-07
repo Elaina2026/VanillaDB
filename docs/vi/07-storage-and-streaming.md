@@ -56,3 +56,15 @@ X-Content-Type-Options: nosniff
 ```
 
 Cơ chế này cho phép các trình phát HTML `<video>` và `<audio>` tua tức thì đến bất kỳ thời điểm nào mà không cần tải toàn bộ tệp.
+
+---
+
+## 4. Kiểm định Khóa ngoại & Toàn vẹn Tệp tải lên
+
+Đặc tả kỹ thuật kiểm định tham chiếu, cấu trúc lỗi chuẩn và cơ chế hoạt động đa nút cluster:
+- **Ràng buộc Khóa ngoại**: Bảng metadata `files` áp dụng nghiêm ngặt `FOREIGN KEY (database_id) REFERENCES databases(id) ON DELETE CASCADE`.
+- **Kiểm định Thực thể Cha Trước khi Lưu (Pre-flight Validation)**: Trước khi lưu tệp hoặc nhận stream dữ liệu, hệ thống kiểm tra sự tồn tại của `databaseId` trong danh mục metadata. Nếu cơ sở dữ liệu không tồn tại, máy chủ phản hồi ngay lập tức HTTP `404 Not Found` với mã lỗi chuẩn `DATABASE_NOT_FOUND` theo cấu trúc envelope `{ success: false, error: { code: 'DATABASE_NOT_FOUND', message: '...' } }`.
+- **Tự động Đăng ký Nút Lưu trữ (Worker Auto-Registration)**: Trên các worker storage node lưu trữ tệp `.sqlite` trực tiếp trên đĩa (`data/databases/:databaseId.sqlite`), hệ thống tự động đăng ký bản ghi cơ sở dữ liệu vào catalog metadata cục bộ để bảo toàn ràng buộc khóa ngoại khi API Gateway chuyển tiếp tải tệp.
+- **Dọn dẹp Tệp Mồ côi (Orphan Cleanup Guarantee)**: Nếu quá trình lưu tệp hoặc lệnh INSERT gặp lỗi, tệp đã ghi trên đĩa sẽ lập tức bị xóa bỏ (`fs.unlinkSync`), đảm bảo không để lại tệp rác trên hệ thống.
+- **Chuẩn hóa Siêu dữ liệu (Metadata Normalization)**: Các giá trị metadata tùy chọn nếu là chuỗi rỗng hoặc chỉ chứa khoảng trắng sẽ được tự động chuẩn hóa về giá trị `NULL`.
+

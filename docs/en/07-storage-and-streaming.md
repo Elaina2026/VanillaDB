@@ -56,3 +56,15 @@ X-Content-Type-Options: nosniff
 ```
 
 This architecture enables seamless scrubbing and playback in web audio and video players.
+
+---
+
+## 4. File Upload & Foreign Key Validation
+
+Technical specification of upload verification, error envelopes, and distributed cluster integrity:
+- **Foreign Key Constraint**: The `files` metadata table strictly enforces `FOREIGN KEY (database_id) REFERENCES databases(id) ON DELETE CASCADE`.
+- **Pre-flight Parent Validation**: Before writing or streaming file bytes to disk, the server validates that `databaseId` exists in the metadata catalog. If the database does not exist, the API responds immediately with HTTP `404 Not Found` (`DATABASE_NOT_FOUND`) with the standard envelope `{ success: false, error: { code: 'DATABASE_NOT_FOUND', message: '...' } }`.
+- **Worker Node Auto-Registration**: On distributed storage nodes hosting tenant databases directly on disk (`data/databases/:databaseId.sqlite`), existing database instances are auto-registered into the local metadata catalog to guarantee foreign key integrity for cluster proxy uploads.
+- **Orphan File Cleanup Guarantee**: If file saving or database record insertion encounters any error, encrypted file artifacts on disk are immediately unlinked (`fs.unlinkSync`), guaranteeing zero orphaned disk files.
+- **Metadata Normalization**: Optional metadata payloads are normalized to `NULL` when empty or whitespace-only.
+

@@ -13,7 +13,7 @@ import { clusterService } from '../services/cluster.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { requireTokenPermission } from '../middleware/auth.js';
 import { decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
-import { isAdminRole } from '../../../shared/index.js';
+import { isAdminRole, type FileRecord } from '../../../shared/index.js';
 
 function resolveTokenRestrictions(req: FastifyRequest) {
   let allowed: string[] | null = (req as any).apiToken?.allowed_tables || null;
@@ -852,15 +852,36 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const metadata = (data.fields?.metadata as any)?.value || null;
+    const rawMetadata = (data.fields?.metadata as any)?.value;
+    const metadata = typeof rawMetadata === 'string' && rawMetadata.trim() !== '' ? rawMetadata.trim() : null;
 
-    const fileRecord = await storageService.saveStreamFile({
-      databaseId,
-      originalName: data.filename,
-      mimeType: data.mimetype,
-      stream: data.file,
-      metadata,
-    });
+    let fileRecord: FileRecord;
+    try {
+      fileRecord = await storageService.saveStreamFile({
+        databaseId,
+        originalName: data.filename,
+        mimeType: data.mimetype,
+        stream: data.file,
+        metadata,
+      });
+    } catch (err: any) {
+      if (err.code === 'DATABASE_NOT_FOUND' || err.statusCode === 404 || err.errcode === 787 || err.message?.includes('FOREIGN KEY constraint failed')) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'DATABASE_NOT_FOUND', message: err.message || `Database "${databaseId}" not found` }
+        });
+      }
+      if (err.message?.includes('exceeds maximum upload size limit')) {
+        return reply.status(413).send({
+          success: false,
+          error: { code: 'FILE_TOO_LARGE', message: err.message }
+        });
+      }
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'STORAGE_ERROR', message: err.message || 'Failed to save file' }
+      });
+    }
 
     realtimeService.emitEvent({
       databaseId,

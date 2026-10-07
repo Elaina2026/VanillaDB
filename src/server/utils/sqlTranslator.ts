@@ -72,7 +72,7 @@ export class SqlTranslator {
     out = out.replace(/`([^`]+)`/g, '"$1"');
 
     // 5. Transform AUTO_INCREMENT in column definitions
-    out = out.replace(/\b(TINYINT|SMALLINT|MEDIUMINT|INT|INTEGER|BIGINT)\s+(?:UNSIGNED\s+)?AUTO_INCREMENT\b/gi, 'INTEGER PRIMARY KEY AUTOINCREMENT');
+    out = out.replace(/\b(TINYINT|SMALLINT|MEDIUMINT|INT|INTEGER|BIGINT)\b(?:\s*\(\d+\))?(?:\s+UNSIGNED)?(?:\s+NOT\s+NULL)?\s+AUTO_INCREMENT(?:\s+PRIMARY\s+KEY)?/gi, 'INTEGER PRIMARY KEY AUTOINCREMENT');
     out = out.replace(/\bAUTO_INCREMENT\b/gi, 'AUTOINCREMENT');
 
     // 6. Map MySQL Data Types to SQLite Affinity (Using strict word boundary or exact type name)
@@ -91,11 +91,25 @@ export class SqlTranslator {
     const standaloneIndexes: string[] = [];
     out = out.replace(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?("?[A-Za-z0-9_]+"?)\s*\(([\s\S]*?)\);/gi, (match, tableName, tableBody) => {
       const cleanTableName = tableName.replace(/"/g, '');
-      const lines = tableBody.split(',\n');
+      const rawLines = tableBody.split(/,\s*\n/);
+      const autoIncrCols = new Set<string>();
+
+      for (const line of rawLines) {
+        const colMatch = line.trim().match(/^"([A-Za-z0-9_]+)"\s+INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/i);
+        if (colMatch) autoIncrCols.add(colMatch[1]);
+      }
+
       const filteredLines: string[] = [];
 
-      for (let line of lines) {
+      for (let line of rawLines) {
         const trimmedLine = line.trim();
+
+        // Check for redundant table-level PRIMARY KEY constraint on a column that already has AUTOINCREMENT
+        const pkMatch = trimmedLine.match(/^PRIMARY\s+KEY\s*\(\s*"?([A-Za-z0-9_]+)"?\s*\)/i);
+        if (pkMatch && autoIncrCols.has(pkMatch[1])) {
+          continue;
+        }
+
         // Check for inline KEY / INDEX (not PRIMARY KEY or FOREIGN KEY)
         const keyMatch = trimmedLine.match(/^(?:UNIQUE\s+)?(?:KEY|INDEX)\s+("?[A-Za-z0-9_]+"?)\s*\(([^)]+)\)/i);
         const isUnique = /^UNIQUE\s+(?:KEY|INDEX)/i.test(trimmedLine);

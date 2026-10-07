@@ -504,6 +504,15 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/change-password', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const ip = req.ip || 'unknown';
+    const userId = req.adminUser!.userId;
+    if (!checkAuthRateLimit(`change_pwd:${userId}`, 10, 60 * 1000) || !checkAuthRateLimit(`change_pwd_ip:${ip}`, 20, 60 * 1000)) {
+      return reply.status(429).send({
+        success: false,
+        error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many password change attempts. Please wait 1 minute.' },
+      });
+    }
+
     const Schema = z.object({
       currentPassword: z.string().min(1),
       newPassword: z.string().min(6).max(128),
@@ -964,6 +973,13 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     const metaDb = (await import('../db/metadata.js')).getMetadataDb();
     const cleanId = parsed.data.usernameOrEmail.trim();
     const cleanLower = cleanId.toLowerCase();
+
+    if (!checkAuthRateLimit(`recovery_user:${cleanLower}`, 10, 60 * 1000)) {
+      return reply.status(429).send({
+        success: false,
+        error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many recovery attempts on this account. Please wait 1 minute.' },
+      });
+    }
 
     const userRow = metaDb.prepare(`
       SELECT id, username, email, totp_enabled, totp_secret, totp_backup_codes, last_totp_step

@@ -11,6 +11,7 @@ import { requireAdminAuth } from '../middleware/auth.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { activityService } from '../services/activity.js';
 import { storageService } from '../services/storage.js';
+import { logger } from '../utils/logger.js';
 import { isAdminRole } from '../../../shared/index.js';
 
 const addNodeSchema = z.object({
@@ -187,6 +188,18 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
       }
       fs.copyFileSync(tempFile, destFile);
       fs.unlinkSync(tempFile);
+
+      // Auto-register database in local metadata catalog to preserve foreign key constraints
+      try {
+        const metaDb = getMetadataDb();
+        const now = Date.now();
+        metaDb.prepare(`
+          INSERT OR IGNORE INTO databases (id, name, slug, description, filename, max_size_mb, owner_id, node_id, created_at, updated_at, last_accessed_at)
+          VALUES (?, ?, ?, NULL, ?, NULL, NULL, ?, ?, ?, ?)
+        `).run(safeId, safeId, safeId, `${safeId}.sqlite`, config.nodeId || 'local', now, now, now);
+      } catch (regErr) {
+        logger.warn({ regErr, databaseId: safeId }, 'Failed to record received database in metadata databases table');
+      }
 
       return reply.send({ success: true, data: { databaseId: safeId, sizeBytes: fs.statSync(destFile).size } });
     } catch (err: any) {

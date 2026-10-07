@@ -34,6 +34,7 @@ export function getMetadataDb(): DatabaseSync {
   `);
 
   runMigrations(metaDb);
+  syncDiskDatabasesToMetadata(metaDb);
   return metaDb;
 }
 
@@ -443,6 +444,13 @@ function runMigrations(db: DatabaseSync): void {
         UPDATE users SET role = 'admin' WHERE role = 'system_admin';
         DELETE FROM roles WHERE id IN ('system_owner', 'system_admin');
       `
+    },
+    {
+      version: 20,
+      name: 'sync_disk_databases_and_clean_orphan_files',
+      sql: `
+        DELETE FROM files WHERE database_id NOT IN (SELECT id FROM databases);
+      `
     }
   ];
 
@@ -478,6 +486,28 @@ function runMigrations(db: DatabaseSync): void {
         throw err;
       }
     }
+  }
+}
+
+export function syncDiskDatabasesToMetadata(db: DatabaseSync): void {
+  try {
+    if (!fs.existsSync(config.databasesDir)) return;
+    const entries = fs.readdirSync(config.databasesDir);
+    const now = Date.now();
+    const insertStmt = db.prepare(`
+      INSERT OR IGNORE INTO databases (id, name, slug, description, filename, max_size_mb, owner_id, node_id, created_at, updated_at, last_accessed_at)
+      VALUES (?, ?, ?, NULL, ?, NULL, NULL, ?, ?, ?, ?)
+    `);
+    for (const file of entries) {
+      if (file.endsWith('.sqlite') && !file.endsWith('-wal') && !file.endsWith('-shm') && !file.endsWith('-journal')) {
+        const id = file.slice(0, -7);
+        if (id && /^[a-zA-Z0-9_-]+$/.test(id)) {
+          insertStmt.run(id, id, id, file, config.nodeId || 'local', now, now, now);
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Failed to sync disk databases to metadata catalog');
   }
 }
 

@@ -239,14 +239,16 @@ export async function buildApp() {
   // Global L7 flood defense and request timeout hook
   app.addHook('onRequest', async (req, reply) => {
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    const { allowed, remaining } = globalL7Limiter.consume(ip);
-    reply.header('X-RateLimit-Remaining-IP', remaining);
+    if (process.env.VDB_DISABLE_L7_LIMITER !== 'true') {
+      const { allowed, remaining } = globalL7Limiter.consume(ip);
+      reply.header('X-RateLimit-Remaining-IP', remaining);
 
-    if (!allowed) {
-      return reply.status(429).send({
-        success: false,
-        error: { code: 'TOO_MANY_REQUESTS', message: 'Too many requests from this IP address.' }
-      });
+      if (!allowed) {
+        return reply.status(429).send({
+          success: false,
+          error: { code: 'TOO_MANY_REQUESTS', message: 'Too many requests from this IP address.' }
+        });
+      }
     }
 
     // Request execution timeout safeguard (skip for live SSE streams; extend to 300s for batch/storage/migration/backups)

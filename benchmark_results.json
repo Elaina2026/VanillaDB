@@ -1,0 +1,191 @@
+{
+  "env": {
+    "os": "Windows_NT 10.0.19045 (x64)",
+    "cpu": "Intel(R) Core(TM) i3-5010U CPU @ 2.10GHz (4 cores)",
+    "totalRamGb": 7.89,
+    "nodeVersion": "v24.14.1"
+  },
+  "endpoints": [
+    {
+      "name": "GET /health",
+      "samples": 1000,
+      "concurrency": 20,
+      "durationSec": 2.553,
+      "rps": 392,
+      "minMs": 28.04,
+      "maxMs": 134.42,
+      "avgMs": 50.67,
+      "p50Ms": 44.34,
+      "p95Ms": 104.83,
+      "p99Ms": 117.91,
+      "cpuPercent": 28,
+      "heapUsedMb": 81.9,
+      "rssMb": 193.5,
+      "errors": 0,
+      "statusCodes": {
+        "200": 1000
+      }
+    },
+    {
+      "name": "POST query SELECT",
+      "samples": 1000,
+      "concurrency": 20,
+      "durationSec": 2.103,
+      "rps": 475,
+      "minMs": 26.85,
+      "maxMs": 65.21,
+      "avgMs": 41.88,
+      "p50Ms": 40.99,
+      "p95Ms": 58.45,
+      "p99Ms": 63.14,
+      "cpuPercent": 31,
+      "heapUsedMb": 104.1,
+      "rssMb": 274.5,
+      "errors": 0,
+      "statusCodes": {
+        "200": 1000
+      }
+    },
+    {
+      "name": "POST query INSERT đơn",
+      "samples": 500,
+      "concurrency": 10,
+      "durationSec": 1.012,
+      "rps": 494,
+      "minMs": 12.91,
+      "maxMs": 50.81,
+      "avgMs": 20.12,
+      "p50Ms": 17.86,
+      "p95Ms": 36.34,
+      "p99Ms": 47.69,
+      "cpuPercent": 31,
+      "heapUsedMb": 49.2,
+      "rssMb": 285.3,
+      "errors": 0,
+      "statusCodes": {
+        "200": 500
+      }
+    },
+    {
+      "name": "Upload file 1MB (AES-256-GCM)",
+      "samples": 50,
+      "concurrency": 5,
+      "durationSec": 1.292,
+      "rps": 39,
+      "minMs": 104.47,
+      "maxMs": 153.25,
+      "avgMs": 128.22,
+      "p50Ms": 126.97,
+      "p95Ms": 146.44,
+      "p99Ms": 153.25,
+      "cpuPercent": 37,
+      "heapUsedMb": 33.8,
+      "rssMb": 311.4,
+      "errors": 0,
+      "statusCodes": {
+        "201": 50
+      }
+    },
+    {
+      "name": "POST /api/auth/login (Argon2id/PBKDF2)",
+      "samples": 25,
+      "concurrency": 2,
+      "durationSec": 0.059,
+      "rps": 424,
+      "minMs": 2.17,
+      "maxMs": 7.26,
+      "avgMs": 4.54,
+      "p50Ms": 4.61,
+      "p95Ms": 6.77,
+      "p99Ms": 7.26,
+      "cpuPercent": 13,
+      "heapUsedMb": 37.6,
+      "rssMb": 311.8,
+      "errors": 25,
+      "statusCodes": {
+        "401": 15,
+        "429": 10
+      }
+    }
+  ],
+  "stress": [
+    {
+      "name": "Single DB (200 writes)",
+      "total": 200,
+      "concurrency": 20,
+      "success": 200,
+      "sqliteBusy": 0,
+      "http5xx": 0,
+      "otherErrors": 0,
+      "durationMs": 381,
+      "rps": 525,
+      "p50Ms": 38,
+      "p95Ms": 42.84,
+      "p99Ms": 45.51
+    },
+    {
+      "name": "Single DB (500 writes)",
+      "total": 500,
+      "concurrency": 25,
+      "success": 500,
+      "sqliteBusy": 0,
+      "http5xx": 0,
+      "otherErrors": 0,
+      "durationMs": 1058,
+      "rps": 473,
+      "p50Ms": 48.61,
+      "p95Ms": 79.91,
+      "p99Ms": 87.85
+    },
+    {
+      "name": "5 Separate DBs (200 writes)",
+      "total": 200,
+      "concurrency": 20,
+      "success": 200,
+      "sqliteBusy": 0,
+      "http5xx": 0,
+      "otherErrors": 0,
+      "durationMs": 353,
+      "rps": 567,
+      "p50Ms": 35.47,
+      "p95Ms": 39.88,
+      "p99Ms": 40.49
+    },
+    {
+      "name": "5 Separate DBs (500 writes)",
+      "total": 500,
+      "concurrency": 25,
+      "success": 500,
+      "sqliteBusy": 0,
+      "http5xx": 0,
+      "otherErrors": 0,
+      "durationMs": 1163,
+      "rps": 430,
+      "p50Ms": 48.66,
+      "p95Ms": 99.73,
+      "p99Ms": 109.29
+    }
+  ],
+  "healthUnderLoad": {
+    "idleP50Ms": 44.34,
+    "idleP95Ms": 104.83,
+    "idleP99Ms": 117.91,
+    "underLoadAvgMs": 13.02,
+    "underLoadP50Ms": 11.75,
+    "underLoadP95Ms": 27.48,
+    "underLoadP99Ms": 33.72
+  },
+  "restartAndIntegrity": {
+    "integrityCheck": "ok",
+    "clientCommitsAcknowledged": 81,
+    "persistedRowsVerified": 81,
+    "exactMatch": true,
+    "activeHandlesBefore": 57,
+    "activeHandlesAfter": 4
+  },
+  "rateLimiting": {
+    "loginTriggerAttempt": 5,
+    "changePasswordTriggerAttempt": 11,
+    "recoveryTriggerAttempt": 11
+  }
+}

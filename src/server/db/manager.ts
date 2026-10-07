@@ -489,7 +489,7 @@ export class DatabaseManager {
     }
 
     if (/\bPRAGMA\b/i.test(stripped)) {
-      const pragmaMatches = stripped.matchAll(/\bPRAGMA\s+([a-zA-Z0-9_]+)/gi);
+      const pragmaMatches = stripped.matchAll(/\bPRAGMA(?:\s+|(?=["'`[]))(?:(?:["'`[]?[a-zA-Z0-9_]+["'`\]]?\s*\.\s*)?)(?:["'`[]?([a-zA-Z0-9_]+)["'`\]]?)/gi);
       const safePragmas = [
         'table_info',
         'table_xinfo',
@@ -512,11 +512,16 @@ export class DatabaseManager {
         'optimize',
         'incremental_vacuum',
       ];
+      let foundPragma = false;
       for (const match of pragmaMatches) {
-        const pragmaName = match[1].toLowerCase();
+        foundPragma = true;
+        const pragmaName = (match[1] || '').toLowerCase();
         if (!safePragmas.includes(pragmaName)) {
           throw new Error(`PRAGMA ${pragmaName} is not permitted through this API.`);
         }
+      }
+      if (!foundPragma) {
+        throw new Error('Malformed or unrecognized PRAGMA statement is not permitted.');
       }
     }
 

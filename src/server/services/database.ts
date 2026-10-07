@@ -213,6 +213,16 @@ export class DatabaseService {
     const safeId = databaseId.replace(/[^a-zA-Z0-9_-]/g, '');
     const dbPath = path.resolve(config.databasesDir, `${safeId}.sqlite`);
     if (fs.existsSync(dbPath)) {
+      try {
+        const now = Date.now();
+        metaDb.prepare(`
+          INSERT OR IGNORE INTO databases (id, name, slug, description, filename, max_size_mb, owner_id, node_id, created_at, updated_at, last_accessed_at)
+          VALUES (?, ?, ?, NULL, ?, NULL, NULL, ?, ?, ?, ?)
+        `).run(safeId, safeId, safeId, `${safeId}.sqlite`, config.nodeId || 'local', now, now, now);
+      } catch (err) {
+        logger.warn({ err, databaseId: safeId }, 'Failed to auto-register disk database into metadata databases table');
+      }
+
       return {
         id: safeId,
         name: safeId,
@@ -225,6 +235,31 @@ export class DatabaseService {
     }
 
     return null;
+  }
+
+  public ensureDatabaseRecord(databaseId: string): boolean {
+    if (!databaseId || typeof databaseId !== 'string') return false;
+    const safeId = databaseId.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeId) return false;
+
+    const metaDb = getMetadataDb();
+    const existing = metaDb.prepare('SELECT id FROM databases WHERE id = ?').get(safeId) as { id: string } | undefined;
+    if (existing) return true;
+
+    const dbPath = path.resolve(config.databasesDir, `${safeId}.sqlite`);
+    if (fs.existsSync(dbPath)) {
+      try {
+        const now = Date.now();
+        metaDb.prepare(`
+          INSERT OR IGNORE INTO databases (id, name, slug, description, filename, max_size_mb, owner_id, node_id, created_at, updated_at, last_accessed_at)
+          VALUES (?, ?, ?, NULL, ?, NULL, NULL, ?, ?, ?, ?)
+        `).run(safeId, safeId, safeId, `${safeId}.sqlite`, config.nodeId || 'local', now, now, now);
+        return true;
+      } catch (err) {
+        logger.warn({ err, databaseId: safeId }, 'Failed to ensure database record in metadata');
+      }
+    }
+    return false;
   }
 
   public updateDatabase(databaseId: string, updates: {
@@ -572,6 +607,8 @@ export class DatabaseService {
   } {
     const dbRecord = this.getDatabase(databaseId);
     if (!dbRecord) throw new Error(`Database not found: ${databaseId}`);
+
+    dbManager.validateSqlSafety(sql, { readonly: true });
 
     const db = dbManager.get(databaseId);
     const planRows = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{
