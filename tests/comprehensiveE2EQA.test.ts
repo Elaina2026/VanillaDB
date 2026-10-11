@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import path from 'path';
 import fs from 'fs';
 import { Readable } from 'stream';
-import { buildApp } from '../src/server/index.js';
+import { buildApp, globalL7Limiter } from '../src/server/index.js';
 import { getMetadataDb } from '../src/server/db/metadata.js';
 import { dbManager } from '../src/server/db/manager.js';
 import { config } from '../src/server/config/index.js';
@@ -97,6 +97,7 @@ describe('Comprehensive E2E QA Test Suite (Sections A-L)', () => {
       permissions: ['database:read', 'database:write', 'database:ddl'],
       allowedTables: null,
       deniedTables: null,
+      rateLimit: 0,
     });
     primaryToken = tok1.plainSecret;
 
@@ -104,6 +105,7 @@ describe('Comprehensive E2E QA Test Suite (Sections A-L)', () => {
       databaseId: secondaryDbId,
       name: 'Secondary RW Token',
       permissions: ['database:read', 'database:write'],
+      rateLimit: 0,
     });
     secondaryToken = tok2.plainSecret;
   }, 35000);
@@ -952,6 +954,7 @@ describe('Comprehensive E2E QA Test Suite (Sections A-L)', () => {
   // ==========================================
   describe('[K] Concurrency & High Load Endurance', () => {
     it('should handle 60 concurrent read/write queries without SQLITE_BUSY', async () => {
+      globalL7Limiter.reset();
       const count = 60;
       const startTime = performance.now();
 
@@ -989,6 +992,7 @@ describe('Comprehensive E2E QA Test Suite (Sections A-L)', () => {
   // ==========================================
   describe('[L] Web Frontend Client Serving', () => {
     it('should serve index.html for root path', async () => {
+      globalL7Limiter.reset();
       const res = await app.inject({ method: 'GET', url: '/' });
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toContain('text/html');

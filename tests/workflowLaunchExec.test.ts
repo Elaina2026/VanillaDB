@@ -2,6 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { buildApp } from '../src/server/index.js';
 import { getMetadataDb } from '../src/server/db/metadata.js';
 import { databaseService } from '../src/server/services/database.js';
+import { authService } from '../src/server/services/auth.js';
+import { config } from '../src/server/config/index.js';
 
 describe('Workflow Launch Exec: Complete End-to-End Role Operations Matrix', () => {
   let app: any;
@@ -41,17 +43,14 @@ describe('Workflow Launch Exec: Complete End-to-End Role Operations Matrix', () 
       superAdminCookie = `vdb_session=${setupRes.cookies.find((c: any) => c.name === 'vdb_session').value}`;
       superAdminId = setupRes.json().data.user.id;
     } else {
-      const loginRes = await app.inject({
-        method: 'POST',
-        url: '/api/auth/login',
-        payload: {
-          username: process.env.VDB_ADMIN_USERNAME || 'VanillaDatabase',
-          password: process.env.VDB_ADMIN_PASSWORD || '123456',
-        },
-      });
-      superAdminCookie = `vdb_session=${loginRes.cookies.find((c: any) => c.name === 'vdb_session').value}`;
-      const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: superAdminCookie } });
-      superAdminId = me.json().data.user.userId;
+      const metaDb = getMetadataDb();
+      let adminRow = metaDb.prepare("SELECT * FROM users WHERE role = 'super_admin' LIMIT 1").get() as any;
+      if (!adminRow) {
+        adminRow = await authService.createAdminUser(`exec_sa_${runId}`, 'SuperAdminPassword123!', 'super_admin', 1000, 0);
+      }
+      const { cookieValue } = authService.generateSessionCookie(adminRow, config.sessionSecret);
+      superAdminCookie = `vdb_session=${cookieValue}`;
+      superAdminId = adminRow.id;
     }
 
     // 2. Create and login admin
