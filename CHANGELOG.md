@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.3] - 2026-10-11
+
+### Security
+- **Query String Token Restrictions (RFC 6750)**: Prohibited `?token=...` on all data write and query routes (`/query`, `/batch`, `/exec`), rejecting requests with HTTP 401 `QUERY_TOKEN_NOT_PERMITTED` to eliminate token leakage via browser history, proxy logs, and `Referer` headers.
+- **One-Time Tickets (VDB-SEC-03)**: Added `POST /v1/databases/:databaseId/tickets` issuing short-lived (60-second TTL), single-use tickets (`?ticket=vdb_ticket_...`) scoped strictly to a database and route for SSE streams (`EventSource`) and media tags. Emitted `Deprecation: true` and `Warning: 299` headers on legacy query token links with scheduled removal in **v1.3.4**. Redacted both `token` and `ticket` parameters in request logging.
+- **Internal Binary Avatar Storage Pipeline**: Added `POST /api/auth/profile/avatar` (multipart, 10MB limit, strict binary magic byte validation for PNG, JPEG, WebP) persisting binary files to `data/storage/avatars/`. Served via `GET /api/auth/avatar/:userId` with `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, and cache headers. Added `DELETE /api/auth/profile/avatar`. Disallowed new external URLs and data URIs on `PUT /profile` (`EXTERNAL_AVATAR_DISALLOWED`) to eliminate third-party tracking pixels and database bloat.
+- **Active File Content Isolation**: Enforced strict MIME allowlists, `Content-Disposition: attachment`, and `Content-Security-Policy: sandbox; default-src 'none'` for non-inline formats (SVG, XML, HTML, PDF).
+- **Cluster Secret Comparison**: Transitioned cluster secret verification to fixed-length SHA-256 timing-safe evaluation (`safeCompareSecret`) with IP brute-force lockout.
+- **External Link Hardening**: Enforced `rel="noopener noreferrer"` across all external browser window links (`target="_blank"`).
+- **Reliable Cleanup Logging**: Replaced silent error swallowing on file unlinks with structured logging ignoring `ENOENT` while capturing operational errors (`removeFileQuiet`).
+
+### Changed
+- **Breaking Change for Custom Curl Scripts**: Scripts passing `?token=...` directly into `POST /query`, `POST /exec`, or `POST /batch` will receive HTTP 401 `QUERY_TOKEN_NOT_PERMITTED`. Clients must migrate to `-H "Authorization: Bearer <token>"`.
+- **Query Token Removal Milestone**: Legacy query tokens on streaming endpoints (`/realtime`, `/view`, `/storage/`) will be completely prohibited starting in release **v1.3.4**.
+- **System-Level Avatar Storage**: Avatar binary files are tracked under system assets (`data/storage/avatars/`), excluded from tenant database storage limits (`max_storage_mb`), and stored on the standalone Single-Gateway instance.
+- **Frontend Avatar Architecture**: Replaced base64 data URIs and external URL inputs in `SettingsPage.tsx` with binary file selection, drag-and-drop, instant object URL preview, size/MIME validation, and avatar removal. Standardized all avatar rendering across `DashboardLayout`, `UsersPage`, `UserDashboardPage`, `UserAuditDrawer`, and `DatabaseDetailPage` using `UserAvatar` with fallback initials.
+
 ## [1.3.1] - 2026-08-30
 
 ### Fixed

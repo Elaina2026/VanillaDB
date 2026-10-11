@@ -7,8 +7,38 @@ import { nanoid } from 'nanoid';
 import { config } from '../config/index.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { encryptBuffer, decryptBuffer, isEncryptedFile } from '../utils/crypto.js';
+import { removeFileQuiet } from '../utils/fsUtils.js';
 import { logger } from '../utils/logger.js';
 import type { FileRecord } from '../../../shared/index.ts';
+
+export function sanitizeMimeType(originalName: string, clientMime?: string): string {
+  const ext = path.extname(originalName || '').toLowerCase().replace(/^\./, '');
+  const mimeMap: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    avif: 'image/avif',
+    svg: 'image/svg+xml',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    ogg: 'audio/ogg',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    pdf: 'application/pdf',
+    txt: 'text/plain',
+    csv: 'text/csv',
+    json: 'application/json',
+    sqlite: 'application/x-sqlite3',
+    db: 'application/x-sqlite3',
+  };
+
+  const expectedMime = mimeMap[ext];
+  if (expectedMime) return expectedMime;
+  const cleanClient = (clientMime || '').trim().toLowerCase().split(';')[0];
+  return cleanClient || 'application/octet-stream';
+}
 
 export class StorageService {
   public ensureDatabaseExists(databaseId: string): boolean {
@@ -100,9 +130,7 @@ export class StorageService {
     const normalizedMetadata = typeof params.metadata === 'string' && params.metadata.trim() !== ''
       ? params.metadata.trim()
       : null;
-    const normalizedMimeType = params.mimeType && params.mimeType.trim()
-      ? params.mimeType.trim()
-      : 'application/octet-stream';
+    const normalizedMimeType = sanitizeMimeType(params.originalName, params.mimeType);
     const normalizedOriginalName = params.originalName && params.originalName.trim()
       ? params.originalName.trim()
       : filename;
@@ -175,9 +203,7 @@ export class StorageService {
         updated_at: now,
       };
     } catch (err: any) {
-      try {
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      } catch {}
+      removeFileQuiet(filePath, 'storage.saveStreamFile');
 
       if (err.code === 'ERR_SQLITE_ERROR' && (err.errcode === 787 || err.message?.includes('FOREIGN KEY constraint failed'))) {
         err.code = 'DATABASE_NOT_FOUND';
@@ -210,9 +236,7 @@ export class StorageService {
     const normalizedMetadata = typeof params.metadata === 'string' && params.metadata.trim() !== ''
       ? params.metadata.trim()
       : null;
-    const normalizedMimeType = params.mimeType && params.mimeType.trim()
-      ? params.mimeType.trim()
-      : 'application/octet-stream';
+    const normalizedMimeType = sanitizeMimeType(params.originalName, params.mimeType);
     const normalizedOriginalName = params.originalName && params.originalName.trim()
       ? params.originalName.trim()
       : filename;
@@ -256,8 +280,8 @@ export class StorageService {
         updated_at: now,
       };
     } catch (err: any) {
-      if (filePath && fs.existsSync(filePath)) {
-        try { fs.unlinkSync(filePath); } catch {}
+      if (filePath) {
+        removeFileQuiet(filePath, 'storage.createFile');
       }
 
       if (err.code === 'ERR_SQLITE_ERROR' && (err.errcode === 787 || err.message?.includes('FOREIGN KEY constraint failed'))) {
@@ -292,11 +316,7 @@ export class StorageService {
     if (!file) return false;
 
     const filePath = this.getStoragePath(file.database_id, file.filename);
-    if (fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath);
-      } catch {}
-    }
+    removeFileQuiet(filePath, 'storage.deleteFile');
 
     metaDb.prepare('DELETE FROM files WHERE id = ?').run(fileId);
     return true;
@@ -312,7 +332,11 @@ export class StorageService {
     if (dbDir !== storageRoot && dbDir.startsWith(storageRoot + path.sep) && fs.existsSync(dbDir)) {
       try {
         fs.rmSync(dbDir, { recursive: true, force: true });
-      } catch {}
+      } catch (err: any) {
+        if (err?.code !== 'ENOENT') {
+          logger.warn({ err, dbDir }, 'Failed to remove database directory during cleanup');
+        }
+      }
     }
   }
 }

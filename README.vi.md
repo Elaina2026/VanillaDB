@@ -14,8 +14,8 @@
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.8-3178c6.svg?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
   <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/Phi%C3%AAn%20b%E1%BA%A3n-1.3.2-ea580c.svg?style=flat-square" alt="Phiên bản 1.3.2" /></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-138%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="138 bài kiểm thử vượt qua" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Phi%C3%AAn%20b%E1%BA%A3n-1.3.3-ea580c.svg?style=flat-square" alt="Phiên bản 1.3.3" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-245%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="245 bài kiểm thử vượt qua" /></a>
 </p>
 
 <p align="center">

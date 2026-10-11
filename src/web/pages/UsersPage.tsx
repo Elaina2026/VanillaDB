@@ -34,6 +34,7 @@ import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
 import { ConfirmModal } from '../components/ConfirmModal.js';
 import { UserAuditDrawer, getAvatarStyle, getInitials } from '../components/UserAuditDrawer.js';
+import { UserAvatar } from '../components/UserAvatar.js';
 import { SYSTEM_PERMISSIONS, isOwnerRole, isAdminRole, type UserRecord, type UserRole, type RoleRecord } from '@shared/index.js';
 
 export const UsersPage: React.FC = () => {
@@ -578,19 +579,14 @@ export const UsersPage: React.FC = () => {
                       {/* Username with Avatar */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2.5">
-                          <div
+                          <UserAvatar
+                            avatarUrl={u.avatar_url}
+                            username={u.username}
                             onClick={() => handleOpenSummary(u.id)}
                             className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-border flex items-center justify-center font-bold text-xs cursor-pointer hover:ring-2 hover:ring-primary/40 transition-all shadow-xs"
+                            fallbackClassName={`w-full h-full flex items-center justify-center font-semibold text-xs border ${getAvatarStyle(u.username)}`}
                             title={t('users.viewAuditStats', 'View Audit & Stats')}
-                          >
-                            {u.avatar_url ? (
-                              <img src={u.avatar_url} alt={u.username} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className={`w-full h-full flex items-center justify-center font-semibold text-xs border ${getAvatarStyle(u.username)}`}>
-                                {getInitials(u.username)}
-                              </div>
-                            )}
-                          </div>
+                          />
 
                           <div className="min-w-0">
                             <div className="font-semibold text-foreground flex items-center gap-1.5">

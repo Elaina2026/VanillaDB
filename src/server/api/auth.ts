@@ -1,5 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
+import path from 'path';
+import fs from 'fs';
 import crypto from 'crypto';
+import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { authService } from '../services/auth.js';
 import { activityService } from '../services/activity.js';
@@ -14,6 +17,39 @@ import {
 } from '../utils/totp.js';
 import { config } from '../config/index.js';
 import { requireAdminAuth } from '../middleware/auth.js';
+import { removeFileQuiet } from '../utils/fsUtils.js';
+
+export const AVATAR_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+const avatarsDir = path.join(config.storageDir, 'avatars');
+
+export function detectImageMagicBytes(buffer: Buffer): 'image/png' | 'image/jpeg' | 'image/webp' | null {
+  if (!buffer || buffer.length < 12) return null;
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  ) {
+    return 'image/png';
+  }
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  // WebP: RIFF .... WEBP
+  if (
+    buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+    buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+  return null;
+}
 
 // In-memory rate limiting tracker for authentication attempts (Brute-force protection)
 const authAttemptTracker = new Map<string, { count: number; resetAt: number }>();
@@ -611,9 +647,12 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
   // User Profile & Avatar Update
   fastify.put('/profile', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const currentUser = authService.getUserById(req.adminUser!.userId);
+    const existingAvatar = currentUser?.avatar_url || '';
+
     const Schema = z.object({
       email: z.union([z.string().email(), z.literal(''), z.null()]).optional(),
-      avatar_url: z.union([z.string().max(5000000), z.literal(''), z.null()]).optional(), // supports URL or Data URL up to 5MB
+      avatar_url: z.union([z.string().max(500000), z.literal(''), z.null()]).optional(),
     });
 
     const parsed = Schema.safeParse(req.body);
@@ -624,9 +663,24 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    const candidateAvatar = parsed.data.avatar_url !== undefined ? (parsed.data.avatar_url?.trim() || null) : undefined;
+    if (candidateAvatar) {
+      const isInternal = candidateAvatar.startsWith('/') && !candidateAvatar.startsWith('//');
+      const isExisting = candidateAvatar === existingAvatar;
+      if (!isInternal && !isExisting) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'EXTERNAL_AVATAR_DISALLOWED',
+            message: 'External avatar URLs and data URIs are no longer supported. Please upload an avatar via POST /api/auth/profile/avatar.',
+          },
+        });
+      }
+    }
+
     try {
       const cleanEmail = parsed.data.email !== undefined ? (parsed.data.email?.trim() || null) : undefined;
-      const cleanAvatar = parsed.data.avatar_url !== undefined ? (parsed.data.avatar_url?.trim() || null) : undefined;
+      const cleanAvatar = candidateAvatar;
 
       const updated = await authService.updateUser(req.adminUser!.userId, {
         email: cleanEmail,
@@ -645,6 +699,186 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err: any) {
       return reply.status(400).send({ success: false, error: { code: 'PROFILE_UPDATE_ERROR', message: err.message } });
     }
+  });
+
+  // User Avatar Binary Upload (PNG, JPEG, WebP, max 10MB)
+  fastify.post('/profile/avatar', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const userId = req.adminUser!.userId;
+    const safeUserId = path.basename(userId);
+    if (!safeUserId || safeUserId === '.' || safeUserId !== userId) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_USER_ID', message: 'Invalid user identifier' },
+      });
+    }
+
+    let part;
+    try {
+      part = await req.file({ limits: { fileSize: AVATAR_MAX_BYTES } });
+    } catch (err: any) {
+      if (err.code === 'FST_REQ_FILE_TOO_LARGE' || err.statusCode === 413) {
+        return reply.status(413).send({
+          success: false,
+          error: { code: 'FILE_TOO_LARGE', message: 'Avatar image must not exceed 10 MB' },
+        });
+      }
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'UPLOAD_ERROR', message: err.message || 'Multipart upload failed' },
+      });
+    }
+
+    if (!part) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'NO_FILE', message: 'Multipart image file is required' },
+      });
+    }
+
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    let truncated = false;
+
+    for await (const chunk of part.file) {
+      totalBytes += chunk.length;
+      if (totalBytes > AVATAR_MAX_BYTES) {
+        truncated = true;
+        part.file.resume();
+        break;
+      }
+      chunks.push(chunk);
+    }
+
+    if (truncated || part.file.truncated) {
+      return reply.status(413).send({
+        success: false,
+        error: { code: 'FILE_TOO_LARGE', message: 'Avatar image must not exceed 10 MB' },
+      });
+    }
+
+    const buffer = Buffer.concat(chunks);
+    const mimeType = detectImageMagicBytes(buffer);
+    if (!mimeType) {
+      return reply.status(415).send({
+        success: false,
+        error: {
+          code: 'UNSUPPORTED_MEDIA_TYPE',
+          message: 'Only PNG, JPEG, and WebP images are permitted for avatars',
+        },
+      });
+    }
+
+    const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/jpeg' ? 'jpg' : 'webp';
+    if (!fs.existsSync(avatarsDir)) {
+      fs.mkdirSync(avatarsDir, { recursive: true });
+    }
+
+    // Atomic write to disk
+    const targetFile = path.join(avatarsDir, `${safeUserId}.${ext}`);
+    const tempFile = path.join(avatarsDir, `${safeUserId}.${nanoid(8)}.tmp`);
+    try {
+      fs.writeFileSync(tempFile, buffer);
+      fs.renameSync(tempFile, targetFile);
+    } catch (err: any) {
+      removeFileQuiet(tempFile, 'avatar_temp_cleanup');
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'STORAGE_ERROR', message: 'Failed to write avatar to disk' },
+      });
+    }
+
+    // Clean up any old files with different extensions for this user
+    for (const otherExt of ['png', 'jpg', 'jpeg', 'webp']) {
+      if (otherExt !== ext) {
+        const oldFile = path.join(avatarsDir, `${safeUserId}.${otherExt}`);
+        removeFileQuiet(oldFile, 'avatar_old_cleanup');
+      }
+    }
+
+    const internalAvatarUrl = `/api/auth/avatar/${safeUserId}`;
+    await authService.updateUser(userId, { avatarUrl: internalAvatarUrl });
+
+    activityService.recordAudit({
+      user: req.adminUser!.username,
+      action: 'user.update_avatar',
+      resource: userId,
+      result: 'success',
+      requestId: req.id,
+    });
+
+    return reply.status(200).send({
+      success: true,
+      data: {
+        avatar_url: internalAvatarUrl,
+        size_bytes: buffer.length,
+        mime_type: mimeType,
+      },
+    });
+  });
+
+  // Serve user avatar with strict security headers (no credentials required for image tags)
+  fastify.get('/avatar/:userId', async (req, reply) => {
+    const { userId } = req.params as { userId: string };
+    const safeUserId = path.basename(userId);
+    if (!safeUserId || safeUserId === '.' || safeUserId !== userId) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_USER_ID', message: 'Invalid user identifier' },
+      });
+    }
+
+    let foundPath: string | null = null;
+    let foundExt: string | null = null;
+
+    for (const ext of ['png', 'jpg', 'jpeg', 'webp']) {
+      const candidate = path.join(avatarsDir, `${safeUserId}.${ext}`);
+      if (fs.existsSync(candidate)) {
+        foundPath = candidate;
+        foundExt = ext;
+        break;
+      }
+    }
+
+    if (!foundPath || !foundExt) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'AVATAR_NOT_FOUND', message: 'Avatar not found' },
+      });
+    }
+
+    const mime = foundExt === 'png' ? 'image/png' : foundExt === 'webp' ? 'image/webp' : 'image/jpeg';
+
+    reply.header('Content-Type', mime);
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+    reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
+    reply.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+
+    const stream = fs.createReadStream(foundPath);
+    return reply.send(stream);
+  });
+
+  // Remove user avatar
+  fastify.delete('/profile/avatar', { preHandler: [requireAdminAuth] }, async (req, reply) => {
+    const userId = req.adminUser!.userId;
+    const safeUserId = path.basename(userId);
+
+    for (const ext of ['png', 'jpg', 'jpeg', 'webp']) {
+      const candidate = path.join(avatarsDir, `${safeUserId}.${ext}`);
+      removeFileQuiet(candidate, 'avatar_delete');
+    }
+
+    await authService.updateUser(userId, { avatarUrl: null });
+
+    activityService.recordAudit({
+      user: req.adminUser!.username,
+      action: 'user.delete_avatar',
+      resource: userId,
+      result: 'success',
+      requestId: req.id,
+    });
+
+    return reply.send({ success: true });
   });
 
   // 2FA TOTP Setup (Generate Secret & QR Code)

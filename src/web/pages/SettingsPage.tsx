@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Settings,
@@ -68,7 +68,21 @@ export const SettingsPage: React.FC = () => {
   // Profile Edit State
   const [profileEmail, setProfileEmail] = useState(currentUser?.email || '');
   const [profileAvatar, setProfileAvatar] = useState(currentUser?.avatar_url || '');
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
+  const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
+  const [isAvatarRemoving, setIsAvatarRemoving] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewObjectUrl) {
+        URL.revokeObjectURL(previewObjectUrl);
+      }
+    };
+  }, [previewObjectUrl]);
 
   // 2FA Setup State
   const [is2faModalOpen, setIs2faModalOpen] = useState(false);
@@ -330,19 +344,91 @@ export const SettingsPage: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleAvatarFile = (file?: File | null) => {
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      alert(t('settings.avatarSizeLimit', 'Avatar image size cannot exceed 2MB'));
+    setAvatarError(null);
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setAvatarError(t('settings.invalidAvatarFormat', 'Invalid image format. Only PNG, JPEG, and WebP are allowed.'));
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setProfileAvatar(dataUrl);
-    };
-    reader.readAsDataURL(file);
+
+    if (file.size > 10 * 1024 * 1024) {
+      setAvatarError(t('settings.avatarSizeLimit', 'Avatar image size cannot exceed 10MB'));
+      return;
+    }
+
+    if (previewObjectUrl) {
+      URL.revokeObjectURL(previewObjectUrl);
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setSelectedAvatarFile(file);
+    setPreviewObjectUrl(objectUrl);
+    setIsAvatarRemoving(false);
+  };
+
+  const handleRemoveAvatar = () => {
+    if (previewObjectUrl) {
+      URL.revokeObjectURL(previewObjectUrl);
+      setPreviewObjectUrl(null);
+    }
+    setSelectedAvatarFile(null);
+    setProfileAvatar('');
+    setIsAvatarRemoving(true);
+    setAvatarError(null);
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSavingProfile(true);
+    setProfileStatus(null);
+    setAvatarError(null);
+    try {
+      // 1. If user removed avatar
+      if (isAvatarRemoving && currentUser?.avatar_url) {
+        await apiRequest('/api/auth/profile/avatar', { method: 'DELETE' });
+        setIsAvatarRemoving(false);
+      }
+
+      // 2. If new binary avatar was selected
+      if (selectedAvatarFile) {
+        const formData = new FormData();
+        formData.append('avatar', selectedAvatarFile);
+        const res = await fetch('/api/auth/profile/avatar', {
+          method: 'POST',
+          body: formData,
+        });
+        const json = await res.json();
+        if (!res.ok || json.success === false) {
+          throw new Error(json.error?.message || t('settings.avatarUploadFailed', 'Failed to upload avatar'));
+        }
+        if (previewObjectUrl) {
+          URL.revokeObjectURL(previewObjectUrl);
+          setPreviewObjectUrl(null);
+        }
+        setSelectedAvatarFile(null);
+        setProfileAvatar(json.data.avatar_url);
+      }
+
+      // 3. If email changed
+      if (profileEmail !== (currentUser?.email || '')) {
+        await apiRequest('/api/auth/profile', {
+          method: 'PUT',
+          body: JSON.stringify({ email: profileEmail || undefined }),
+        });
+      }
+
+      await refetchAuthStatus();
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setProfileStatus(t('settings.updateProfileSuccess', 'Profile updated successfully!'));
+      setTimeout(() => setProfileStatus(null), 3500);
+    } catch (err: any) {
+      setProfileStatus(err.message || t('settings.updateProfileFailed', 'Update failed'));
+      setTimeout(() => setProfileStatus(null), 4000);
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const current: SystemSettings = {
@@ -1424,24 +1510,68 @@ export const SettingsPage: React.FC = () => {
               </div>
             )}
 
+            {avatarError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs rounded-md flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{avatarError}</span>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pb-4 border-b border-border">
-              {/* Avatar Preview */}
-              <div className="relative group">
+              {/* Avatar Drag & Drop and Preview */}
+              <div
+                className={`relative group cursor-pointer ${isDraggingAvatar ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDraggingAvatar(true);
+                }}
+                onDragLeave={() => setIsDraggingAvatar(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingAvatar(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) handleAvatarFile(file);
+                }}
+              >
                 <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-border bg-muted/60 flex items-center justify-center shrink-0">
-                  {profileAvatar ? (
-                    <img src={profileAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                  {previewObjectUrl || profileAvatar ? (
+                    <img
+                      src={previewObjectUrl || profileAvatar}
+                      alt="Avatar"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                      onError={() => {
+                        if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+                        setPreviewObjectUrl(null);
+                        setProfileAvatar('');
+                      }}
+                    />
                   ) : (
                     <User className="w-8 h-8 text-muted-foreground" />
                   )}
                 </div>
-                <label className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 rounded-full flex flex-col items-center justify-center text-[9px] font-semibold cursor-pointer transition-opacity">
+                <label className="absolute inset-0 bg-black/60 text-white opacity-0 group-hover:opacity-100 rounded-full flex flex-col items-center justify-center text-[9px] font-semibold cursor-pointer transition-opacity text-center p-1">
                   <UploadCloud className="w-4 h-4 mb-0.5" />
-                  <span>{t('settings.changeAvatar', 'Change avatar')}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarFile} />
+                  <span>{t('settings.changeAvatar', 'Upload Avatar')}</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleAvatarFile(file);
+                      e.target.value = '';
+                    }}
+                  />
                 </label>
               </div>
 
               <div className="flex-1 space-y-2 w-full max-w-md">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">
+                    {t('settings.avatarHint', 'PNG, JPEG, WebP (max 10MB)')}
+                  </span>
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">{t('auth.email', 'Email Address')}</label>
                   <input
@@ -1455,17 +1585,17 @@ export const SettingsPage: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    disabled={updateProfileMutation.isPending}
-                    onClick={() => updateProfileMutation.mutate({ email: profileEmail || undefined, avatar_url: profileAvatar || undefined })}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                    disabled={isSavingProfile}
+                    onClick={handleSaveProfile}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    {updateProfileMutation.isPending ? t('common.saving', 'Saving...') : t('settings.saveProfileAndAvatar', 'Save Profile & Avatar')}
+                    {isSavingProfile ? t('common.saving', 'Saving...') : t('settings.saveProfileAndAvatar', 'Save Profile & Avatar')}
                   </button>
-                  {profileAvatar && (
+                  {(previewObjectUrl || profileAvatar) && (
                     <button
                       type="button"
-                      onClick={() => setProfileAvatar('')}
-                      className="px-2.5 py-1.5 text-xs text-muted-foreground hover:text-red-500 border border-border rounded hover:bg-red-500/10 transition-colors"
+                      onClick={handleRemoveAvatar}
+                      className="px-2.5 py-1.5 text-xs text-muted-foreground hover:text-red-500 border border-border rounded hover:bg-red-500/10 transition-colors cursor-pointer"
                     >
                       {t('settings.removeAvatar', 'Remove avatar')}
                     </button>

@@ -2,8 +2,10 @@ import crypto from 'crypto';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { authService, type SessionUser } from '../services/auth.js';
 import { tokenService } from '../services/tokens.js';
+import { ticketService } from '../services/tickets.js';
 import { systemService } from '../services/system.js';
 import { config } from '../config/index.js';
+import { safeCompareSecret } from '../utils/crypto.js';
 import type { ApiTokenRecord, TokenPermission, UserRole } from '../../../shared/index.js';
 import { isOwnerRole, isAdminRole } from '../../../shared/index.js';
 
@@ -31,20 +33,13 @@ setInterval(() => {
 export async function requireAdminAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   // Support trusted Cluster Gateway via x-cluster-secret
   const clusterSecretHeader = request.headers['x-cluster-secret'];
-  if (clusterSecretHeader && typeof clusterSecretHeader === 'string') {
-    let isClusterMatch = false;
-    const expected = config.clusterSecret;
-    if (clusterSecretHeader.length === expected.length) {
-      isClusterMatch = crypto.timingSafeEqual(Buffer.from(clusterSecretHeader), Buffer.from(expected));
-    }
-    if (isClusterMatch) {
-      request.adminUser = {
-        userId: 'cluster_gateway',
-        username: 'cluster_gateway',
-        role: 'super_admin',
-      };
-      return;
-    }
+  if (clusterSecretHeader && safeCompareSecret(clusterSecretHeader, config.clusterSecret)) {
+    request.adminUser = {
+      userId: 'cluster_gateway',
+      username: 'cluster_gateway',
+      role: 'super_admin',
+    };
+    return;
   }
 
   const sessionCookie = request.cookies?.vdb_session;
@@ -240,16 +235,9 @@ export function requireTokenPermission(permission: TokenPermission) {
 
     // 0. Support Trusted Cluster Gateway (x-cluster-secret)
     const clusterSecretHeader = request.headers['x-cluster-secret'];
-    if (clusterSecretHeader && typeof clusterSecretHeader === 'string') {
-      let isClusterMatch = false;
-      const expected = config.clusterSecret;
-      if (clusterSecretHeader.length === expected.length) {
-        isClusterMatch = crypto.timingSafeEqual(Buffer.from(clusterSecretHeader), Buffer.from(expected));
-      }
-      if (isClusterMatch) {
-        request.databaseId = databaseId;
-        return;
-      }
+    if (clusterSecretHeader && safeCompareSecret(clusterSecretHeader, config.clusterSecret)) {
+      request.databaseId = databaseId;
+      return;
     }
 
     // 1. Support Admin / User Session Cookie (For Web UI viewing images/videos/media)
@@ -345,11 +333,49 @@ export function requireTokenPermission(permission: TokenPermission) {
       }
     }
 
-    // 2. Support Token in Query Param (?token=vdb_live_...) for <img>, <video>, <a> links
+    // 2. Reject query token if present on non-allowed routes
     let authHeader = request.headers.authorization;
     const queryToken = (request.query as any)?.token;
-    if (!authHeader && queryToken && typeof queryToken === 'string') {
+    const queryTicket = (request.query as any)?.ticket;
+    const urlPath = (request.url || '').split('?')[0];
+
+    const isAllowedQueryMediaRoute =
+      request.method === 'GET' &&
+      (urlPath.includes('/realtime') || urlPath.includes('/view') || urlPath.includes('/storage/'));
+
+    if (queryToken && !authHeader) {
+      if (!isAllowedQueryMediaRoute) {
+        reply.status(401).send({
+          success: false,
+          error: {
+            code: 'QUERY_TOKEN_NOT_PERMITTED',
+            message: 'API token in query string is not permitted on this route. Use "Authorization: Bearer <token>" header.',
+          },
+        });
+        return;
+      }
+
+      // Route is allowed GET media/stream link: Accept with Deprecation header
+      reply.header('Deprecation', 'true');
+      reply.header('Warning', '299 - "API token in query string is deprecated and will be removed in v1.3.4. Use one-time tickets from POST /v1/databases/:databaseId/tickets instead."');
       authHeader = `Bearer ${queryToken}`;
+    }
+
+    // 3. Support one-time tickets on allowed media/stream routes
+    if (queryTicket && !authHeader && isAllowedQueryMediaRoute) {
+      const scope = urlPath.includes('/realtime') ? 'realtime' : urlPath.includes('/view') ? 'view' : 'storage';
+      const ticketToken = ticketService.consumeTicket(queryTicket, databaseId, scope as any);
+      if (ticketToken) {
+        request.apiToken = ticketToken;
+        request.databaseId = databaseId;
+        return;
+      } else {
+        reply.status(401).send({
+          success: false,
+          error: { code: 'INVALID_OR_EXPIRED_TICKET', message: 'One-time ticket is invalid, expired, or already used' },
+        });
+        return;
+      }
     }
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

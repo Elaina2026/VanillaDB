@@ -675,8 +675,7 @@ export const LandingPage: React.FC<{
               </button>
               <a
                 href="https://github.com/Elaina2026/VanillaDB"
-                target="_blank"
-                rel="noopener noreferrer"
+                target="_blank" rel="noopener noreferrer"
                 className="w-full sm:w-auto px-7 sm:px-8 py-3 sm:py-3.5 rounded-full text-sm font-semibold border border-border/80 dark:border-slate-700 text-foreground/80 dark:text-slate-200 hover:text-foreground hover:border-border dark:hover:border-slate-500 transition-all duration-200 flex items-center justify-center gap-2 bg-card/50 dark:bg-card/30"
               >
                 <GitBranch className="w-4 h-4" />
@@ -701,8 +700,7 @@ export const LandingPage: React.FC<{
               </p>
               <a
                 href="https://github.com/Elaina2026/VanillaDB"
-                target="_blank"
-                rel="noopener noreferrer"
+                target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:border-border/60 transition-colors"
               >
                 <GitBranch className="w-3.5 h-3.5" />

@@ -1126,11 +1126,11 @@ describe('VanillaDatabase Full Platform Test Suite', () => {
       url: '/api/auth/profile',
       headers: { cookie: alphaSessionCookie },
       payload: {
-        avatar_url: 'https://example.com/avatar_alpha.png',
+        avatar_url: '/api/auth/avatar/usr_alpha',
       },
     });
     expect(updateProfileRes.statusCode).toBe(200);
-    expect(updateProfileRes.json().data.avatar_url).toBe('https://example.com/avatar_alpha.png');
+    expect(updateProfileRes.json().data.avatar_url).toBe('/api/auth/avatar/usr_alpha');
 
     // 3. User Alpha creates an isolated database
     const createAlphaDb = await app.inject({

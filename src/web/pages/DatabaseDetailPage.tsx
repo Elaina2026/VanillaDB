@@ -59,6 +59,7 @@ import { ConfirmModal } from '../components/ConfirmModal.js';
 import { DatabaseOperationsTimelineChart } from '../components/MetricsCharts.js';
 import { ErdCanvas } from '../components/ErdCanvas.js';
 import { StorageUploadManager } from '../components/StorageUploadManager.js';
+import { UserAvatar } from '../components/UserAvatar.js';
 import { exportQueryResults } from '../lib/exportUtils.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
@@ -3052,8 +3053,7 @@ export const DatabaseDetailPage: React.FC<{
 
                             <a
                               href={viewUrl}
-                              target="_blank"
-                              rel="noreferrer"
+                              target="_blank" rel="noopener noreferrer"
                               className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
                               title={t('storage.openInNewTab', 'Open file in new tab')}
                             >
@@ -4686,19 +4686,12 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                 {/* Database Owner Entry */}
                 <div className="p-4 flex items-center justify-between hover:bg-accent/20 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full overflow-hidden border border-border bg-muted/60 flex items-center justify-center font-bold text-xs shrink-0">
-                      {stats?.database.owner_avatar_url ? (
-                        <img
-                          src={stats.database.owner_avatar_url}
-                          alt={stats.database.owner_username || 'Owner'}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-blue-600/10 border border-blue-500/30 flex items-center justify-center font-bold text-blue-600 text-xs">
-                          {stats?.database.owner_username?.slice(0, 2).toUpperCase() || 'OW'}
-                        </div>
-                      )}
-                    </div>
+                    <UserAvatar
+                      avatarUrl={stats?.database.owner_avatar_url}
+                      username={stats?.database.owner_username || 'Owner'}
+                      className="w-9 h-9 rounded-full overflow-hidden border border-border bg-muted/60 flex items-center justify-center font-bold text-xs shrink-0"
+                      fallbackClassName="w-full h-full bg-blue-600/10 border border-blue-500/30 flex items-center justify-center font-bold text-blue-600 text-xs"
+                    />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-foreground">
@@ -4722,15 +4715,12 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
                   membersData?.members?.map((member) => (
                     <div key={member.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-accent/20 transition-colors">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className="w-9 h-9 rounded-full overflow-hidden border border-border bg-muted flex items-center justify-center font-bold text-xs shrink-0">
-                          {member.avatar_url ? (
-                            <img src={member.avatar_url} alt={member.username} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold text-xs">
-                              {member.username.slice(0, 2).toUpperCase()}
-                            </div>
-                          )}
-                        </div>
+                        <UserAvatar
+                          avatarUrl={member.avatar_url}
+                          username={member.username}
+                          className="w-9 h-9 rounded-full overflow-hidden border border-border bg-muted flex items-center justify-center font-bold text-xs shrink-0"
+                          fallbackClassName="w-full h-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold text-xs"
+                        />
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-foreground">{member.username}</span>

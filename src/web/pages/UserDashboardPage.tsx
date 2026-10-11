@@ -25,6 +25,7 @@ import { apiRequest } from '../api/client.js';
 import { formatBytes, formatDate } from '../lib/utils.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
+import { UserAvatar } from '../components/UserAvatar.js';
 import type { UserDashboardStats, DatabaseRecord } from '@shared/index.js';
 
 export const UserDashboardPage: React.FC<{
@@ -158,13 +159,12 @@ export const UserDashboardPage: React.FC<{
       {/* Personalized Welcome Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-border bg-muted/60 flex items-center justify-center shrink-0">
-            {currentUser?.avatar_url ? (
-              <img src={currentUser.avatar_url} alt={currentUser.username} className="w-full h-full object-cover" />
-            ) : (
-              <UserIcon className="w-6 h-6 text-muted-foreground" />
-            )}
-          </div>
+          <UserAvatar
+            avatarUrl={currentUser?.avatar_url}
+            username={currentUser?.username}
+            className="w-12 h-12 rounded-full overflow-hidden border-2 border-border bg-muted/60 flex items-center justify-center shrink-0"
+            fallbackClassName="w-full h-full flex items-center justify-center font-bold text-base bg-blue-500/10 text-blue-600"
+          />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight text-foreground">

@@ -41,6 +41,29 @@ Tổng hợp các lỗi vận hành thường gặp, hướng dẫn chẩn đoá
   - Đồng bộ lại giờ hệ thống trên điện thoại hoặc thiết bị xác thực.
   - Đợi chu kỳ bước thời gian 30 giây tiếp theo để nhập mã mới.
 
+### 1.7. Lỗi `QUERY_TOKEN_NOT_PERMITTED` (HTTP 401)
+- **Nguyên nhân**: Truyền API token qua chuỗi truy vấn URL (`?token=...`) vào các điểm cuối thay đổi dữ liệu hoặc truy vấn (`POST /query`, `/batch`, `/exec`).
+- **Cách khắc phục**:
+  - Chuyển các kịch bản curl hoặc ứng dụng ngoài sang dùng tiêu đề chuẩn:
+    ```bash
+    curl -X POST http://localhost:3000/v1/databases/:id/query \
+      -H "Authorization: Bearer <token>" \
+      -H "Content-Type: application/json" \
+      -d '{"sql": "SELECT 1;"}'
+    ```
+  - Với các trường hợp nhúng media hoặc kết nối SSE (`EventSource`) không thể gửi header, tạo vé tạm thời qua `POST /v1/databases/:id/tickets` và truyền `?ticket=...`.
+
+### 1.8. Lỗi Tải Ảnh đại diện: `FILE_TOO_LARGE` (HTTP 413) & `UNSUPPORTED_MEDIA_TYPE` (HTTP 415)
+- **Nguyên nhân**: Tệp ảnh vượt quá 10MB hoặc chữ ký tệp nhị phân (magic bytes) không phải là PNG, JPEG, WebP hợp lệ (ví dụ tệp SVG, HTML hoặc tệp hỏng).
+- **Cách khắc phục**:
+  - Nén hoặc giảm kích thước ảnh xuống dưới 10MB.
+  - Đảm bảo tệp là PNG thật (`89 50 4E 47`), JPEG thật (`FF D8 FF`), hoặc WebP thật (`RIFF....WEBP`). Máy chủ không dựa vào phần mở rộng hay header MIME của client mà kiểm tra trực tiếp byte nhị phân.
+
+### 1.9. Lỗi `EXTERNAL_AVATAR_DISALLOWED` (HTTP 400) khi `PUT /profile`
+- **Nguyên nhân**: Cố gắng lưu URL ngoài (`https://...`) hoặc chuỗi base64 mới vào trường `avatar_url` qua `PUT /api/auth/profile`.
+- **Cách khắc phục**:
+  - Tải tệp ảnh trực tiếp qua endpoint `POST /api/auth/profile/avatar`. Hệ thống chặn URL ngoài mới để triệt tiêu nguy cơ tracking pixel của bên thứ ba và tránh phình cơ sở dữ liệu metadata. Các tài khoản cũ có avatar từ trước vẫn hoạt động bình thường.
+
 ---
 
 ## 2. Các Câu hỏi Thường gặp (FAQ)

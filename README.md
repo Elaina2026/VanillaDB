@@ -14,8 +14,8 @@
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.8-3178c6.svg?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
   <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/Version-1.3.2-ea580c.svg?style=flat-square" alt="Version 1.3.2" /></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/Tests-138%20passed-22c55e.svg?style=flat-square" alt="138 Tests Passed" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Version-1.3.3-ea580c.svg?style=flat-square" alt="Version 1.3.3" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Tests-245%20passed-22c55e.svg?style=flat-square" alt="245 Tests Passed" /></a>
 </p>
 
 <p align="center">

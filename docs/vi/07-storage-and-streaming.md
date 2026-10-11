@@ -68,3 +68,27 @@ Cơ chế này cho phép các trình phát HTML `<video>` và `<audio>` tua tứ
 - **Dọn dẹp Tệp Mồ côi (Orphan Cleanup Guarantee)**: Nếu quá trình lưu tệp hoặc lệnh INSERT gặp lỗi, tệp đã ghi trên đĩa sẽ lập tức bị xóa bỏ (`fs.unlinkSync`), đảm bảo không để lại tệp rác trên hệ thống.
 - **Chuẩn hóa Siêu dữ liệu (Metadata Normalization)**: Các giá trị metadata tùy chọn nếu là chuỗi rỗng hoặc chỉ chứa khoảng trắng sẽ được tự động chuẩn hóa về giá trị `NULL`.
 
+---
+
+## 5. Cách ly & Bảo vệ Nội dung Tệp Tĩnh (Active Content Isolation)
+
+- **Danh sách Trắng MIME & Bắt buộc Tải về (Forced Attachment)**: Chỉ các định dạng tĩnh an toàn (`image/jpeg`, `image/png`, `image/gif`, `image/webp`, `image/avif`, `audio/*`, `video/*`) được xem trực tiếp (inline). Các tệp có khả năng thực thi (`image/svg+xml`, `text/html`, XML, PDF, script) bắt buộc gửi `Content-Disposition: attachment; filename="..."` và `Content-Security-Policy: sandbox; default-src 'none'`.
+- **Chuẩn hóa MIME**: Máy chủ xác định MIME theo phần mở rộng tệp và chữ ký bytes thay vì tin tưởng hoàn toàn header từ phía client.
+- **Header An toàn**: Mọi phản hồi xem tệp đều kèm theo `X-Content-Type-Options: nosniff`, `Cross-Origin-Resource-Policy: same-origin`, và `Referrer-Policy: no-referrer`.
+- **Vé Dùng Một Lần & Khai tử Query Token**: Việc truyền trực tiếp token qua `?token=...` trên các liên kết stream/media đã bị đánh dấu ngừng hỗ trợ (Deprecation) và sẽ bị cấm hoàn toàn trong bản **v1.3.4**. Đối với việc nhúng thẻ `<img src="...">`, `<audio src="...">`, `<video src="...">`, hoặc `EventSource`, ứng dụng cần xin vé dùng một lần qua `POST /v1/databases/:id/tickets` và truyền `?ticket=vdb_ticket_...` (hiệu lực 60 giây, chỉ dùng 1 lần). Các route phi streaming khác sẽ từ chối token trong query string với HTTP 401 `QUERY_TOKEN_NOT_PERMITTED`.
+
+---
+
+## 6. Quy trình Lưu trữ Ảnh đại diện Nội bộ
+
+- **Điểm cuối**: `POST /api/auth/profile/avatar` (multipart/form-data).
+- **Giới hạn Dung lượng**: 10 MB (`AVATAR_MAX_BYTES`). Tệp vượt quá ngưỡng này bị từ chối ngay với HTTP 413 `FILE_TOO_LARGE`.
+- **Xác minh Định dạng Nhị phân**: Bỏ qua header `Content-Type` và phần mở rộng do client gửi, máy chủ quét trực tiếp chữ ký byte nhị phân (magic bytes) cho `image/png`, `image/jpeg`, `image/webp`. Các định dạng không hợp lệ trả về HTTP 415 `UNSUPPORTED_MEDIA_TYPE`.
+- **Lưu trữ trên Ổ đĩa**: Tệp nhị phân được ghi nguyên tử vào `data/storage/avatars/:userId.<ext>` qua tệp tạm và atomic rename. Tệp ảnh cũ của người dùng được tự động dọn dẹp.
+- **Điểm cuối Phục vụ Ảnh**: `GET /api/auth/avatar/:userId` trả về ảnh gốc kèm `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, và `Cache-Control: public, max-age=3600, stale-while-revalidate=86400`.
+- **Xóa Ảnh**: `DELETE /api/auth/profile/avatar` xóa tệp khỏi ổ đĩa và cập nhật trường `avatar_url` trong cơ sở dữ liệu về `NULL`.
+- **Hạch toán Dung lượng**: Ảnh đại diện được lưu ở cấp hệ thống (`data/storage/avatars/`) và hoàn toàn tách biệt, không tính vào hạn mức lưu trữ tenant database (`max_storage_mb`).
+- **Kiến trúc Single Gateway**: Tệp avatar lưu trực tiếp trên ổ đĩa cục bộ của máy chủ Gateway độc lập, không yêu cầu chia sẻ file phân tán multi-gateway.
+- **Tương thích Ngược**: Các tài khoản cũ có `avatar_url` dạng `https://...` hoặc `data:image/...` tiếp tục hiển thị bình thường. `PUT /api/auth/profile` chặn URL ngoài và data URI mới để triệt tiêu nguy cơ tracking pixel của bên thứ ba.
+
+

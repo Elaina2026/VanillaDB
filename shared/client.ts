@@ -190,11 +190,27 @@ export class VanillaDatabase {
   }
 
   // 5. Realtime SSE Subscription
-  subscribe(callback: (event: RealtimeEventPayload) => void, table?: string): () => void {
+  subscribe(
+    callback: (event: RealtimeEventPayload) => void,
+    tableOrOptions?: string | { table?: string; ticket?: string }
+  ): () => void {
     const base = this.getBaseUrl();
-    let sseUrl = `${base}/realtime?token=${encodeURIComponent(this.token)}`;
+    const table = typeof tableOrOptions === 'string' ? tableOrOptions : tableOrOptions?.table;
+    const ticket = typeof tableOrOptions === 'object' ? tableOrOptions?.ticket : undefined;
+
+    let sseUrl = `${base}/realtime`;
+    const params = new URLSearchParams();
+    if (ticket) {
+      params.set('ticket', ticket);
+    } else if (this.token) {
+      params.set('token', this.token);
+    }
     if (table) {
-      sseUrl += `&table=${encodeURIComponent(table)}`;
+      params.set('table', table);
+    }
+    const qs = params.toString();
+    if (qs) {
+      sseUrl += `?${qs}`;
     }
 
     const EventSourceImpl =
@@ -231,7 +247,26 @@ export class VanillaDatabase {
     };
   }
 
-  // 6. File Storage API
+  // 6. One-Time Ticket Helper (VDB-SEC-03)
+  async createTicket(options: { route?: 'realtime' | 'storage' | 'view' | 'any'; ttlSeconds?: number } = {}): Promise<{ ticket: string; expiresAt: number; expiresInSeconds: number }> {
+    const base = this.getBaseUrl();
+    const res = await fetch(`${base}/tickets`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        route: options.route || 'any',
+        ttl_seconds: options.ttlSeconds || 60,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.error?.message || 'Create ticket failed');
+    return json.data;
+  }
+
+  // 7. File Storage API
   async listFiles(): Promise<FileRecord[]> {
     const base = this.getBaseUrl();
     const res = await fetch(`${base}/files`, {
@@ -244,9 +279,10 @@ export class VanillaDatabase {
     return json.data;
   }
 
-  getFileUrl(fileId: string): string {
+  getFileUrl(fileId: string, ticket?: string): string {
     const base = this.url.split('/v1/')[0];
-    return `${base}/v1/files/${fileId}/view`;
+    const ticketParam = ticket ? `?ticket=${encodeURIComponent(ticket)}` : '';
+    return `${base}/v1/files/${fileId}/view${ticketParam}`;
   }
 
   async uploadFile(fileData: Blob | Buffer | Uint8Array, fileName: string, mimeType?: string): Promise<FileRecord> {

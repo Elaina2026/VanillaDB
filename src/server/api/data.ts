@@ -8,6 +8,7 @@ import { dbManager, isReadOnlySql } from '../db/manager.js';
 import { authService } from '../services/auth.js';
 import { activityService } from '../services/activity.js';
 import { storageService } from '../services/storage.js';
+import { ticketService } from '../services/tickets.js';
 import { realtimeService } from '../services/realtime.js';
 import { clusterService } from '../services/cluster.js';
 import { getMetadataDb } from '../db/metadata.js';
@@ -47,18 +48,20 @@ function isTablePermitted(table: string, apiToken?: any, customRestrictions?: { 
 }
 
 export function streamFileHelper(req: FastifyRequest, reply: FastifyReply, filePath: string, mimeType: string, fileSize: number) {
-  // Defensive isolation for active/executable formats (SVG, HTML, XML)
+  // Defensive isolation for active/executable formats (SVG, HTML, XML, PDF, etc.)
   const baseMime = (mimeType || '').split(';')[0].trim().toLowerCase();
   const safeInlineMimes = new Set([
     'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
     'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'video/mp4', 'video/webm'
   ]);
 
+  reply.header('X-Content-Type-Options', 'nosniff');
+  reply.header('Cross-Origin-Resource-Policy', 'same-origin');
+  reply.header('Referrer-Policy', 'no-referrer');
+
   if (!safeInlineMimes.has(baseMime)) {
     reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
-    if (baseMime === 'image/svg+xml' || baseMime === 'text/html' || baseMime.includes('xml')) {
-      reply.header('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
-    }
+    reply.header('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
   }
 
   const range = req.headers.range;
@@ -176,8 +179,19 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
           // Special authentication check for realtime SSE
           if (isRealtime) {
+            const queryTicket = (req.query as any)?.ticket;
+            if (queryTicket && typeof queryTicket === 'string' && !req.headers.authorization) {
+              const ticketToken = ticketService.consumeTicket(queryTicket, databaseId, 'realtime');
+              if (ticketToken) {
+                req.apiToken = ticketToken;
+                req.databaseId = databaseId;
+              }
+            }
+
             const queryToken = (req.query as any)?.token;
             if (queryToken && typeof queryToken === 'string' && !req.headers.authorization) {
+              reply.header('Deprecation', 'true');
+              reply.header('Warning', '299 - "API token in query string is deprecated. Use one-time tickets from POST /v1/databases/:databaseId/tickets instead."');
               req.headers.authorization = `Bearer ${queryToken}`;
             }
 
@@ -757,11 +771,62 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  // Issue short-lived, single-use ticket for URL-based access (SSE, media embedding)
+  fastify.post('/databases/:databaseId/tickets', {
+    preHandler: [requireTokenPermission('database:read')],
+  }, async (req, reply) => {
+    const databaseId = req.databaseId!;
+    const Schema = z.object({
+      route: z.enum(['realtime', 'storage', 'view', 'any']).optional().default('any'),
+      ttl_seconds: z.number().int().min(10).max(300).optional().default(60),
+    });
+
+    const parsed = Schema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid ticket request' },
+      });
+    }
+
+    const tokenRecord = req.apiToken!;
+    const ticketData = ticketService.createTicket({
+      tokenRecord,
+      databaseId,
+      routeScope: parsed.data.route,
+      ttlMs: parsed.data.ttl_seconds * 1000,
+    });
+
+    return reply.status(201).send({
+      success: true,
+      data: ticketData,
+    });
+  });
+
   // Realtime SSE Event Stream
   fastify.get('/databases/:databaseId/realtime', {
     preHandler: async (req, reply) => {
       const queryToken = (req.query as any)?.token;
+      const queryTicket = (req.query as any)?.ticket;
+      const targetDbId = (req.params as any).databaseId;
+
+      if (queryTicket && typeof queryTicket === 'string' && !req.headers.authorization) {
+        const ticketToken = ticketService.consumeTicket(queryTicket, targetDbId, 'realtime');
+        if (ticketToken) {
+          req.apiToken = ticketToken;
+          req.databaseId = targetDbId;
+          return;
+        } else {
+          return reply.status(401).send({
+            success: false,
+            error: { code: 'INVALID_OR_EXPIRED_TICKET', message: 'One-time ticket is invalid, expired, or already used' },
+          });
+        }
+      }
+
       if (queryToken && typeof queryToken === 'string' && !req.headers.authorization) {
+        reply.header('Deprecation', 'true');
+        reply.header('Warning', '299 - "API token in query string is deprecated. Use one-time tickets from POST /v1/databases/:databaseId/tickets instead."');
         req.headers.authorization = `Bearer ${queryToken}`;
       }
 
@@ -769,7 +834,6 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       if (!req.headers.authorization && req.cookies?.vdb_session) {
         const user = authService.verifySessionCookie(req.cookies.vdb_session, config.sessionSecret);
         if (user) {
-          const targetDbId = (req.params as any).databaseId;
           if (!isAdminRole(user.role)) {
             const { databaseMembersService } = await import('../services/members.js');
             const role = databaseMembersService.getUserDatabaseRole(targetDbId, user.userId, user.role);
@@ -796,11 +860,19 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    reply.raw.writeHead(200, {
+    const sseHeaders: Record<string, string> = {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
-    });
+    };
+    if (reply.getHeader('deprecation')) {
+      sseHeaders['Deprecation'] = String(reply.getHeader('deprecation'));
+    }
+    if (reply.getHeader('warning')) {
+      sseHeaders['Warning'] = String(reply.getHeader('warning'));
+    }
+
+    reply.raw.writeHead(200, sseHeaders);
 
     reply.raw.write(`event: ping\ndata: ${JSON.stringify({ type: 'ping', timestamp: Date.now() })}\n\n`);
 

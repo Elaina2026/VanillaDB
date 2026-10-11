@@ -11,6 +11,7 @@ import { logger } from '../utils/logger.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { dbManager } from '../db/manager.js';
 import { systemService } from './system.js';
+import { removeFileQuiet } from '../utils/fsUtils.js';
 import type {
   StorageNodeRecord,
   StorageNodeStatus,
@@ -929,9 +930,7 @@ export class ClusterService {
         } catch (err: any) {
           throw new Error(`Failed to create consistent SQLite snapshot: ${err.message}`);
         } finally {
-          if (fs.existsSync(tempSnapshot)) {
-            try { fs.unlinkSync(tempSnapshot); } catch {}
-          }
+          removeFileQuiet(tempSnapshot, 'cluster.migrate:tempSnapshot');
         }
       } else {
         sourceNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(currentNodeId) as any;
@@ -977,25 +976,17 @@ export class ClusterService {
         testDb.close();
 
         if (!check || (check.quick_check !== 'ok' && Object.values(check)[0] !== 'ok')) {
-          if (fs.existsSync(tempDest)) fs.unlinkSync(tempDest);
+          removeFileQuiet(tempDest, 'cluster.migrate:invalidTempDest');
           throw new Error('Downloaded database snapshot failed SQLite quick_check integrity test');
         }
 
         dbManager.close(databaseId);
-        if (fs.existsSync(destPath)) {
-          try { fs.unlinkSync(destPath); } catch {}
-        }
-        if (fs.existsSync(`${destPath}-wal`)) {
-          try { fs.unlinkSync(`${destPath}-wal`); } catch {}
-        }
-        if (fs.existsSync(`${destPath}-shm`)) {
-          try { fs.unlinkSync(`${destPath}-shm`); } catch {}
-        }
-        if (fs.existsSync(`${destPath}-journal`)) {
-          try { fs.unlinkSync(`${destPath}-journal`); } catch {}
-        }
+        removeFileQuiet(destPath, 'cluster.migrate:dest');
+        removeFileQuiet(`${destPath}-wal`, 'cluster.migrate:wal');
+        removeFileQuiet(`${destPath}-shm`, 'cluster.migrate:shm');
+        removeFileQuiet(`${destPath}-journal`, 'cluster.migrate:journal');
         fs.copyFileSync(tempDest, destPath);
-        fs.unlinkSync(tempDest);
+        removeFileQuiet(tempDest, 'cluster.migrate:tempDest');
       } else {
         targetNode = metaDb.prepare('SELECT * FROM storage_nodes WHERE id = ?').get(targetNodeId) as any;
         if (!targetNode || targetNode.status !== 'healthy') {
@@ -1028,18 +1019,10 @@ export class ClusterService {
       if (currentNodeId === 'local') {
         dbManager.close(databaseId);
         const localDbPath = path.resolve(config.databasesDir, dbRow.filename || `${databaseId}.sqlite`);
-        if (fs.existsSync(localDbPath)) {
-          try { fs.unlinkSync(localDbPath); } catch {}
-        }
-        if (fs.existsSync(`${localDbPath}-wal`)) {
-          try { fs.unlinkSync(`${localDbPath}-wal`); } catch {}
-        }
-        if (fs.existsSync(`${localDbPath}-shm`)) {
-          try { fs.unlinkSync(`${localDbPath}-shm`); } catch {}
-        }
-        if (fs.existsSync(`${localDbPath}-journal`)) {
-          try { fs.unlinkSync(`${localDbPath}-journal`); } catch {}
-        }
+        removeFileQuiet(localDbPath, 'cluster.migrate:localDb');
+        removeFileQuiet(`${localDbPath}-wal`, 'cluster.migrate:localWal');
+        removeFileQuiet(`${localDbPath}-shm`, 'cluster.migrate:localShm');
+        removeFileQuiet(`${localDbPath}-journal`, 'cluster.migrate:localJournal');
       } else if (sourceNode) {
         await fetch(`${sourceNode.base_url.replace(/\/+$/, '')}/api/internal/node/databases/${databaseId}`, {
           method: 'DELETE',

@@ -64,6 +64,11 @@ tests/                    # Vitest end-to-end integration and unit test suite
    - Verification accepts `lastUsedStep` and requires `candidateStep > lastUsedStep`.
 7. **SSRF Blocker**:
    - Webhook destinations reject private RFC 1918, loopback, and cloud metadata (`169.254.169.254`).
+8. **Token Transport Security & One-Time Tickets (VDB-SEC-03)**:
+   - RFC 6750 enforcement: API tokens in URL query strings (`?token=...`) are forbidden on mutation routes (`401 QUERY_TOKEN_NOT_PERMITTED`).
+   - Ephemeral One-Time Tickets (`POST /v1/databases/:id/tickets`) with 60-second TTL for URL-based media and SSE streaming.
+9. **Internal Binary Avatar Pipeline**:
+   - Avatars uploaded via `POST /api/auth/profile/avatar` (10MB limit, binary magic byte verification for PNG, JPEG, WebP) and served via `GET /api/auth/avatar/:userId` with nosniff and CSP sandbox. New external URLs and data URIs disallowed on `PUT /profile`.
 
 ---
 
@@ -104,3 +109,5 @@ VanillaDatabase là động cơ SQLite đám mây đa người thuê, hỗ trợ
 - **Bảo vệ phiên làm việc:** Cookie phiên HMAC đính kèm `token_version`. Bất kỳ thay đổi mật khẩu nào phải kích hoạt tăng `token_version` để thu hồi phiên cũ.
 - **Chống phát lại 2FA:** Mã TOTP phải kiểm tra `last_totp_step` theo RFC 6238 để ngăn chặn gửi lại trong cửa sổ trôi dạt 90s.
 - **Chặn SSRF:** Webhook kiểm tra hostname và địa chỉ IP phân giải, cấm mọi dải IP riêng tư hoặc metadata đám mây.
+- **Vận chuyển Token & Vé dùng 1 lần (VDB-SEC-03):** Cấm truyền API token qua URL query string trên các route thay đổi dữ liệu (`401 QUERY_TOKEN_NOT_PERMITTED`). Sử dụng vé dùng một lần `vdb_ticket_*` (60s) cho SSE và phát luồng media.
+- **Lưu trữ Ảnh đại diện Nội bộ:** Ảnh đại diện được tải lên qua `POST /api/auth/profile/avatar` (giới hạn 10MB, kiểm tra chữ ký magic bytes nhị phân cho PNG, JPEG, WebP) và phục vụ qua `GET /api/auth/avatar/:userId` với nosniff và CSP sandbox. Cấm URL ngoài mới trên `PUT /profile`.

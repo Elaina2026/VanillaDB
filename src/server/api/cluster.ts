@@ -12,6 +12,8 @@ import { getMetadataDb } from '../db/metadata.js';
 import { activityService } from '../services/activity.js';
 import { storageService } from '../services/storage.js';
 import { logger } from '../utils/logger.js';
+import { safeCompareSecret } from '../utils/crypto.js';
+import { removeFileQuiet } from '../utils/fsUtils.js';
 import { isAdminRole } from '../../../shared/index.js';
 
 const addNodeSchema = z.object({
@@ -25,6 +27,15 @@ const migrateSchema = z.object({
   targetNodeId: z.string().min(1),
 });
 
+// In-memory rate limiting map for failed cluster secret attempts: ip -> { count, resetAt }
+const clusterFailTracker = new Map<string, { count: number; resetAt: number }>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, tracker] of clusterFailTracker.entries()) {
+    if (now > tracker.resetAt) clusterFailTracker.delete(ip);
+  }
+}, 60 * 1000).unref();
+
 export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
   // ==========================================
   // 1. Worker Node Internal APIs (/api/internal/node/*)
@@ -33,16 +44,26 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', async (req, reply) => {
     const pathname = (req.url || '').split('?')[0];
     if (pathname.startsWith('/api/internal/node') || pathname.startsWith('/internal/node')) {
-      const secretHeader = req.headers['x-cluster-secret'];
-      const secretStr = typeof secretHeader === 'string' ? secretHeader : '';
-      const expectedStr = config.clusterSecret;
-
-      let isMatch = false;
-      if (secretStr.length > 0 && secretStr.length === expectedStr.length) {
-        isMatch = crypto.timingSafeEqual(Buffer.from(secretStr), Buffer.from(expectedStr));
+      const ip = req.ip || 'unknown';
+      const now = Date.now();
+      const failEntry = clusterFailTracker.get(ip) || { count: 0, resetAt: now + 60000 };
+      if (now > failEntry.resetAt) {
+        failEntry.count = 0;
+        failEntry.resetAt = now + 60000;
+      }
+      if (failEntry.count >= 15) {
+        return reply.status(429).send({
+          success: false,
+          error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many invalid cluster authentication attempts' },
+        });
       }
 
+      const secretHeader = req.headers['x-cluster-secret'];
+      const isMatch = safeCompareSecret(secretHeader, config.clusterSecret);
+
       if (!isMatch) {
+        failEntry.count++;
+        clusterFailTracker.set(ip, failEntry);
         return reply.status(401).send({
           success: false,
           error: { code: 'UNAUTHORIZED_CLUSTER_NODE', message: 'Invalid or missing x-cluster-secret' },
@@ -174,20 +195,12 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Atomic rename/move to destination
       dbManager.close(safeId);
-      if (fs.existsSync(destFile)) {
-        try { fs.unlinkSync(destFile); } catch {}
-      }
-      if (fs.existsSync(`${destFile}-wal`)) {
-        try { fs.unlinkSync(`${destFile}-wal`); } catch {}
-      }
-      if (fs.existsSync(`${destFile}-shm`)) {
-        try { fs.unlinkSync(`${destFile}-shm`); } catch {}
-      }
-      if (fs.existsSync(`${destFile}-journal`)) {
-        try { fs.unlinkSync(`${destFile}-journal`); } catch {}
-      }
+      removeFileQuiet(destFile, 'cluster.receiveSnapshot:dest');
+      removeFileQuiet(`${destFile}-wal`, 'cluster.receiveSnapshot:wal');
+      removeFileQuiet(`${destFile}-shm`, 'cluster.receiveSnapshot:shm');
+      removeFileQuiet(`${destFile}-journal`, 'cluster.receiveSnapshot:journal');
       fs.copyFileSync(tempFile, destFile);
-      fs.unlinkSync(tempFile);
+      removeFileQuiet(tempFile, 'cluster.receiveSnapshot:temp');
 
       // Auto-register database in local metadata catalog to preserve foreign key constraints
       try {
@@ -203,9 +216,7 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.send({ success: true, data: { databaseId: safeId, sizeBytes: fs.statSync(destFile).size } });
     } catch (err: any) {
-      if (fs.existsSync(tempFile)) {
-        try { fs.unlinkSync(tempFile); } catch {}
-      }
+      removeFileQuiet(tempFile, 'cluster.receiveSnapshot:error');
       return reply.status(500).send({
         success: false,
         error: { message: `Failed to receive database snapshot: ${err.message}` },
@@ -249,7 +260,7 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
         snapHandle.exec(`VACUUM INTO '${safeTemp}';`);
         snapHandle.close();
         fileData = fs.readFileSync(tempExport);
-        try { fs.unlinkSync(tempExport); } catch {}
+        removeFileQuiet(tempExport, 'cluster.export:tempSuccess');
       } catch {
         fileData = fs.readFileSync(dbPath);
       }
@@ -257,9 +268,7 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
       reply.header('content-type', 'application/octet-stream');
       return reply.send(fileData);
     } catch (err: any) {
-      if (fs.existsSync(tempExport)) {
-        try { fs.unlinkSync(tempExport); } catch {}
-      }
+      removeFileQuiet(tempExport, 'cluster.export:tempError');
       return reply.status(500).send({ success: false, error: { message: `Export error: ${err.message}` } });
     }
   });
@@ -271,15 +280,9 @@ export const clusterRoutes: FastifyPluginAsync = async (fastify) => {
     dbManager.close(safeId);
 
     const dbPath = path.resolve(config.databasesDir, `${safeId}.sqlite`);
-    if (fs.existsSync(dbPath)) {
-      try { fs.unlinkSync(dbPath); } catch {}
-    }
-    if (fs.existsSync(`${dbPath}-wal`)) {
-      try { fs.unlinkSync(`${dbPath}-wal`); } catch {}
-    }
-    if (fs.existsSync(`${dbPath}-shm`)) {
-      try { fs.unlinkSync(`${dbPath}-shm`); } catch {}
-    }
+    removeFileQuiet(dbPath, 'cluster.deleteWorkerDb:db');
+    removeFileQuiet(`${dbPath}-wal`, 'cluster.deleteWorkerDb:wal');
+    removeFileQuiet(`${dbPath}-shm`, 'cluster.deleteWorkerDb:shm');
 
     // Clean up media and file storage for this database on worker node
     try {

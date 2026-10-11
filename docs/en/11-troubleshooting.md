@@ -41,6 +41,29 @@ Common operational errors, diagnostic steps, and frequently asked questions for 
   - Synchronize the system time on your device.
   - Wait for the next 30-second time-step cycle before entering a fresh 6-digit code.
 
+### 1.7. `QUERY_TOKEN_NOT_PERMITTED` (HTTP 401)
+- **Root Cause**: An API token was transmitted via URL query string (`?token=...`) on a restricted route (`POST /query`, `/batch`, `/exec`, etc.).
+- **Remediation**:
+  - Switch external scripts or HTTP requests to use the standard authorization header:
+    ```bash
+    curl -X POST http://localhost:3000/v1/databases/:id/query \
+      -H "Authorization: Bearer <token>" \
+      -H "Content-Type: application/json" \
+      -d '{"sql": "SELECT 1;"}'
+    ```
+  - For URL-embedded media or Server-Sent Events where custom headers cannot be set (e.g. `EventSource`), generate a 60-second single-use ticket via `POST /v1/databases/:id/tickets` and pass `?ticket=...`.
+
+### 1.8. Avatar Upload Errors: `FILE_TOO_LARGE` (HTTP 413) & `UNSUPPORTED_MEDIA_TYPE` (HTTP 415)
+- **Root Cause**: Avatar file exceeds the 10MB threshold (`AVATAR_MAX_BYTES`) or fails binary magic byte inspection (e.g., SVG, HTML, GIF, or corrupted headers).
+- **Remediation**:
+  - Compress or resize the image to under 10MB.
+  - Ensure the file is encoded as true PNG (`89 50 4E 47`), JPEG (`FF D8 FF`), or WebP (`RIFF....WEBP`). Client-supplied MIME types and file extensions are ignored; validation relies strictly on file signatures.
+
+### 1.9. `EXTERNAL_AVATAR_DISALLOWED` (HTTP 400) on `PUT /profile`
+- **Root Cause**: Attempted to save a new external URL (`https://...`) or data URI in `avatar_url` via `PUT /api/auth/profile`.
+- **Remediation**:
+  - Upload avatar binaries directly to `POST /api/auth/profile/avatar`. External URLs and base64 strings are disallowed on new updates to eliminate third-party tracking pixels and prevent database bloat. Legacy URLs remain operational for backward compatibility.
+
 ---
 
 ## 2. Frequently Asked Questions (FAQ)

@@ -451,6 +451,27 @@ function runMigrations(db: DatabaseSync): void {
       sql: `
         DELETE FROM files WHERE database_id NOT IN (SELECT id FROM databases);
       `
+    },
+    {
+      version: 21,
+      name: 'sanitize_unsafe_avatar_urls',
+      sql: `
+        UPDATE users
+        SET avatar_url = NULL
+        WHERE avatar_url IS NOT NULL
+          AND avatar_url != ''
+          AND (
+            LOWER(avatar_url) LIKE 'javascript:%'
+            OR LOWER(avatar_url) LIKE 'data:text/html%'
+            OR LOWER(avatar_url) LIKE 'data:image/svg+xml%'
+            OR LOWER(avatar_url) LIKE 'http://%'
+            OR (
+              avatar_url NOT LIKE '/%'
+              AND avatar_url NOT LIKE 'https://%'
+              AND LOWER(avatar_url) NOT LIKE 'data:image/%'
+            )
+          );
+      `
     }
   ];
 

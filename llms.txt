@@ -11,6 +11,6 @@
 ## Core Technical Specs
 - Runtime: Node.js 22+ with native better-sqlite3 (WAL Mode)
 - Web Framework: Fastify 5.2 (REST and SSE)
-- Security: Argon2id password hashing, HMAC SHA-256 session cookies with token versioning (VDB-SEC-01), RFC 6238 TOTP with monotonic step replay protection (VDB-SEC-02), SSRF LAN blocking, AES-256-GCM media encryption
+- Security: Argon2id password hashing, HMAC SHA-256 session cookies with token versioning (VDB-SEC-01), RFC 6238 TOTP with monotonic step replay protection (VDB-SEC-02), One-Time Ticket Service (VDB-SEC-03, RFC 6750), SSRF LAN blocking, AES-256-GCM media encryption, Internal binary avatar storage pipeline (magic bytes validation, nosniff, CSP sandbox)
 - Frontend: React 19, Tailwind CSS v4, Monaco SQL Editor, Lucide Icons, Full Bilingual (EN/VI)
-- Testing: Vitest end-to-end test suite (94 passed tests)
+- Testing: Vitest end-to-end test suite (245 passed tests)

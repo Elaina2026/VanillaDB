@@ -7,6 +7,7 @@ import { getMetadataDb } from '../db/metadata.js';
 import { dbManager } from '../db/manager.js';
 import { logger } from '../utils/logger.js';
 import { encryptFile, decryptFile, isEncryptedFile } from '../utils/crypto.js';
+import { removeFileQuiet } from '../utils/fsUtils.js';
 import { clusterService } from './cluster.js';
 import type { BackupRecord } from '../../../shared/index.js';
 
@@ -81,9 +82,7 @@ export class BackupService {
       try {
         encryptFile(tempPlain, targetPath);
       } finally {
-        if (fs.existsSync(tempPlain)) {
-          try { fs.unlinkSync(tempPlain); } catch {}
-        }
+        removeFileQuiet(tempPlain, 'backup.createRemoteBackup:tempPlain');
       }
     } else {
       const db = dbManager.get(databaseId);
@@ -254,9 +253,7 @@ export class BackupService {
         }
       }
     } finally {
-      if (fs.existsSync(tempDecrypted)) {
-        try { fs.unlinkSync(tempDecrypted); } catch {}
-      }
+      removeFileQuiet(tempDecrypted, 'backup.restore:tempDecrypted');
     }
   }
 }

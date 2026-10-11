@@ -159,14 +159,35 @@ class VanillaDatabase:
             raise Exception(data.get("error", {}).get("message", "Delete file failed"))
         return True
 
-    def subscribe(self, callback: Callable[[Dict[str, Any]], None], table: Optional[str] = None):
+    def create_ticket(self, route: str = "any", ttl_seconds: int = 60) -> Dict[str, Any]:
+        """Issue a short-lived single-use ticket for URL-based media and SSE access."""
+        base = self.get_base_url()
+        res = requests.post(
+            f"{base}/tickets",
+            headers=self.headers,
+            json={"route": route, "ttl_seconds": ttl_seconds},
+        )
+        res.raise_for_status()
+        data = res.json()
+        if not data.get("success"):
+            raise Exception(data.get("error", {}).get("message", "Create ticket failed"))
+        return data.get("data")
+
+    def subscribe(self, callback: Callable[[Dict[str, Any]], None], table: Optional[str] = None, ticket: Optional[str] = None):
         """Subscribe to Realtime SSE event stream (blocking generator / worker)."""
         base = self.get_base_url()
-        url = f"{base}/realtime?token={self.token}"
-        if table:
-            url += f"&table={table}"
+        headers = {"Accept": "text/event-stream"}
+        if ticket:
+            url = f"{base}/realtime?ticket={ticket}"
+        else:
+            headers["Authorization"] = f"Bearer {self.token}"
+            url = f"{base}/realtime"
 
-        with requests.get(url, headers={"Accept": "text/event-stream"}, stream=True) as response:
+        if table:
+            sep = "&" if "?" in url else "?"
+            url += f"{sep}table={table}"
+
+        with requests.get(url, headers=headers, stream=True) as response:
             response.raise_for_status()
             for line in response.iter_lines(decode_unicode=True):
                 if line and line.startswith("data: "):

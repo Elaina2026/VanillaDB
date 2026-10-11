@@ -18,6 +18,7 @@ import {
 import { apiRequest } from '../api/client.js';
 import { formatBytes, formatDate } from '../lib/utils.js';
 import { useI18n } from '../hooks/useI18n.js';
+import { UserAvatar } from './UserAvatar.js';
 import { isOwnerRole, isAdminRole, type UserSummaryResponse, type UserRecord } from '@shared/index.js';
 
 interface UserAuditDrawerProps {
@@ -143,15 +144,12 @@ export const UserAuditDrawer: React.FC<UserAuditDrawerProps> = ({
               {/* User Profile Card */}
               <div className="p-4 rounded-xl border border-border bg-muted/20 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border border-border flex items-center justify-center font-bold text-base shadow-xs">
-                    {user.avatar_url ? (
-                      <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className={`w-full h-full flex items-center justify-center font-bold text-sm border ${getAvatarStyle(user.username)}`}>
-                        {getInitials(user.username)}
-                      </div>
-                    )}
-                  </div>
+                  <UserAvatar
+                    avatarUrl={user.avatar_url}
+                    username={user.username}
+                    className="w-12 h-12 rounded-full overflow-hidden shrink-0 border border-border flex items-center justify-center font-bold text-base shadow-xs"
+                    fallbackClassName={`w-full h-full flex items-center justify-center font-bold text-sm border ${getAvatarStyle(user.username)}`}
+                  />
                   <div className="min-w-0">
                     <h3 className="font-bold text-base text-foreground truncate">
                       {user.username}

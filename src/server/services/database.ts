@@ -7,6 +7,7 @@ import { config } from '../config/index.js';
 import { getMetadataDb } from '../db/metadata.js';
 import { dbManager } from '../db/manager.js';
 import { logger } from '../utils/logger.js';
+import { removeFileQuiet } from '../utils/fsUtils.js';
 import { storageService } from './storage.js';
 import { clusterService } from './cluster.js';
 import { isOwnerRole, isAdminRole, type DatabaseRecord, type DatabaseOverviewStats, type BackupRecord, type DatabaseStorageStats, type DatabaseMetricsStats } from '../../../shared/index.js';
@@ -96,9 +97,9 @@ export class DatabaseService {
           }).then(res => {
             if (res.ok) {
               // Successfully transferred to remote worker, unlink local template files
-              if (fs.existsSync(dbPath)) try { fs.unlinkSync(dbPath); } catch {}
-              if (fs.existsSync(`${dbPath}-wal`)) try { fs.unlinkSync(`${dbPath}-wal`); } catch {}
-              if (fs.existsSync(`${dbPath}-shm`)) try { fs.unlinkSync(`${dbPath}-shm`); } catch {}
+              removeFileQuiet(dbPath, 'database.initWorker:db');
+              removeFileQuiet(`${dbPath}-wal`, 'database.initWorker:wal');
+              removeFileQuiet(`${dbPath}-shm`, 'database.initWorker:shm');
             } else {
               logger.error({ status: res.status, assignedNodeId }, 'Failed to initialize database on remote worker node, reverting to local');
               metaDb.prepare('UPDATE databases SET node_id = ? WHERE id = ?').run('local', id);

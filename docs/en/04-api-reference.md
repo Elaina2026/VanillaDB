@@ -13,10 +13,29 @@ Authorization: Bearer vdb_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 Content-Type: application/json
 ```
 
-For media streaming in browser `<audio>`, `<img>`, or `<video>` tags, the token can also be supplied via URL query parameter:
-```http
-GET /v1/databases/:databaseId/storage/:fileId?token=vdb_live_...
-```
+> [SECURITY] **Query String Token Deprecation (RFC 6750)**:
+> Passing API tokens via query string (`?token=...`) is strictly **forbidden** on write, mutation, and query routes (`/query`, `/batch`, `/exec`), returning HTTP 401 `QUERY_TOKEN_NOT_PERMITTED`.
+> For media streaming and Server-Sent Events where custom headers cannot be set (e.g., `<img src="...">`, `<audio src="...">`, or `EventSource`), use short-lived **One-Time Tickets**:
+> ```http
+> POST /v1/databases/:databaseId/tickets
+> Authorization: Bearer vdb_live_...
+> 
+> Response (201 Created):
+> {
+>   "success": true,
+>   "data": {
+>     "ticket": "vdb_ticket_...",
+>     "expiresAt": 1775560000000,
+>     "expiresInSeconds": 60
+>   }
+> }
+> ```
+> Then consume via URL:
+> ```http
+> GET /v1/databases/:databaseId/realtime?ticket=vdb_ticket_...
+> GET /v1/files/:fileId/view?ticket=vdb_ticket_...
+> ```
+> Tickets are single-use, strictly scoped to the database and route, and expire after 60 seconds. Legacy query tokens (`?token=...`) on GET `/realtime`, `/view`, and `/storage/` are deprecated and scheduled for complete removal in **v1.3.4**.
 
 ---
 
@@ -27,6 +46,7 @@ GET /v1/databases/:databaseId/storage/:fileId?token=vdb_live_...
 | `POST` | `/v1/databases/:databaseId/query` | Execute parameterized SQL read/write query | `database:read` or `database:write` |
 | `POST` | `/v1/databases/:databaseId/exec` | Execute single-statement SQL mutation | `database:write` |
 | `POST` | `/v1/databases/:databaseId/batch` | Execute atomic multi-statement transaction | `database:write` |
+| `POST` | `/v1/databases/:databaseId/tickets` | Issue single-use 60s ticket for SSE/media stream | `database:read` |
 | `GET` | `/v1/databases/:databaseId/tables/:table/rows` | Select table rows with pagination & sorting | `database:read` |
 | `POST` | `/v1/databases/:databaseId/tables/:table/rows` | Insert a new record into table | `database:write` |
 | `PUT` | `/v1/databases/:databaseId/tables/:table/rows` | Update table row(s) with condition | `database:write` |
@@ -37,6 +57,10 @@ GET /v1/databases/:databaseId/storage/:fileId?token=vdb_live_...
 | `POST` | `/v1/databases/:databaseId/files` | Upload media asset (multipart/form-data) | `database:write` |
 | `GET` | `/v1/databases/:databaseId/storage/:fileId` | Stream media asset (HTTP 206 Range) | `database:read` |
 | `DELETE`| `/v1/databases/:databaseId/files/:fileId` | Delete media asset from storage | `database:write` |
+| `POST` | `/api/auth/profile/avatar` | Upload binary user avatar (PNG/JPEG/WebP, max 10MB) | Authenticated Session |
+| `GET` | `/api/auth/avatar/:userId` | Stream user avatar with nosniff and CSP sandbox | Public / Cacheable |
+| `DELETE`| `/api/auth/profile/avatar` | Remove user avatar | Authenticated Session |
+| `PUT` | `/api/auth/profile` | Update profile (disallows external URLs/data URIs) | Authenticated Session |
 
 ---
 

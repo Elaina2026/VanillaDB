@@ -13,10 +13,29 @@ Authorization: Bearer vdb_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 Content-Type: application/json
 ```
 
-Đối với phát luồng tệp đa phương tiện trong thẻ `<audio>`, `<img>`, hoặc `<video>`, mã token có thể được truyền trực tiếp qua tham số URL:
-```http
-GET /v1/databases/:databaseId/storage/:fileId?token=vdb_live_...
-```
+> [SECURITY] **Cấm Token trong Query String (Chuẩn RFC 6750)**:
+> Việc truyền API token qua chuỗi truy vấn URL (`?token=...`) bị **nghiêm cấm** trên các route ghi/sửa dữ liệu (`/query`, `/batch`, `/exec`), hệ thống sẽ từ chối ngay với mã lỗi HTTP 401 `QUERY_TOKEN_NOT_PERMITTED`.
+> Với các luồng phát đa phương tiện và Server-Sent Events không hỗ trợ gắn header tùy biến (như thẻ `<img src="...">`, `<audio src="...">`, hoặc `EventSource`), sử dụng cơ chế **One-Time Tickets** (Vé dùng một lần):
+> ```http
+> POST /v1/databases/:databaseId/tickets
+> Authorization: Bearer vdb_live_...
+> 
+> Phản hồi (201 Created):
+> {
+>   "success": true,
+>   "data": {
+>     "ticket": "vdb_ticket_...",
+>     "expiresAt": 1775560000000,
+>     "expiresInSeconds": 60
+>   }
+> }
+> ```
+> Sau đó truy cập bằng tham số URL:
+> ```http
+> GET /v1/databases/:databaseId/realtime?ticket=vdb_ticket_...
+> GET /v1/files/:fileId/view?ticket=vdb_ticket_...
+> ```
+> Vé chỉ có hiệu lực dùng 1 lần duy nhất, giới hạn chặt chẽ theo database và route, tự động hết hạn sau 60 giây. Query token cũ (`?token=...`) trên GET `/realtime`, `/view`, và `/storage/` hiện bị gắn cờ Deprecation và sẽ bị cấm hoàn toàn trong bản **v1.3.4**.
 
 ---
 
@@ -27,6 +46,7 @@ GET /v1/databases/:databaseId/storage/:fileId?token=vdb_live_...
 | `POST` | `/v1/databases/:databaseId/query` | Thực thi truy vấn SQL có tham số (SELECT/INSERT/UPDATE) | `database:read` hoặc `database:write` |
 | `POST` | `/v1/databases/:databaseId/exec` | Thực thi một câu lệnh thay đổi dữ liệu đơn lẻ | `database:write` |
 | `POST` | `/v1/databases/:databaseId/batch` | Thực thi giao dịch nhiều câu lệnh nguyên tử | `database:write` |
+| `POST` | `/v1/databases/:databaseId/tickets` | Cấp vé dùng 1 lần (60 giây) cho SSE và phát luồng media | `database:read` |
 | `GET` | `/v1/databases/:databaseId/tables/:table/rows` | Lấy danh sách dòng với phân trang & sắp xếp | `database:read` |
 | `POST` | `/v1/databases/:databaseId/tables/:table/rows` | Chèn một dòng mới vào bảng | `database:write` |
 | `PUT` | `/v1/databases/:databaseId/tables/:table/rows` | Cập nhật dòng theo điều kiện lọc | `database:write` |
@@ -37,6 +57,10 @@ GET /v1/databases/:databaseId/storage/:fileId?token=vdb_live_...
 | `POST` | `/v1/databases/:databaseId/files` | Tải tệp media lên kho lưu trữ (multipart) | `database:write` |
 | `GET` | `/v1/databases/:databaseId/storage/:fileId` | Phát luồng tệp tin media (HTTP 206 Range) | `database:read` |
 | `DELETE`| `/v1/databases/:databaseId/files/:fileId` | Xóa tệp tin media khỏi kho lưu trữ | `database:write` |
+| `POST` | `/api/auth/profile/avatar` | Tải lên tệp ảnh đại diện (PNG/JPEG/WebP, tối đa 10MB) | Phiên đăng nhập |
+| `GET` | `/api/auth/avatar/:userId` | Phục vụ ảnh đại diện kèm nosniff và CSP sandbox | Công khai / Bộ nhớ đệm |
+| `DELETE`| `/api/auth/profile/avatar` | Xóa ảnh đại diện người dùng | Phiên đăng nhập |
+| `PUT` | `/api/auth/profile` | Cập nhật hồ sơ (chặn URL ngoài và data URI mới) | Phiên đăng nhập |
 
 ---
 

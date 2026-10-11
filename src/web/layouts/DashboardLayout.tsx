@@ -45,6 +45,7 @@ import { useAuth } from '../hooks/useAuth.js';
 import { useTheme } from '../hooks/useTheme.js';
 import { useI18n } from '../hooks/useI18n.js';
 import { LogoIcon } from '../components/LogoIcon.js';
+import { UserAvatar } from '../components/UserAvatar.js';
 import { cn } from '../lib/utils.js';
 
 interface DashboardLayoutProps {
@@ -587,13 +588,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               )}
               title={`${user?.username || 'Account'} (${user?.role || 'user'})`}
             >
-              <div className="w-7 h-7 rounded-full overflow-hidden border border-border group-hover:border-blue-500 bg-muted/50 flex items-center justify-center shrink-0 transition-colors">
-                {user?.avatar_url ? (
-                  <img src={user.avatar_url} alt={user.username} className="w-full h-full object-cover" />
-                ) : (
-                  <UserIcon className="w-4 h-4 text-muted-foreground group-hover:text-foreground" />
-                )}
-              </div>
+              <UserAvatar
+                avatarUrl={user?.avatar_url}
+                username={user?.username}
+                className="w-7 h-7 rounded-full overflow-hidden border border-border group-hover:border-blue-500 bg-muted/50 flex items-center justify-center shrink-0 transition-colors"
+                fallbackClassName="w-full h-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]"
+              />
               {!isSidebarCollapsed && (
                 <div className="truncate">
                   <span className="truncate font-medium text-foreground block group-hover:text-blue-500 transition-colors">{user?.username}</span>

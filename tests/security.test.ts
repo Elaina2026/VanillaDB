@@ -1169,7 +1169,7 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
         method: 'PUT',
         url: '/api/auth/profile',
         headers: { cookie: adminCookie },
-        payload: { avatar_url: 'https://example.com/safe-avatar.png' },
+        payload: { avatar_url: '/api/auth/avatar/usr_safe_avatar' },
       });
       expect(res.statusCode).toBe(200);
       const data = res.json().data;

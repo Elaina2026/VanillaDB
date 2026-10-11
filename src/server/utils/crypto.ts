@@ -95,6 +95,24 @@ export function isEncryptedFile(filePath: string): boolean {
 }
 
 /**
+ * Timing-safe secret comparison.
+ * Computes SHA-256 digests for both inputs so comparison is always fixed-length (32 bytes),
+ * completely preventing timing attacks and secret length leakage.
+ */
+export function safeCompareSecret(provided: unknown, expected: string): boolean {
+  if (typeof provided !== 'string' || typeof expected !== 'string') {
+    return false;
+  }
+  if (!provided || !expected) {
+    return false;
+  }
+  const hashProvided = crypto.createHash('sha256').update(provided).digest();
+  const hashExpected = crypto.createHash('sha256').update(expected).digest();
+  return crypto.timingSafeEqual(hashProvided, hashExpected);
+}
+
+
+/**
  * Derive encryption key from arbitrary string (e.g. user-supplied key for SQL helper functions).
  */
 export function deriveKeyFromString(passphrase: string): Buffer {
