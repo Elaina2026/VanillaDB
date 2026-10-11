@@ -108,66 +108,62 @@ function renderHighlightedCode(code: string): React.ReactNode {
 const CODE_SNIPPETS: Record<CodeTab, { file: string; code: string }> = {
   'per-tenant': {
     file: 'per-tenant.ts',
-    code: `import { VanillaClient } from '@vanilladb/sdk';
+    code: `import { VanillaDatabase } from '@nullex/vanilladb';
 
-const vdb = new VanillaClient({
-  apiKey: process.env.VDB_API_KEY,
+// Initialize tenant database instance with unified base URL
+const db = new VanillaDatabase({
+  url: 'https://db.yourcloud.com/v1/databases/db_tenant_01',
+  token: process.env.VDB_TOKEN,
 });
 
-// Every tenant gets an isolated encrypted database
-const db = await vdb.databases.create({
-  name: \`tenant-\${tenantId}\`,
-  encryption: 'aes-256-gcm',
-  wal: true,
-});
+// Parameterized SQL — isolated tenant table
+const { rows } = await db.query(
+  'SELECT id, name, price FROM products WHERE active = ?',
+  [1]
+);
 
-// Scoped token — table-level permissions
-const token = await db.tokens.create({
-  permissions: ['read', 'write'],
-  allowedTables: ['orders', 'products'],
-  expiresIn: '30d',
-});`,
+// Atomic transaction across tenant records
+await db.batch([
+  { sql: 'INSERT INTO orders (product_id, qty) VALUES (?, ?)', params: [rows[0].id, 2] },
+  { sql: 'UPDATE products SET stock = stock - ? WHERE id = ?', params: [2, rows[0].id] }
+], true);`,
   },
   'per-agent': {
     file: 'per-agent.ts',
-    code: `import { VanillaClient } from '@vanilladb/sdk';
+    code: `import { VanillaDatabase } from '@nullex/vanilladb';
 
-const vdb = new VanillaClient({
-  apiKey: process.env.VDB_API_KEY,
+// Dedicated high-speed SQLite instance for AI Agent memory
+const agentDb = new VanillaDatabase({
+  url: 'https://db.yourcloud.com/v1/databases/db_agent_memory',
+  token: process.env.VDB_AGENT_TOKEN,
 });
 
-// Each AI agent gets its own isolated memory store
-const agentDb = await vdb.databases.create({
-  name: \`agent-\${agentId}-\${sessionId}\`,
-  encryption: 'aes-256-gcm',
-});
-
-// Execute SQL directly — no ORM overhead
-const result = await agentDb.query({
-  sql: 'SELECT * FROM memory WHERE relevance > ?',
-  params: [0.85],
+// Native Vector Cosine Similarity Search
+const memories = await agentDb.vectorSearch({
+  table: 'agent_memories',
+  vectorColumn: 'embedding',
+  vector: [0.012, 0.421, -0.198, 0.087],
+  limit: 5,
+  threshold: 0.85,
 });`,
   },
   'per-user': {
     file: 'per-user.ts',
-    code: `import { VanillaClient } from '@vanilladb/sdk';
+    code: `import { VanillaDatabase } from '@nullex/vanilladb';
 
-const vdb = new VanillaClient({
-  apiKey: process.env.VDB_API_KEY,
+const userDb = new VanillaDatabase({
+  url: 'https://db.yourcloud.com/v1/databases/db_user_vault',
+  token: process.env.VDB_USER_TOKEN,
 });
 
-// Zero-trust per-user database with 2FA enforcement
-const userDb = await vdb.databases.create({
-  name: \`user-\${userId}\`,
-  encryption: 'aes-256-gcm',
-  accessRole: 'owner',
-});
+// Live Server-Sent Events (SSE) with auto-provisioned ticket
+const unsubscribe = userDb.subscribe((event) => {
+  console.log('Realtime sync:', event.type, event.table, event.data);
+}, 'notifications');
 
-// Webhook triggers on every mutation
-await userDb.webhooks.create({
-  url: 'https://yourapp.com/sync',
-  events: ['insert', 'update', 'delete'],
-});`,
+// Secure binary media upload with one-time view ticket
+const file = await userDb.uploadFile(avatarBlob, 'avatar.png', 'image/png');
+const viewUrl = await userDb.getFileUrlWithTicket(file.id);`,
   },
 };
 

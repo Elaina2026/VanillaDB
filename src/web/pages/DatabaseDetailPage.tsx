@@ -3904,9 +3904,10 @@ const unsubscribe = db.subscribe((event) => {
   console.log('Realtime DB Event:', event.type, event.table, event.data);
 }, 'users');
 
-// 4. Media Storage (Upload & Stream)
+// 4. Media Storage (Upload & Secure Stream URL)
 const file = await db.uploadFile(buffer, 'avatar.png', 'image/png');
-console.log('Stream URL:', db.getFileUrl(file.id));`}
+const streamUrl = await db.getFileUrlWithTicket(file.id);
+console.log('Stream URL:', streamUrl);`}
                 </pre>
               </div>
 
@@ -3915,7 +3916,7 @@ console.log('Stream URL:', db.getFileUrl(file.id));`}
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-foreground">{t('quickstart.pyClient', '2. Python Client')}</span>
                   <span className="text-[11px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                    pip install vanilladb
+                    pip install vanilladatabase
                   </span>
                 </div>
                 <pre className="p-4 bg-muted/60 border border-border rounded text-xs font-mono overflow-x-auto text-foreground">
@@ -3936,9 +3937,9 @@ db.batch([
     {"sql": "INSERT INTO logs (event) VALUES (?)", "params": ["user_created"]}
 ], transaction=True)
 
-# 3. Media Storage Upload
+# 3. Media Storage Upload & Secure Stream URL
 uploaded = db.upload_file("photo.png", filename="user_avatar.png", content_type="image/png")
-print("File URL:", db.get_file_url(uploaded["id"]))`}
+print("File URL:", db.get_file_url_with_ticket(uploaded["id"]))`}
                 </pre>
               </div>
             </div>
