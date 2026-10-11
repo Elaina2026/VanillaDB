@@ -35,7 +35,7 @@ Content-Type: application/json
 > GET /v1/databases/:databaseId/realtime?ticket=vdb_ticket_...
 > GET /v1/files/:fileId/view?ticket=vdb_ticket_...
 > ```
-> Tickets are single-use, strictly scoped to the database and route, and expire after 60 seconds. Legacy query tokens (`?token=...`) on GET `/realtime`, `/view`, and `/storage/` are deprecated and scheduled for complete removal in **v1.3.4**.
+> Tickets are single-use, strictly scoped to the database and route, and expire after 60 seconds. Query tokens (`?token=...`) are strictly prohibited across all endpoints (including streaming and media) with HTTP 401 `QUERY_TOKEN_NOT_PERMITTED`.
 
 ---
 

@@ -35,7 +35,7 @@ Content-Type: application/json
 > GET /v1/databases/:databaseId/realtime?ticket=vdb_ticket_...
 > GET /v1/files/:fileId/view?ticket=vdb_ticket_...
 > ```
-> Vé chỉ có hiệu lực dùng 1 lần duy nhất, giới hạn chặt chẽ theo database và route, tự động hết hạn sau 60 giây. Query token cũ (`?token=...`) trên GET `/realtime`, `/view`, và `/storage/` hiện bị gắn cờ Deprecation và sẽ bị cấm hoàn toàn trong bản **v1.3.4**.
+> Vé chỉ có hiệu lực dùng 1 lần duy nhất, giới hạn chặt chẽ theo database và route, tự động hết hạn sau 60 giây. Query token (`?token=...`) bị nghiêm cấm hoàn toàn trên tất cả các route (kể cả streaming và media) với mã lỗi HTTP 401 `QUERY_TOKEN_NOT_PERMITTED`.
 
 ---
 

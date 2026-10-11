@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.4] - 2026-10-11
+
+### Security
+- **Complete Prohibition of Query String Tokens (RFC 6750)**: Permanently blocked `?token=...` across all endpoints, including GET streaming and media routes (`/realtime`, `/v1/files/:id/view`, `/v1/databases/:id/storage/:name`). Any request passing `?token=` is immediately rejected with HTTP 401 `QUERY_TOKEN_NOT_PERMITTED`.
+- **Client SDK Ephemeral Ticket Auto-Provisioning**: Updated TypeScript SDK (`@nullex/vanilladb`) `subscribe()` to automatically acquire single-use 60s tickets (`vdb_ticket_*`) via `createTicket()` before establishing EventSource connections, ensuring master API tokens never leak into URLs. Added `getFileUrlWithTicket()` across TypeScript and Python SDKs.
+
 ## [1.3.3] - 2026-10-11
 
 ### Security

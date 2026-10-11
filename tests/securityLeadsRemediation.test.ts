@@ -239,15 +239,15 @@ describe('Security Leads Remediation Suite (Leads 1 - 6)', () => {
       expect(['QUERY_TOKEN_NOT_PERMITTED', 'UNAUTHENTICATED']).toContain(res.json().error.code);
     });
 
-    it('should allow ?token= on file view and realtime SSE where headers cannot be sent', async () => {
+    it('should strictly reject ?token= on file view and storage routes per RFC 6750', async () => {
       const res = await app.inject({
         method: 'GET',
         url: `/v1/databases/${testDbId}/storage/non_existent.png?token=${testToken}`,
       });
 
-      // Should authenticate token and proceed to file check (404 FILE_NOT_FOUND, not 401 UNAUTHENTICATED)
-      expect(res.statusCode).toBe(404);
-      expect(res.json().error.code).toBe('FILE_NOT_FOUND');
+      // Must be rejected with QUERY_TOKEN_NOT_PERMITTED
+      expect(res.statusCode).toBe(401);
+      expect(res.json().error.code).toBe('QUERY_TOKEN_NOT_PERMITTED');
     });
   });
 

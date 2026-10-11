@@ -42,7 +42,7 @@ Common operational errors, diagnostic steps, and frequently asked questions for 
   - Wait for the next 30-second time-step cycle before entering a fresh 6-digit code.
 
 ### 1.7. `QUERY_TOKEN_NOT_PERMITTED` (HTTP 401)
-- **Root Cause**: An API token was transmitted via URL query string (`?token=...`) on a restricted route (`POST /query`, `/batch`, `/exec`, etc.).
+- **Root Cause**: An API token was transmitted via URL query string (`?token=...`). Query tokens are strictly prohibited across all endpoints (including streaming and media routes) per RFC 6750.
 - **Remediation**:
   - Switch external scripts or HTTP requests to use the standard authorization header:
     ```bash

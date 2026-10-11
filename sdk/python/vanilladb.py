@@ -125,10 +125,16 @@ class VanillaDatabase:
         res.raise_for_status()
         return res.json().get("data")
 
-    def get_file_url(self, file_id: str) -> str:
-        """Get stream/download URL for file."""
+    def get_file_url(self, file_id: str, ticket: Optional[str] = None) -> str:
+        """Get stream/download URL for file with optional one-time ticket."""
         base = self.url.split('/v1/')[0]
-        return f"{base}/v1/files/{file_id}/view"
+        ticket_param = f"?ticket={ticket}" if ticket else ""
+        return f"{base}/v1/files/{file_id}/view{ticket_param}"
+
+    def get_file_url_with_ticket(self, file_id: str) -> str:
+        """Issue a 60-second one-time ticket and return single-use file view URL."""
+        ticket_data = self.create_ticket(route="view")
+        return self.get_file_url(file_id, ticket=ticket_data["ticket"])
 
     def upload_file(self, file_path_or_bytes, filename: str, content_type: str = "application/octet-stream"):
         """Upload a file to database media storage."""

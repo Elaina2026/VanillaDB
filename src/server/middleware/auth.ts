@@ -333,35 +333,28 @@ export function requireTokenPermission(permission: TokenPermission) {
       }
     }
 
-    // 2. Reject query token if present on non-allowed routes
+    // 2. Reject query token on ALL routes per RFC 6750
     let authHeader = request.headers.authorization;
     const queryToken = (request.query as any)?.token;
     const queryTicket = (request.query as any)?.ticket;
     const urlPath = (request.url || '').split('?')[0];
 
+    if (queryToken) {
+      reply.status(401).send({
+        success: false,
+        error: {
+          code: 'QUERY_TOKEN_NOT_PERMITTED',
+          message: 'API token in query string is strictly prohibited across all routes per RFC 6750. Use "Authorization: Bearer <token>" header or one-time tickets (?ticket=...) from POST /v1/databases/:databaseId/tickets.',
+        },
+      });
+      return;
+    }
+
+    // 3. Support one-time tickets on allowed media/stream routes
     const isAllowedQueryMediaRoute =
       request.method === 'GET' &&
       (urlPath.includes('/realtime') || urlPath.includes('/view') || urlPath.includes('/storage/'));
 
-    if (queryToken && !authHeader) {
-      if (!isAllowedQueryMediaRoute) {
-        reply.status(401).send({
-          success: false,
-          error: {
-            code: 'QUERY_TOKEN_NOT_PERMITTED',
-            message: 'API token in query string is not permitted on this route. Use "Authorization: Bearer <token>" header.',
-          },
-        });
-        return;
-      }
-
-      // Route is allowed GET media/stream link: Accept with Deprecation header
-      reply.header('Deprecation', 'true');
-      reply.header('Warning', '299 - "API token in query string is deprecated and will be removed in v1.3.4. Use one-time tickets from POST /v1/databases/:databaseId/tickets instead."');
-      authHeader = `Bearer ${queryToken}`;
-    }
-
-    // 3. Support one-time tickets on allowed media/stream routes
     if (queryTicket && !authHeader && isAllowedQueryMediaRoute) {
       const scope = urlPath.includes('/realtime') ? 'realtime' : urlPath.includes('/view') ? 'view' : 'storage';
       const ticketToken = ticketService.consumeTicket(queryTicket, databaseId, scope as any);

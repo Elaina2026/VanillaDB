@@ -64,7 +64,7 @@ API tokens authenticate external applications, automated microservices, and scri
 - **`denied_tables`**: Optional denylist. Any query referencing tables in this list is blocked immediately.
 
 ### Token Transport Security & Ephemeral Tickets (VDB-SEC-03)
-- **RFC 6750 Compliance**: API tokens in query strings (`?token=...`) are rejected on sensitive endpoints (`POST /query`, `/batch`, `/exec`) with `401 QUERY_TOKEN_NOT_PERMITTED` to eliminate leakage via browser history, proxy access logs, and `Referer` headers.
+- **RFC 6750 Compliance**: API tokens in query strings (`?token=...`) are strictly prohibited across all endpoints (including streaming and media) with `401 QUERY_TOKEN_NOT_PERMITTED` to eliminate leakage via browser history, proxy access logs, and `Referer` headers.
 - **One-Time Tickets**: Where Authorization headers cannot be transmitted (SSE `EventSource`, `<img src="...">`, `<audio src="...">`), clients exchange their long-lived API token for an ephemeral, single-use ticket via `POST /v1/databases/:id/tickets`. Tickets expire in 60 seconds and are scoped strictly to the target database and route.
 - **Internal Binary Avatars**: Profile avatars are stored as binary files on the filesystem (`data/storage/avatars/`) after strict magic byte validation (PNG, JPEG, WebP) with a 10MB limit. External URLs and new data URIs are disallowed to prevent third-party tracking pixels and metadata database bloat. Legacy URLs remain backward compatible.
 

@@ -189,29 +189,14 @@ export class VanillaDatabase {
     return json.data;
   }
 
-  // 5. Realtime SSE Subscription
+  // 5. Realtime SSE Subscription (VDB-SEC-03 Compliant)
   subscribe(
     callback: (event: RealtimeEventPayload) => void,
     tableOrOptions?: string | { table?: string; ticket?: string }
   ): () => void {
     const base = this.getBaseUrl();
     const table = typeof tableOrOptions === 'string' ? tableOrOptions : tableOrOptions?.table;
-    const ticket = typeof tableOrOptions === 'object' ? tableOrOptions?.ticket : undefined;
-
-    let sseUrl = `${base}/realtime`;
-    const params = new URLSearchParams();
-    if (ticket) {
-      params.set('ticket', ticket);
-    } else if (this.token) {
-      params.set('token', this.token);
-    }
-    if (table) {
-      params.set('table', table);
-    }
-    const qs = params.toString();
-    if (qs) {
-      sseUrl += `?${qs}`;
-    }
+    const initialTicket = typeof tableOrOptions === 'object' ? tableOrOptions?.ticket : undefined;
 
     const EventSourceImpl =
       typeof EventSource !== 'undefined'
@@ -222,28 +207,66 @@ export class VanillaDatabase {
       throw new Error('EventSource is not available in this environment');
     }
 
-    const es = new EventSourceImpl(sseUrl);
+    let es: any = null;
+    let isClosed = false;
 
-    es.onmessage = (event: MessageEvent) => {
-      try {
-        const payload: RealtimeEventPayload = JSON.parse(event.data);
-        if (payload.type !== 'ping') {
-          callback(payload);
-        }
-      } catch {}
-    };
+    const connectWithTicket = (ticketToUse?: string) => {
+      if (isClosed) return;
+      let sseUrl = `${base}/realtime`;
+      const params = new URLSearchParams();
+      if (ticketToUse) {
+        params.set('ticket', ticketToUse);
+      }
+      if (table) {
+        params.set('table', table);
+      }
+      const qs = params.toString();
+      if (qs) {
+        sseUrl += `?${qs}`;
+      }
 
-    ['insert', 'update', 'delete', 'schema'].forEach((eventType) => {
-      es.addEventListener(eventType, (event: any) => {
+      es = new EventSourceImpl(sseUrl);
+
+      es.onmessage = (event: MessageEvent) => {
         try {
           const payload: RealtimeEventPayload = JSON.parse(event.data);
-          callback(payload);
+          if (payload.type !== 'ping') {
+            callback(payload);
+          }
         } catch {}
+      };
+
+      ['insert', 'update', 'delete', 'schema'].forEach((eventType) => {
+        es.addEventListener(eventType, (event: any) => {
+          try {
+            const payload: RealtimeEventPayload = JSON.parse(event.data);
+            callback(payload);
+          } catch {}
+        });
       });
-    });
+    };
+
+    if (initialTicket) {
+      connectWithTicket(initialTicket);
+    } else if (this.token) {
+      // Auto-provision ephemeral single-use ticket so master API token is never exposed in query string
+      this.createTicket({ route: 'realtime' })
+        .then((t) => {
+          connectWithTicket(t.ticket);
+        })
+        .catch((err) => {
+          console.error('[VanillaDB] Failed to acquire ephemeral ticket for realtime stream:', err);
+        });
+    } else {
+      // Fallback for session-authenticated cookie environments
+      connectWithTicket();
+    }
 
     return () => {
-      es.close();
+      isClosed = true;
+      if (es) {
+        es.close();
+      }
     };
   }
 
@@ -283,6 +306,11 @@ export class VanillaDatabase {
     const base = this.url.split('/v1/')[0];
     const ticketParam = ticket ? `?ticket=${encodeURIComponent(ticket)}` : '';
     return `${base}/v1/files/${fileId}/view${ticketParam}`;
+  }
+
+  async getFileUrlWithTicket(fileId: string): Promise<string> {
+    const { ticket } = await this.createTicket({ route: 'view' });
+    return this.getFileUrl(fileId, ticket);
   }
 
   async uploadFile(fileData: Blob | Buffer | Uint8Array, fileName: string, mimeType?: string): Promise<FileRecord> {

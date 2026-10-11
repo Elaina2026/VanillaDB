@@ -189,10 +189,14 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
             }
 
             const queryToken = (req.query as any)?.token;
-            if (queryToken && typeof queryToken === 'string' && !req.headers.authorization) {
-              reply.header('Deprecation', 'true');
-              reply.header('Warning', '299 - "API token in query string is deprecated. Use one-time tickets from POST /v1/databases/:databaseId/tickets instead."');
-              req.headers.authorization = `Bearer ${queryToken}`;
+            if (queryToken && typeof queryToken === 'string') {
+              return reply.status(401).send({
+                success: false,
+                error: {
+                  code: 'QUERY_TOKEN_NOT_PERMITTED',
+                  message: 'API token in query string is strictly prohibited. Use "Authorization: Bearer <token>" header or one-time tickets (?ticket=...) from POST /v1/databases/:databaseId/tickets.',
+                },
+              });
             }
 
             if (!req.headers.authorization && req.cookies?.vdb_session) {
@@ -807,6 +811,16 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/databases/:databaseId/realtime', {
     preHandler: async (req, reply) => {
       const queryToken = (req.query as any)?.token;
+      if (queryToken && typeof queryToken === 'string') {
+        return reply.status(401).send({
+          success: false,
+          error: {
+            code: 'QUERY_TOKEN_NOT_PERMITTED',
+            message: 'API token in query string is strictly prohibited. Use "Authorization: Bearer <token>" header or one-time tickets (?ticket=...) from POST /v1/databases/:databaseId/tickets.',
+          },
+        });
+      }
+
       const queryTicket = (req.query as any)?.ticket;
       const targetDbId = (req.params as any).databaseId;
 
@@ -822,12 +836,6 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
             error: { code: 'INVALID_OR_EXPIRED_TICKET', message: 'One-time ticket is invalid, expired, or already used' },
           });
         }
-      }
-
-      if (queryToken && typeof queryToken === 'string' && !req.headers.authorization) {
-        reply.header('Deprecation', 'true');
-        reply.header('Warning', '299 - "API token in query string is deprecated. Use one-time tickets from POST /v1/databases/:databaseId/tickets instead."');
-        req.headers.authorization = `Bearer ${queryToken}`;
       }
 
       // Allow session cookie authentication for SSE with membership verification
@@ -865,12 +873,6 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
       'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
     };
-    if (reply.getHeader('deprecation')) {
-      sseHeaders['Deprecation'] = String(reply.getHeader('deprecation'));
-    }
-    if (reply.getHeader('warning')) {
-      sseHeaders['Warning'] = String(reply.getHeader('warning'));
-    }
 
     reply.raw.writeHead(200, sseHeaders);
 

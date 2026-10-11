@@ -85,16 +85,12 @@ describe('Task 1: Query Token Restriction & One-Time Tickets Suite', () => {
       expect(json.success).toBe(true);
     });
 
-    it('should allow ?token= with Deprecation and Warning headers on allowed media/stream routes', async () => {
-      const controller = new AbortController();
-      const res = await fetch(`http://127.0.0.1:${serverPort}/v1/databases/${testDbId}/realtime?token=${testToken}`, {
-        signal: controller.signal,
-      });
-
-      // Headers indicate deprecation
-      expect(res.headers.get('deprecation')).toBe('true');
-      expect(res.headers.get('warning')).toContain('API token in query string is deprecated');
-      controller.abort();
+    it('should strictly reject ?token= with 401 QUERY_TOKEN_NOT_PERMITTED on media/stream routes', async () => {
+      const res = await fetch(`http://127.0.0.1:${serverPort}/v1/databases/${testDbId}/realtime?token=${testToken}`);
+      expect(res.status).toBe(401);
+      const json = await res.json();
+      expect(json.success).toBe(false);
+      expect(json.error.code).toBe('QUERY_TOKEN_NOT_PERMITTED');
     });
   });
 

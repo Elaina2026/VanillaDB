@@ -42,7 +42,7 @@ Tổng hợp các lỗi vận hành thường gặp, hướng dẫn chẩn đoá
   - Đợi chu kỳ bước thời gian 30 giây tiếp theo để nhập mã mới.
 
 ### 1.7. Lỗi `QUERY_TOKEN_NOT_PERMITTED` (HTTP 401)
-- **Nguyên nhân**: Truyền API token qua chuỗi truy vấn URL (`?token=...`) vào các điểm cuối thay đổi dữ liệu hoặc truy vấn (`POST /query`, `/batch`, `/exec`).
+- **Nguyên nhân**: Truyền API token qua chuỗi truy vấn URL (`?token=...`). Token trong URL bị cấm triệt để trên toàn bộ các route (kể cả stream/media) theo chuẩn RFC 6750.
 - **Cách khắc phục**:
   - Chuyển các kịch bản curl hoặc ứng dụng ngoài sang dùng tiêu đề chuẩn:
     ```bash

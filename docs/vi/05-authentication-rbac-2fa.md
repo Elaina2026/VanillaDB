@@ -64,7 +64,7 @@ API Token cho phép ứng dụng bên ngoài, dịch vụ tự động hóa và 
 - **`denied_tables`**: Danh sách bảng cấm. Mọi truy vấn vào bảng trong danh sách này đều bị chặn đứng.
 
 ### An toàn Vận chuyển Token & Vé Dùng một lần (VDB-SEC-03)
-- **Chuẩn RFC 6750**: Cấm truyền token qua chuỗi truy vấn URL (`?token=...`) trên các điểm cuối nhạy cảm (`POST /query`, `/batch`, `/exec`), hệ thống trả về `401 QUERY_TOKEN_NOT_PERMITTED` nhằm triệt tiêu nguy cơ rò rỉ token qua lịch sử trình duyệt, proxy log và header `Referer`.
+- **Chuẩn RFC 6750**: Cấm truyền token qua chuỗi truy vấn URL (`?token=...`) trên toàn bộ các route (kể cả stream/media), hệ thống trả về `401 QUERY_TOKEN_NOT_PERMITTED` nhằm triệt tiêu nguy cơ rò rỉ token qua lịch sử trình duyệt, proxy log và header `Referer`.
 - **One-Time Tickets**: Ở các vị trí không thể truyền Authorization header (như `EventSource` của SSE, thẻ `<img src="...">`, thẻ `<audio src="...">`), client đổi token lấy vé tạm thời qua `POST /v1/databases/:id/tickets`. Vé có thời hạn 60 giây, chỉ dùng được 1 lần và giới hạn phạm vi chặt chẽ theo database và route.
 - **Hệ thống Ảnh đại diện Nội bộ**: Ảnh đại diện người dùng được lưu trữ nhị phân trực tiếp trên hệ thống tệp (`data/storage/avatars/`) sau khi xác thực định dạng qua magic bytes (PNG, JPEG, WebP) và giới hạn 10MB. Hệ thống chặn URL ngoài và data URI mới để phòng ngừa tracking pixel và tránh phình cơ sở dữ liệu metadata. Các tài khoản cũ giữ nguyên tương thích ngược.
 
