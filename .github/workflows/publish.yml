@@ -24,13 +24,20 @@ jobs:
     - name: Build TypeScript SDK
       run: |
         npm install
-        npm run build --prefix sdk/typescript
+        npx tsc -p sdk/typescript/tsconfig.json
+        ls -la sdk/typescript/dist
 
-    - name: Publish to NPM
+    - name: Check NPM Secret and Publish
       working-directory: sdk/typescript
       run: |
+        if [ -z "$NODE_AUTH_TOKEN" ]; then
+          echo "::warning ::NPM_TOKEN / NODE_AUTH_TOKEN secret is not configured in repository settings. Skipping npm publish."
+          exit 0
+        fi
         echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
-        npm publish --access public --no-git-checks
+        echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+        [ -n "$NPM_CONFIG_USERCONFIG" ] && echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > "$NPM_CONFIG_USERCONFIG"
+        npm publish --access public --no-git-checks --verbose
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
