@@ -14,14 +14,14 @@
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.8-3178c6.svg?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
   <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/Version-1.3.3-ea580c.svg?style=flat-square" alt="Version 1.3.3" /></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/Tests-245%20passed-22c55e.svg?style=flat-square" alt="245 Tests Passed" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Version-1.3.4-ea580c.svg?style=flat-square" alt="Version 1.3.4" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Tests-248%20passed-22c55e.svg?style=flat-square" alt="248 Tests Passed" /></a>
 </p>
 
 <p align="center">
   <strong>[ <a href="#overview">Overview</a> ]</strong> &bull;
   <strong>[ <a href="README.vi.md">Phiên bản Tiếng Việt</a> ]</strong> &bull;
-  <strong>[ <a href="#architecture">Architecture</a> ]</strong> &bull;
+  <strong>[ <a href="ARCHITECTURE.md">System Architecture</a> ]</strong> &bull;
   <strong>[ <a href="#key-capabilities">Key Capabilities</a> ]</strong> &bull;
   <strong>[ <a href="#quickstart">Quickstart</a> ]</strong> &bull;
   <strong>[ <a href="SECURITY.md">Security Policy</a> ]</strong> &bull;
@@ -113,6 +113,20 @@ Rather than running monolithic database clusters for every client, project, or m
 ### <img src="https://api.iconify.design/lucide:hard-drive.svg?color=%238b5cf6" width="20" height="20" align="absmiddle" /> Media Assets & HTTP 206 Streaming
 - Database-scoped file storage with transparent chunked encryption.
 - HTTP 206 Partial Content range requests for audio and video scrubbing.
+
+### <img src="https://api.iconify.design/lucide:clock.svg?color=%23f59e0b" width="20" height="20" align="absmiddle" /> Schedules & Multi-Task Chaining Engine
+- **5-Part Cron Scheduler:** Industrial-grade cron parser (`* * * * *`) supporting step intervals, ranges, and comma lists.
+- **Ordered Task Pipeline:** Execute sequential arrays of tasks: `send_command` (SQL), `run_maintenance` (`wal_checkpoint`, `vacuum`, `optimize`, `reindex`), `create_backup`, `trigger_webhook`, and `export_data`.
+- **Fault-Tolerant Automation:** Configurable `time_offset` staging delays, `continue_on_failure` bypass, and `only_when_online` state validation.
+
+### <img src="https://api.iconify.design/lucide:history.svg?color=%2306b6d4" width="20" height="20" align="absmiddle" /> Realtime Activity Timeline & Audit Stream
+- Unified audit and operational event aggregation across all tenant databases (`/api/admin/databases/:id/activity`).
+- Live event streaming and filtering by category, status, actor, and IP address with pause/resume controls.
+
+### <img src="https://api.iconify.design/lucide:ticket.svg?color=%23ec4899" width="20" height="20" align="absmiddle" /> RFC 6750 Ephemeral Single-Use Tickets (VDB-SEC-03)
+- Complete prohibition of token exposure in query parameters across all write and query routes.
+- 60-second single-use tickets (`POST /v1/databases/:id/tickets`) for secure media streaming and SSE connection handshakes.
+- Memory-cached instant invalidation upon consumption.
 
 ### <img src="https://api.iconify.design/lucide:layout.svg?color=%233178c6" width="20" height="20" align="absmiddle" /> Production Landing Page & Enterprise Dashboard
 - **Turso-Inspired Landing Page:** Production-ready public landing page with 6 architectural pillars, tabbed code switcher (per-tenant, per-agent, per-user), real-time TypeScript/SQL syntax highlighter, feature grid, and smooth navigation exit transitions.
@@ -342,10 +356,10 @@ VanillaDatabase features a comprehensive shortcut matrix accessible from anywher
 The test suite runs with Vitest and executes end-to-end assertions against the server instance:
 
 ```bash
-# Run complete test suite (134 integration & unit tests across 8 test suites)
+# Run complete test suite (248 integration & unit tests across 16 test suites)
 npm test
 
-# Run security and pentesting suites (data leak, zero-day & auth tests)
+# Run security and pentesting suites (data leak, zero-day, auth & token tickets)
 npm run test:security
 
 # Run TypeScript typecheck
@@ -355,7 +369,7 @@ npm run typecheck
 npm run benchmark
 ```
 
-All 134 tests cover:
+All 248 tests cover:
 - Multi-host cluster node registration, spillover triggers, and zero-loss snapshot migrations.
 - Data leakage prevention and credential redaction (OWASP Top 10 API Security).
 - Zero-day exploit resilience (DNS rebinding, decimal/hex IP SSRF, SQL prefix schema escapes).
@@ -363,6 +377,9 @@ All 134 tests cover:
 - 2FA TOTP activation, backup codes lifecycle, and step-up login challenges.
 - Session revocation on credential update (VDB-SEC-01).
 - Monotonic time-step TOTP replay rejection (VDB-SEC-02).
+- Complete prohibition of token exposure in query parameters and ephemeral ticket lifecycle (VDB-SEC-03).
+- Isolated binary avatar uploads, magic bytes validation, and path traversal security.
+- Pterodactyl-inspired multi-task schedule execution pipelines and cron intervals.
 - AES-256-GCM envelope encryption and PBKDF2 key derivation.
 - SQL syntax translation from MySQL, PostgreSQL, CSV, and NDJSON.
 - Transactional batch executions and rollback safety.
@@ -372,7 +389,10 @@ All 134 tests cover:
 
 ## <img src="https://api.iconify.design/lucide:book-open.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Documentation Suite
 
-For detailed technical guides, visit the documentation directories:
+For exhaustive technical reference and system designs:
+- **Comprehensive System Architecture**: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- **Đặc tả Kiến trúc Hệ thống Toàn diện (VI)**: [`ARCHITECTURE.vi.md`](ARCHITECTURE.vi.md)
+- **Documentation Hub**: [docs/README.md](docs/README.md)
 
 - **Documentation Hub**: [docs/README.md](docs/README.md)
 - **English Guides**:

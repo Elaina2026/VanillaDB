@@ -117,13 +117,16 @@
           return (
             str.indexOf("reading 'startTime'") !== -1 ||
             str.indexOf("reading 'processingStart'") !== -1 ||
-            str.indexOf('reportAllChanges') !== -1
+            str.indexOf('reportAllChanges') !== -1 ||
+            str.indexOf("reading 'M_ID'") !== -1 ||
+            str.indexOf('M_ID') !== -1 ||
+            str.indexOf('200.js') !== -1
           );
         }
 
         var prevOnError = window.onerror;
         window.onerror = function(message, source, lineno, colno, error) {
-          if (shouldSuppress(error, message)) {
+          if (shouldSuppress(error, message) || (typeof source === 'string' && source.indexOf('200.js') !== -1)) {
             return true;
           }
           if (typeof prevOnError === 'function') {
@@ -135,7 +138,7 @@
         window.addEventListener(
           'error',
           function(event) {
-            if (shouldSuppress(event.error, event.message)) {
+            if (shouldSuppress(event.error, event.message) || (event.filename && event.filename.indexOf('200.js') !== -1)) {
               event.preventDefault();
               event.stopImmediatePropagation();
               return true;
@@ -150,6 +153,7 @@
             if (shouldSuppress(event.reason, event.reason && event.reason.message)) {
               event.preventDefault();
               event.stopImmediatePropagation();
+              return true;
             }
           },
           true

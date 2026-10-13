@@ -242,3 +242,124 @@ Gửi yêu cầu kiểm tra song song (`Promise.allSettled`) đến tất cả c
 
 Tạo snapshot nhất quán tức thì bằng `VACUUM INTO`, phát luồng dữ liệu sang node đích, kiểm tra toàn vẹn mã băm và cập nhật bản ghi điều phối trong cơ sở dữ liệu hệ thống.
 
+---
+
+## 5. API Vé Truy cập Ngắn hạn (RFC 6750 Single-Use Streaming)
+
+Nhằm ngăn ngừa lộ token truy cập dài hạn qua chuỗi truy vấn URL khi phát luồng Server-Sent Events hoặc tệp âm thanh/video, ứng dụng khách yêu cầu cấp vé truy cập một lần.
+
+### 5.1. Cấp vé truy cập ngắn hạn
+- **POST** `/v1/databases/:databaseId/tickets`
+- **Tiêu đề**: `Authorization: Bearer <token>`
+- **Phản hồi**:
+```json
+{
+  "success": true,
+  "ticket": "vdb_ticket_9k3f8b1a4c2e7d5f0b8a1c3e5d7f9a2b",
+  "expiresAt": 1788854460000,
+  "expiresInSeconds": 60
+}
+```
+
+Vé tự động hết hạn sau 60 giây và bị xóa ngay lập tức khỏi bộ nhớ đệm sau lần sử dụng đầu tiên tại:
+- `GET /v1/databases/:databaseId/realtime?ticket=vdb_ticket_...`
+- `GET /v1/files/:fileId/view?ticket=vdb_ticket_...`
+
+---
+
+## 6. API Quản lý Lịch trình Tác vụ (Schedules Automation)
+
+### 6.1. Danh sách lịch trình
+- **GET** `/api/admin/databases/:databaseId/schedules`
+- **Phản hồi**:
+```json
+{
+  "success": true,
+  "schedules": [
+    {
+      "id": "sch_1a2b3c",
+      "database_id": "db_BIcZhxUYK83SMS2r",
+      "name": "Bảo trì định kỳ & Sao lưu",
+      "cron_minute": "0",
+      "cron_hour": "*",
+      "cron_day_of_month": "*",
+      "cron_month": "*",
+      "cron_day_of_week": "*",
+      "is_active": 1,
+      "only_when_online": 1,
+      "tasks": [
+        {
+          "id": "tsk_01",
+          "sequence": 0,
+          "action": "run_maintenance",
+          "payload": "wal_checkpoint",
+          "time_offset": 0,
+          "continue_on_failure": 0
+        },
+        {
+          "id": "tsk_02",
+          "sequence": 1,
+          "action": "create_backup",
+          "payload": "",
+          "time_offset": 5,
+          "continue_on_failure": 1
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 6.2. Tạo lịch trình mới
+- **POST** `/api/admin/databases/:databaseId/schedules`
+- **Dữ liệu gửi**:
+```json
+{
+  "name": "Dọn dẹp phiên hết hạn",
+  "cron_minute": "30",
+  "cron_hour": "2",
+  "cron_day_of_month": "*",
+  "cron_month": "*",
+  "cron_day_of_week": "*",
+  "is_active": true,
+  "only_when_online": true,
+  "tasks": [
+    {
+      "action": "send_command",
+      "payload": "DELETE FROM sessions WHERE expires_at < unixepoch();",
+      "time_offset": 0,
+      "continue_on_failure": false
+    }
+  ]
+}
+```
+
+### 6.3. Kích hoạt thực thi lịch trình ngay lập tức
+- **POST** `/api/admin/databases/:databaseId/schedules/:scheduleId/execute`
+- Kích hoạt quy trình chạy ngầm thực thi các tác vụ tuần tự ngay lập tức.
+
+---
+
+## 7. API Dòng Thời gian Hoạt động & Nhật ký Kiểm toán
+
+### 7.1. Truy vấn dòng hoạt động hợp nhất
+- **GET** `/api/admin/databases/:databaseId/activity?search=&limit=80`
+- **Phản hồi**:
+```json
+{
+  "success": true,
+  "activity": [
+    {
+      "id": "act_88f91c",
+      "action": "schedule execute",
+      "username": "admin",
+      "created_at": 1788854400000,
+      "status": "success",
+      "ip_address": "127.0.0.1",
+      "details": "Kích hoạt lịch trình Bảo trì định kỳ & Sao lưu"
+    }
+  ]
+}
+```
+
+

@@ -143,3 +143,45 @@ Quản trị viên có thể tái cân bằng dung lượng lưu trữ trên to�
 4. **Cập nhật Siêu dữ liệu**: Gateway cập nhật bảng ghi hệ thống: `UPDATE databases SET node_id = ? WHERE id = ?`.
 5. **Giải phóng Ổ đĩa Nguồn**: Node nguồn xóa tệp tin cũ để giải phóng dung lượng đĩa ngay lập tức.
 
+---
+
+## 6. Động cơ Lập lịch Tác vụ Đa bước (Schedules Execution Pipeline)
+
+VanillaDatabase tích hợp động cơ quản lý lịch trình linh hoạt lấy cảm hứng từ các hệ thống điều khiển công nghiệp:
+- **Cú pháp Cron 5 thành phần**: Phân tích biểu thức cron tiêu chuẩn (`phút giờ ngày_trong_tháng tháng ngày_trong_tuần`) hỗ trợ ký tự đại diện, bước nhảy, danh sách và khoảng giá trị.
+- **Chuỗi Tác vụ Tuần tự**: Mỗi lịch trình có thể thực thi danh sách các tác vụ có thứ tự:
+  1. `send_command`: Thực thi câu lệnh SQL hoặc khối truy vấn tham số hóa.
+  2. `run_maintenance`: Kích hoạt quy trình bảo trì động cơ (`wal_checkpoint`, `vacuum`, `optimize`, `reindex`).
+  3. `create_backup`: Tự động tạo bản sao lưu snapshot mã hóa theo thời điểm.
+  4. `trigger_webhook`: Bắn webhook thời gian thực tới hệ thống giám sát bên ngoài.
+  5. `export_data`: Xuất toàn bộ lược đồ và dữ liệu phục vụ khắc phục thảm họa.
+- **Tùy chọn Điều khiển**: Thiết lập độ trễ thực thi theo từng tác vụ (`time_offset`), cơ chế chịu lỗi (`continue_on_failure`), và điều kiện chỉ chạy khi cơ sở dữ liệu hoạt động bình thường (`only_when_online`).
+
+---
+
+## 7. Dòng thời gian Hoạt động & Dòng Kiểm toán Thời gian thực
+
+Mọi hành động thực thi trên cơ sở dữ liệu tenant đều được ghi nhận vào nhật ký vận hành và nhật ký kiểm toán có cấu trúc:
+- **Điểm cuối**: `GET /api/admin/databases/:id/activity?search=...&limit=80`
+- **Hợp nhất Dữ liệu**: Truy vấn và chuẩn hóa cả nhật ký kiểm toán hệ thống lẫn sự kiện cơ sở dữ liệu thành đối tượng `DatabaseActivityItem` thống nhất kèm mốc thời gian, tên tài khoản thực hiện, danh mục nhãn màu sắc (`schedule create`, `backup restore`, `query execute`), trạng thái lỗi và địa chỉ IP của máy khách.
+- **Giao diện Giám sát Trực tiếp**: Hỗ trợ tự động tải định kỳ với nút tạm dừng/tiếp tục và làm mới thủ công trên giao diện.
+
+---
+
+## 8. Hệ thống Vé Truy cập Ngắn hạn (RFC 6750 Ephemeral Ticket System)
+
+Nhằm ngăn chặn rò rỉ token truy cập qua lịch sử trình duyệt web, nhật ký proxy HTTP và tiêu đề `Referer`:
+- Cấm hoàn toàn việc truyền Bearer Token qua chuỗi truy vấn URL (`?token=...`) trên toàn bộ các tuyến dữ liệu (`VDB-SEC-03`).
+- Vé truy cập ngắn hạn dùng một lần (`vdb_ticket_*`) được cấp qua `POST /v1/databases/:databaseId/tickets` dành riêng cho việc phát luồng media (`/v1/files/:id/view`) và kết nối luồng sự kiện thời gian thực Server-Sent Events (`/v1/databases/:id/realtime`).
+- Vé tự động hủy sau 60 giây và bị xóa ngay khỏi bộ nhớ đệm sau lần sử dụng đầu tiên.
+
+---
+
+## 9. Đường ống Quản lý Ảnh đại diện Nhị phân Nội bộ
+
+Ảnh đại diện người dùng được xử lý qua hệ thống lưu trữ nhị phân cô lập:
+- **Lưu trữ**: Lưu tại `data/storage/avatars/:userId.<ext>` dưới dạng tài nguyên hệ thống, không tính vào hạn mức dung lượng đĩa của cơ sở dữ liệu tenant.
+- **Xác thực**: Điểm cuối tải lên (`POST /api/auth/profile/avatar`) kiểm tra chữ ký nhị phân (magic bytes) đối với định dạng PNG, JPEG, WebP với dung lượng tối đa 10MB.
+- **Phân phối**: Cung cấp qua `GET /api/auth/avatar/:userId` đi kèm các tiêu đề bảo mật nghiêm ngặt (`nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, và `Cross-Origin-Resource-Policy: cross-origin`).
+
+

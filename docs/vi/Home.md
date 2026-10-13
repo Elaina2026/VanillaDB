@@ -6,6 +6,7 @@ Chào mừng bạn đến với hệ thống tài liệu kỹ thuật chi tiết
 
 ## Điều hướng & Lựa chọn ngôn ngữ
 
+- **Đặc tả Kiến trúc Chi tiết**: [ARCHITECTURE.vi.md](../../ARCHITECTURE.vi.md)
 - **Trung tâm tài liệu**: [Central Hub](../README.md)
 - **Phiên bản Tiếng Anh**: [English Documentation](../en/Home.md)
 - **Mã nguồn dự án**: [GitHub Repository](https://github.com/Elaina2026/VanillaDB)

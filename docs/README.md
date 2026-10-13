@@ -14,6 +14,13 @@ Trung tâm tài liệu kỹ thuật và cẩm nang vận hành chính thức c�
 
 ---
 
+## Core Specifications / Đặc tả kỹ thuật cốt lõi
+
+- **Comprehensive System Architecture (EN)**: [`ARCHITECTURE.md`](../ARCHITECTURE.md)
+- **Đặc tả Kiến trúc Hệ thống Toàn diện (VI)**: [`ARCHITECTURE.vi.md`](../ARCHITECTURE.vi.md)
+
+---
+
 ## Technical Modules / Các học phần tài liệu
 
 | Module | Title (English) | Chuyên đề (Tiếng Việt) | English | Tiếng Việt |

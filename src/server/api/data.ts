@@ -1006,6 +1006,12 @@ export const dataRoutes: FastifyPluginAsync = async (fastify) => {
 
     const filePath = storageService.getStoragePath(file.database_id, file.filename);
     if (!fs.existsSync(filePath)) {
+      const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+      const dbRow = metaDb.prepare('SELECT node_id FROM databases WHERE id = ?').get(file.database_id) as any;
+      if (dbRow?.node_id && dbRow.node_id !== 'local' && dbRow.node_id !== config.nodeId) {
+        const { clusterService } = await import('../services/cluster.js');
+        return clusterService.proxyToNode(dbRow.node_id, req, reply);
+      }
       return reply.status(404).send({ success: false, error: { code: 'FILE_MISSING_DISK', message: 'File not found on disk' } });
     }
 

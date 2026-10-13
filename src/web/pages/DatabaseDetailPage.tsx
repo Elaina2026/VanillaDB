@@ -60,6 +60,8 @@ import { DatabaseOperationsTimelineChart } from '../components/MetricsCharts.js'
 import { ErdCanvas } from '../components/ErdCanvas.js';
 import { StorageUploadManager } from '../components/StorageUploadManager.js';
 import { UserAvatar } from '../components/UserAvatar.js';
+import { DatabaseSchedules } from '../components/DatabaseSchedules.js';
+import { DatabaseActivity } from '../components/DatabaseActivity.js';
 import { exportQueryResults } from '../lib/exportUtils.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { useI18n } from '../hooks/useI18n.js';
@@ -84,21 +86,23 @@ import {
 
 export const DatabaseDetailPage: React.FC<{
   databaseId: string;
-  initialTab?: 'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'jobs' | 'backups' | 'members' | 'settings';
+  initialTab?: 'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'jobs' | 'backups' | 'members' | 'settings' | 'activity';
   onTabChange?: (tab: string) => void;
   onBack: () => void;
   onOpenCreateToken: (dbId: string) => void;
 }> = ({ databaseId, initialTab = 'overview', onTabChange, onBack, onOpenCreateToken }) => {
   const { user: currentUser } = useAuth();
   const { language, t } = useI18n();
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'jobs' | 'backups' | 'members' | 'settings'>(initialTab);
+  const normalizedInitialTab = initialTab === 'analytics' ? 'overview' : initialTab;
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'tables' | 'editor' | 'schema' | 'storage' | 'import-export' | 'realtime' | 'webhooks' | 'api' | 'tokens' | 'jobs' | 'backups' | 'members' | 'settings' | 'activity'>(normalizedInitialTab);
   const queryClient = useQueryClient();
 
   const [isImportExportOpen, setIsImportExportOpen] = useState(false);
 
   useEffect(() => {
-    if (initialTab && initialTab !== activeTab) {
-      setActiveTab(initialTab as any);
+    const targetTab = initialTab === 'analytics' ? 'overview' : initialTab;
+    if (targetTab && targetTab !== activeTab) {
+      setActiveTab(targetTab as any);
     }
   }, [initialTab]);
 
@@ -120,7 +124,7 @@ export const DatabaseDetailPage: React.FC<{
   const { data: storageStats, isLoading: isStorageLoading, refetch: refetchStorageStats } = useQuery<DatabaseStorageStats>({
     queryKey: ['dbStorageStats', databaseId],
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/storage-stats`),
-    enabled: activeTab === 'analytics' || activeTab === 'overview',
+    enabled: activeTab === 'overview',
     refetchInterval: 30000,
     staleTime: 25000,
     retry: 1,
@@ -129,7 +133,7 @@ export const DatabaseDetailPage: React.FC<{
   const { data: metricsStats, isLoading: isMetricsLoading, refetch: refetchMetrics } = useQuery<DatabaseMetricsStats>({
     queryKey: ['dbMetricsStats', databaseId],
     queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/metrics`),
-    enabled: activeTab === 'analytics',
+    enabled: activeTab === 'overview',
     refetchInterval: 30000,
     staleTime: 25000,
     retry: 1,
@@ -565,55 +569,6 @@ export const DatabaseDetailPage: React.FC<{
   const [vbSortDir, setVbSortDir] = useState<'ASC' | 'DESC'>('ASC');
   const [vbLimit, setVbLimit] = useState('50');
 
-  // Scheduled Jobs state
-  const { data: scheduledJobs = [], refetch: refetchJobs } = useQuery<ScheduledJobRecord[]>({
-    queryKey: ['dbJobs', databaseId],
-    queryFn: () => apiRequest(`/api/admin/databases/${databaseId}/jobs`),
-    enabled: activeTab === 'jobs',
-  });
-  const [isCreateJobOpen, setIsCreateJobOpen] = useState(false);
-  const [jobName, setJobName] = useState('');
-  const [jobCron, setJobCron] = useState('@hourly');
-  const [jobSql, setJobSql] = useState('VACUUM;');
-
-  const createJobMutation = useMutation({
-    mutationFn: (payload: { name: string; cron_expression: string; sql_query: string }) =>
-      apiRequest(`/api/admin/databases/${databaseId}/jobs`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      }),
-    onSuccess: () => {
-      setIsCreateJobOpen(false);
-      refetchJobs();
-      showSuccess(t('jobs.createdSuccess', 'Scheduled job created successfully'));
-    },
-    onError: (err: any) => {
-      showError(err.message || 'Failed to create scheduled job');
-    },
-  });
-
-  const runJobMutation = useMutation({
-    mutationFn: (jobId: string) => apiRequest(`/api/admin/jobs/${jobId}/run`, { method: 'POST' }),
-    onSuccess: () => {
-      refetchJobs();
-      showSuccess(t('jobs.executedSuccess', 'Job executed successfully'));
-    },
-    onError: (err: any) => {
-      showError(err.message || 'Failed to run job');
-    },
-  });
-
-  const deleteJobMutation = useMutation({
-    mutationFn: (jobId: string) => apiRequest(`/api/admin/jobs/${jobId}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      refetchJobs();
-      showSuccess(t('jobs.deletedSuccess', 'Job deleted successfully'));
-    },
-    onError: (err: any) => {
-      showError(err.message || 'Failed to delete job');
-    },
-  });
-
   // Modals for Table tab
   const [isInsertModalOpen, setIsInsertModalOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<Record<string, any> | null>(null);
@@ -935,14 +890,14 @@ export const DatabaseDetailPage: React.FC<{
   useEffect(() => {
     const detailTabsList: Array<typeof activeTab> = [
       'overview',      // 1
-      'analytics',     // 2
-      'tables',        // 3
-      'editor',        // 4
+      'editor',        // 2
+      'activity',      // 3
+      'tables',        // 4
       'schema',        // 5
       'storage',       // 6
       'import-export', // 7
-      'realtime',      // 8
-      'webhooks',      // 9
+      'jobs',          // 8
+      'backups',       // 9
     ];
 
     const handleDetailKeyDown = (e: KeyboardEvent) => {
@@ -1221,8 +1176,8 @@ export const DatabaseDetailPage: React.FC<{
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="p-1.5 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground transition-colors"
-            title="Back to databases"
+            className="p-1.5 hover:bg-accent rounded-md text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            title={language === 'vi' ? 'Quay lại danh sách cơ sở dữ liệu' : 'Back to databases'}
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
@@ -1275,44 +1230,6 @@ export const DatabaseDetailPage: React.FC<{
             {formatBytes(totalDbStorage)}
           </span>
         </div>
-      </div>
-
-      {/* Mobile/Tablet Horizontal Sub-Tab Strip */}
-      <div className="md:hidden border-b border-border bg-card/60 px-3 py-1.5 overflow-x-auto flex items-center gap-1 shrink-0 no-scrollbar">
-        {[
-          { id: 'overview', label: t('db.overview', 'Overview'), icon: BarChart3 },
-          { id: 'analytics', label: t('db.analytics', 'Analytics'), icon: TrendingUp },
-          { id: 'tables', label: t('db.tables', 'Tables'), icon: TableIcon },
-          { id: 'editor', label: t('db.editor', 'SQL'), icon: Terminal },
-          { id: 'schema', label: t('db.schema', 'Schema'), icon: FileCode },
-          { id: 'storage', label: t('db.storage', 'Storage'), icon: Folder },
-          { id: 'import-export', label: t('db.importExport', 'Import/Export'), icon: ArrowUpDown },
-          { id: 'realtime', label: t('db.realtime', 'Realtime'), icon: Radio },
-          { id: 'webhooks', label: t('db.webhooks', 'Webhooks'), icon: WebhookIcon },
-          { id: 'api', label: t('db.api', 'API'), icon: Key },
-          { id: 'tokens', label: t('db.tokens', 'Tokens'), icon: Shield },
-          { id: 'jobs', label: t('db.jobs', 'Jobs'), icon: Clock },
-          { id: 'backups', label: t('db.backups', 'Backups'), icon: Archive },
-          { id: 'members', label: t('db.members', 'Members'), icon: Users },
-          { id: 'settings', label: t('db.settings', 'Settings'), icon: Sliders },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => handleTabChange(tab.id as any)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium shrink-0 transition-colors whitespace-nowrap cursor-pointer ${
-                isActive
-                  ? 'bg-blue-600 text-white font-semibold shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5 shrink-0" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
       </div>
 
       {/* Main Tab Content */}
@@ -1555,73 +1472,8 @@ export const DatabaseDetailPage: React.FC<{
                 </div>
               )}
             </div>
-          </div>
-        )}
 
-        {/* ANALYTICS & STORAGE B-TREE ALLOCATION TAB */}
-        {activeTab === 'analytics' && (
-          <div className="max-w-7xl mx-auto space-y-6">
-            {/* Top Cards for Requests & Disk Allocation */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
-                <div className="flex items-center justify-between text-muted-foreground mb-1">
-                  <span className="text-xs font-medium">{t('db.requests24h', 'Total 24h Requests')}</span>
-                  <Activity className="w-4 h-4 text-blue-500" />
-                </div>
-                <div className="text-2xl font-bold text-foreground font-mono">
-                  {metricsStats?.totalRequests?.toLocaleString() ?? 0}
-                </div>
-                <div className="text-[10px] text-muted-foreground flex justify-between mt-1">
-                  <span>Avg: {metricsStats?.avgLatencyMs ?? 0} ms</span>
-                  <span>P95: {metricsStats?.p95LatencyMs ?? 0} ms</span>
-                </div>
-              </div>
-
-              <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
-                <div className="flex items-center justify-between text-muted-foreground mb-1">
-                  <span className="text-xs font-medium">{t('db.writeOps', 'Write Operations (DML/DDL)')}</span>
-                  <TrendingUp className="w-4 h-4 text-emerald-500" />
-                </div>
-                <div className="text-2xl font-bold text-emerald-500 font-mono">
-                  {((metricsStats?.totalInsert ?? 0) + (metricsStats?.totalUpdate ?? 0) + (metricsStats?.totalDelete ?? 0)).toLocaleString()}
-                </div>
-                <div className="text-[10px] text-muted-foreground flex justify-between mt-1">
-                  <span>Ins: {metricsStats?.totalInsert ?? 0}</span>
-                  <span>Upd: {metricsStats?.totalUpdate ?? 0}</span>
-                  <span>Del: {metricsStats?.totalDelete ?? 0}</span>
-                </div>
-              </div>
-
-              <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
-                <div className="flex items-center justify-between text-muted-foreground mb-1">
-                  <span className="text-xs font-medium">{t('db.totalDiskFootprint', 'Total Disk Footprint')}</span>
-                  <HardDrive className="w-4 h-4 text-purple-500" />
-                </div>
-                <div className="text-2xl font-bold text-foreground font-mono">
-                  {formatBytes(storageStats?.totalSizeBytes ?? totalDbStorage)}
-                </div>
-                <div className="text-[10px] text-muted-foreground flex justify-between mt-1">
-                  <span>Main: {formatBytes(storageStats?.fileSizeBytes ?? stats?.fileSizeBytes ?? 0)}</span>
-                  <span>WAL: {formatBytes(storageStats?.walSizeBytes ?? stats?.walSizeBytes ?? 0)}</span>
-                </div>
-              </div>
-
-              <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
-                <div className="flex items-center justify-between text-muted-foreground mb-1">
-                  <span className="text-xs font-medium">{t('db.btreeUtilization', 'B-Tree Page Utilization')}</span>
-                  <PieChart className="w-4 h-4 text-amber-500" />
-                </div>
-                <div className="text-2xl font-bold text-foreground font-mono">
-                  {storageStats?.pageCount ? `${100 - (storageStats.fragmentationPercent || 0)}%` : '100%'}
-                </div>
-                <div className="text-[10px] text-muted-foreground flex justify-between mt-1">
-                  <span>Active: {storageStats?.activePageCount ?? activePages} pages</span>
-                  <span>Free: {storageStats?.freelistCount ?? freePages} pages</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 1. Request Operations Timeline & Breakdown Bar Chart */}
+            {/* Request Operations Timeline (24h Window) */}
             <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-3 gap-2">
                 <div>
@@ -1688,144 +1540,6 @@ export const DatabaseDetailPage: React.FC<{
                 </div>
               )}
             </div>
-
-            {/* 2. Redesigned SQLite Storage & B-Tree Page Allocation Chart */}
-            <div className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-3 gap-2">
-                <div>
-                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <HardDrive className="w-4 h-4 text-purple-500" />
-                    {t('db.sqliteStorageAlloc', 'SQLite Storage & B-Tree Page Allocation')}
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {t('db.sqliteStorageAllocDesc', 'Physical disk allocation per database page.')}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono px-2.5 py-1 bg-muted rounded border border-border text-foreground">
-                    {t('db.pageSize', 'Page Size:')} {storageStats?.pageSize || 4096} bytes
-                  </span>
-                  <span className="text-xs font-mono px-2.5 py-1 bg-muted rounded border border-border text-foreground">
-                    {t('db.pages', 'Pages:')} {storageStats?.pageCount || 0}
-                  </span>
-                </div>
-              </div>
-
-              {/* Physical Disk Allocation Visual Bar */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{t('db.physicalDiskBreakdown', 'Physical Disk Breakdown')}</span>
-                  <span className="font-mono font-bold text-foreground">
-                    {formatBytes(storageStats?.totalSizeBytes ?? totalDbStorage)} total
-                  </span>
-                </div>
-
-                <div className="h-5 w-full bg-muted rounded-md overflow-hidden flex border border-border p-0.5 gap-0.5">
-                  <div
-                    style={{
-                      width: `${(storageStats?.totalSizeBytes ?? totalDbStorage) > 0 ? (((storageStats?.fileSizeBytes ?? stats?.fileSizeBytes ?? 0) / (storageStats?.totalSizeBytes ?? totalDbStorage)) * 100) : 100}%`,
-                    }}
-                    className="bg-blue-600 h-full rounded-sm transition-all"
-                    title={`Main Database Binary: ${formatBytes(storageStats?.fileSizeBytes ?? stats?.fileSizeBytes ?? 0)}`}
-                  />
-                  <div
-                    style={{
-                      width: `${(storageStats?.totalSizeBytes ?? totalDbStorage) > 0 ? (((storageStats?.walSizeBytes ?? stats?.walSizeBytes ?? 0) / (storageStats?.totalSizeBytes ?? totalDbStorage)) * 100) : 0}%`,
-                    }}
-                    className="bg-emerald-500 h-full rounded-sm transition-all"
-                    title={`Write-Ahead Log (WAL): ${formatBytes(storageStats?.walSizeBytes ?? stats?.walSizeBytes ?? 0)}`}
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-muted-foreground pt-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-sm bg-blue-600 shrink-0" />
-                    <span>{t('db.mainDbFile', 'Main Database File')} ({formatBytes(storageStats?.fileSizeBytes ?? stats?.fileSizeBytes ?? 0)})</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-sm bg-emerald-500 shrink-0" />
-                    <span>{t('db.walFile', 'Write-Ahead Log (WAL)')} ({formatBytes(storageStats?.walSizeBytes ?? stats?.walSizeBytes ?? 0)})</span>
-                  </div>
-                  <div className="flex items-center gap-2 font-mono">
-                    <span>{t('db.fragmentation', 'Fragmentation')}:</span>
-                    <span className={`font-bold ${(storageStats?.fragmentationPercent || fragmentationPercent) > 20 ? 'text-amber-500' : 'text-emerald-500'}`}>
-                      {storageStats?.fragmentationPercent ?? fragmentationPercent}% freelist
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* B-Tree Page Matrix Grid */}
-              <div className="border border-border rounded-lg p-4 bg-muted/20 space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-foreground">{t('db.btreePageGrid', 'B-Tree Page Allocation Grid')}</span>
-                  <div className="flex items-center gap-4 text-[11px] text-muted-foreground font-mono">
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-blue-500" />
-                      Active: {storageStats?.activePageCount ?? activePages}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-muted-foreground/30" />
-                      Free: {storageStats?.freelistCount ?? freePages}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-1 bg-background border border-border rounded-md">
-                  {Array.from({ length: Math.min(storageStats?.pageCount || totalPages || 20, 200) }).map((_, i) => {
-                    const isFree = i >= (storageStats?.activePageCount ?? activePages);
-                    return (
-                      <div
-                        key={i}
-                        title={`Page #${i + 1}: ${isFree ? 'Free Page (Freelist)' : 'Active B-Tree Page'}`}
-                        className={`w-3.5 h-3.5 rounded-sm transition-colors ${
-                          isFree ? 'bg-muted-foreground/20' : 'bg-blue-500 hover:bg-blue-400'
-                        }`}
-                      />
-                    );
-                  })}
-                  {(storageStats?.pageCount || totalPages) > 200 && (
-                    <span className="text-[10px] text-muted-foreground self-center px-1 font-mono">
-                      +{(storageStats?.pageCount || totalPages) - 200} more pages
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Table & Index Storage Breakdown Table */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  {t('db.tableIndexStorageDist', 'Table & Index Storage Distribution')}
-                </h4>
-                <div className="border border-border rounded-lg overflow-x-auto">
-                  <table className="w-full text-left text-xs font-mono min-w-[400px]">
-                    <thead className="bg-muted/50 border-b border-border text-muted-foreground">
-                      <tr>
-                        <th className="py-2 px-3">{t('db.entityName', 'Entity Name')}</th>
-                        <th className="py-2 px-3">{t('common.type', 'Type')}</th>
-                        <th className="py-2 px-3 text-right">{t('common.rows', 'Rows')}</th>
-                        <th className="py-2 px-3 text-right">{t('db.indexes', 'Indexes')}</th>
-                        <th className="py-2 px-3 text-right">{t('db.estimatedSize', 'Estimated Size')}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {(storageStats?.tables || []).map((tbl) => (
-                        <tr key={tbl.name} className="hover:bg-muted/20">
-                          <td className="py-2 px-3 font-semibold text-foreground flex items-center gap-1.5">
-                            <TableIcon className="w-3.5 h-3.5 text-blue-500" />
-                            {tbl.name}
-                          </td>
-                          <td className="py-2 px-3 uppercase text-[10px] text-muted-foreground">{tbl.type}</td>
-                          <td className="py-2 px-3 text-right text-foreground font-bold">{tbl.rowCount.toLocaleString()}</td>
-                          <td className="py-2 px-3 text-right text-muted-foreground">{tbl.indexCount}</td>
-                          <td className="py-2 px-3 text-right text-muted-foreground font-mono">{formatBytes(tbl.estimatedSizeBytes)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1835,16 +1549,16 @@ export const DatabaseDetailPage: React.FC<{
             {/* Table Sidebar */}
             <div className="w-full md:w-56 bg-card border border-border rounded-lg flex flex-col shrink-0 overflow-hidden shadow-sm max-h-48 md:max-h-none">
               <div className="p-3 border-b border-border font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center justify-between">
-                <span>Tables ({schema.filter((s) => s.type === 'table').length})</span>
+                <span>{language === 'vi' ? 'Bảng dữ liệu' : 'Tables'} ({schema.filter((s) => s.type === 'table').length})</span>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setIsCreateTableOpen(true)}
-                    className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors"
-                    title="Create Table"
+                    className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                    title={language === 'vi' ? 'Tạo bảng' : 'Create Table'}
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => refetchSchema()} className="p-1 hover:bg-accent rounded transition-colors" title="Refresh Schema">
+                  <button onClick={() => refetchSchema()} className="p-1 hover:bg-accent rounded transition-colors cursor-pointer" title={language === 'vi' ? 'Làm mới bảng' : 'Refresh Schema'}>
                     <RefreshCw className="w-3 h-3 text-muted-foreground" />
                   </button>
                 </div>
@@ -2280,29 +1994,29 @@ export const DatabaseDetailPage: React.FC<{
                 : 'h-full flex flex-col space-y-3 -m-4 md:-m-6 p-4 md:p-6 overflow-hidden'
             }
           >
-            {/* Editor Console Header */}
+            {/* SQL Editor Header */}
             <div className="flex flex-wrap items-center justify-between pb-2 border-b border-border gap-2 shrink-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={handleExecuteSql}
                   disabled={isExecuting}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  Run <span className="hidden sm:inline">(Ctrl+Enter)</span>
+                  {t('editor.run', 'Run')} <span className="hidden sm:inline">(Ctrl+Enter)</span>
                 </button>
                 <button
                   onClick={handleExplainQuery}
                   disabled={isExecuting}
-                  className="px-3 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-medium transition-colors"
+                  className="px-3 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-medium transition-colors cursor-pointer"
                 >
-                  Explain Query
+                  {t('editor.explain', 'Explain Query')}
                 </button>
                 <button
                   onClick={() => setSqlText('')}
-                  className="px-3 py-1.5 bg-card border border-border hover:bg-accent text-muted-foreground rounded-md text-xs font-medium transition-colors"
+                  className="px-3 py-1.5 bg-card border border-border hover:bg-accent text-muted-foreground rounded-md text-xs font-medium transition-colors cursor-pointer"
                 >
-                  Clear
+                  {t('editor.clear', 'Clear')}
                 </button>
 
                 {/* Quick SQL Templates Dropdown */}
@@ -2347,9 +2061,9 @@ export const DatabaseDetailPage: React.FC<{
                     }
                     e.target.value = '';
                   }}
-                  className="px-2.5 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-medium transition-colors focus:outline-none"
+                  className="px-2.5 py-1.5 bg-card border border-border hover:bg-accent text-foreground rounded-md text-xs font-medium transition-colors focus:outline-none cursor-pointer"
                 >
-                  <option value="" disabled>Quick SQL Templates...</option>
+                  <option value="" disabled>{t('editor.templates', 'Quick SQL Templates...')}</option>
                   <option value="select_all">SELECT * (Limit 100)</option>
                   <option value="select_count">COUNT(*) Aggregation</option>
                   <option value="insert">INSERT Template</option>
@@ -4052,195 +3766,28 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
 
         {/* SCHEDULED JOBS TAB */}
         {activeTab === 'jobs' && (
-          <div className="max-w-5xl mx-auto space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2">
-              <div>
-                <h3 className="text-sm font-bold text-foreground">{t('jobs.title', 'Scheduled SQL Jobs (Cron)')}</h3>
-                <p className="text-xs text-muted-foreground">{t('jobs.desc', 'Automated database routines, log purges, and maintenance tasks.')}</p>
-              </div>
-              {canAdmin && (
-                <button
-                  onClick={() => setIsCreateJobOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  {t('jobs.create', 'Create Job')}
-                </button>
-              )}
-            </div>
-
-            {/* Create Job Modal */}
-            {isCreateJobOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4 animate-in fade-in zoom-in-95 max-h-[90dvh] flex flex-col">
-                  <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
-                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-blue-500" />
-                      {t('jobs.create', 'Configure Scheduled SQL Job')}
-                    </h3>
-                    <button onClick={() => setIsCreateJobOpen(false)} className="p-1 hover:bg-accent rounded text-muted-foreground">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="space-y-3 text-xs flex-1 overflow-y-auto pr-1">
-                    <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">{t('jobs.name', 'Job Name')}</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Daily Data Cleanup"
-                        value={jobName}
-                        onChange={(e) => setJobName(e.target.value)}
-                        className="w-full px-3 py-1.5 bg-background border border-border rounded-md text-foreground"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">{t('jobs.schedule', 'Cadence / Cron')}</label>
-                      <select
-                        value={jobCron}
-                        onChange={(e) => setJobCron(e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-background border border-border rounded-md text-foreground font-mono"
-                      >
-                        <option value="@every_5m">Every 5 Minutes (*/5 * * * *)</option>
-                        <option value="@every_15m">Every 15 Minutes (*/15 * * * *)</option>
-                        <option value="@hourly">Every Hour (@hourly)</option>
-                        <option value="@daily">Daily at Midnight (@daily)</option>
-                        <option value="@weekly">Weekly on Sunday (@weekly)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">{t('jobs.sql', 'SQL Statements to Execute')}</label>
-                      <textarea
-                        rows={4}
-                        value={jobSql}
-                        onChange={(e) => setJobSql(e.target.value)}
-                        className="w-full p-2.5 bg-background border border-border rounded font-mono text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2 border-t border-border shrink-0">
-                    <button
-                      onClick={() => setIsCreateJobOpen(false)}
-                      className="px-3 py-1.5 border border-border hover:bg-accent rounded text-muted-foreground text-xs"
-                    >
-                      {t('common.cancel', 'Cancel')}
-                    </button>
-                    <button
-                      disabled={!jobName.trim() || !jobSql.trim() || createJobMutation.isPending}
-                      onClick={() => createJobMutation.mutate({ name: jobName, cron_expression: jobCron, sql_query: jobSql })}
-                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded font-semibold text-xs transition-colors cursor-pointer"
-                    >
-                      {createJobMutation.isPending ? t('common.saving', 'Saving...') : t('common.save', 'Save Job')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Jobs List */}
-            <div className="space-y-3">
-              {scheduledJobs.length === 0 ? (
-                <div className="p-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-lg bg-card/50">
-                  {t('jobs.noJobs', 'No scheduled jobs configured. Click "Create Job" to automate recurring SQL routines.')}
-                </div>
-              ) : (
-                scheduledJobs.map((job) => (
-                  <div key={job.id} className="bg-card border border-border rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-blue-500" />
-                        <span className="font-bold text-xs text-foreground">{job.name}</span>
-                        <span className="text-[10px] px-2 py-0.5 bg-muted font-mono rounded text-muted-foreground">
-                          {job.cron_expression}
-                        </span>
-                        {job.last_status === 'success' ? (
-                          <span className="text-[10px] px-1.5 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-semibold">
-                            {t('jobs.success', 'Success')}
-                          </span>
-                        ) : job.last_status === 'failed' ? (
-                          <span className="text-[10px] px-1.5 py-0.2 bg-red-500/10 text-red-500 border border-red-500/20 rounded font-semibold">
-                            {t('jobs.failed', 'Failed')}
-                          </span>
-                        ) : null}
-                      </div>
-                      <pre className="text-[11px] font-mono text-muted-foreground truncate max-w-lg">
-                        {job.sql_query}
-                      </pre>
-                      <div className="text-[10px] text-muted-foreground flex items-center gap-2">
-                        <span>{t('jobs.lastRun', 'Last Run')}: {job.last_run_at ? formatDate(job.last_run_at) : t('jobs.never', 'Never')}</span>
-                        <span>•</span>
-                        <span>{t('jobs.nextRun', 'Next Run')}: {job.next_run_at ? formatDate(job.next_run_at) : '—'}</span>
-                      </div>
-                    </div>
-
-                    {canAdmin && (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => runJobMutation.mutate(job.id)}
-                          disabled={runJobMutation.isPending}
-                          className="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded font-medium transition-colors flex items-center gap-1 cursor-pointer"
-                        >
-                          <Play className="w-3 h-3 fill-current" />
-                          {runJobMutation.isPending ? t('jobs.running', 'Running...') : t('jobs.runNow', 'Run Now')}
-                        </button>
-                        <button
-                          onClick={() => deleteJobMutation.mutate(job.id)}
-                          className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
-                          title={t('common.delete', 'Delete Job')}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          <DatabaseSchedules databaseId={databaseId} canAdmin={canAdmin} />
         )}
 
         {/* BACKUPS TAB */}
         {activeTab === 'backups' && (
           <div className="max-w-5xl mx-auto space-y-4">
-            {/* Automated Backup Schedule Setting */}
-            <div className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-blue-500" />
-                    {t('backups.scheduleTitle', 'Lịch sao lưu tự động định kỳ')}
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {t('backups.scheduleDesc', 'Hệ thống tự động sao lưu theo thời gian cài đặt. Bạn có thể tùy chỉnh lịch riêng cho database này (không bắt buộc) hoặc dùng mặc định hệ thống.')}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <select
-                    value={stats?.database.backup_schedule || 'inherit'}
-                    onChange={(e) => {
-                      updateDbMutation.mutate({ backupSchedule: e.target.value as any });
-                    }}
-                    disabled={!canAdmin || updateDbMutation.isPending}
-                    className="px-2.5 py-1.5 bg-background border border-border rounded-md text-xs font-medium focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    <option value="inherit">{t('backups.schedInherit', 'Mặc định hệ thống')}</option>
-                    <option value="hourly">{t('backups.schedHourly', 'Hàng giờ (Hourly)')}</option>
-                    <option value="6hours">{t('backups.sched6hours', 'Mỗi 6 giờ')}</option>
-                    <option value="12hours">{t('backups.sched12hours', 'Mỗi 12 giờ')}</option>
-                    <option value="daily">{t('backups.schedDaily', 'Hàng ngày (Daily)')}</option>
-                    <option value="weekly">{t('backups.schedWeekly', 'Hàng tuần (Weekly)')}</option>
-                    <option value="disabled">{t('backups.schedDisabled', 'Vô hiệu hóa (Tắt sao lưu)')}</option>
-                  </select>
-                  {updateDbMutation.isPending && (
-                    <span className="text-[10px] text-muted-foreground animate-pulse">
-                      {t('common.saving', 'Đang lưu...')}
-                    </span>
-                  )}
-                </div>
+            {/* User-managed backup schedule note */}
+            <div className="bg-card border border-border rounded-xl p-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <Clock className="w-4 h-4 text-blue-500 shrink-0" />
+                <span className="text-xs text-muted-foreground">
+                  {language === 'vi'
+                    ? 'Bạn có thể tự động hóa việc tạo bản sao lưu định kỳ bằng cách tạo tác vụ trong mục Lịch trình (Schedules).'
+                    : 'You can automate recurring backup creation by configuring a scheduled task in the Schedules tab.'}
+                </span>
               </div>
+              <button
+                onClick={() => handleTabChange('jobs')}
+                className="px-3 py-1.5 text-xs bg-muted/60 hover:bg-accent border border-border text-foreground font-semibold rounded-lg transition-colors cursor-pointer shrink-0"
+              >
+                {language === 'vi' ? 'Xem Lịch trình' : 'Go to Schedules'}
+              </button>
             </div>
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2">
@@ -4818,6 +4365,11 @@ curl -N "${window.location.origin}/v1/databases/${databaseId}/realtime" \\
               </div>
             )}
           </div>
+        )}
+
+        {/* ACTIVITY LOG TIMELINE TAB */}
+        {activeTab === 'activity' && (
+          <DatabaseActivity databaseId={databaseId} />
         )}
       </div>
 

@@ -2615,15 +2615,48 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true, data: jobs });
   });
 
+  fastify.get('/jobs/:jobId', async (req, reply) => {
+    const { jobId } = req.params as { jobId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const jobRow = metaDb.prepare('SELECT database_id FROM scheduled_jobs WHERE id = ?').get(jobId) as { database_id: string } | undefined;
+    if (!jobRow) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    const db = requireDatabaseAccess(req, reply, jobRow.database_id, 'viewer');
+    if (!db) return;
+
+    const job = jobSchedulerService.getJob(jobId);
+    if (!job) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    return reply.send({ success: true, data: job });
+  });
+
   fastify.post('/databases/:id/jobs', async (req, reply) => {
     const { id } = req.params as { id: string };
     const db = requireDatabaseAccess(req, reply, id, 'admin');
     if (!db) return;
 
+    const TaskSchema = z.object({
+      id: z.string().optional(),
+      action: z.enum(['send_command', 'run_maintenance', 'create_backup', 'trigger_webhook', 'export_data', 'send_power_action']),
+      payload: z.string().default(''),
+      time_offset: z.number().min(0).default(0),
+      continue_on_failure: z.boolean().default(false),
+    });
+
     const Schema = z.object({
       name: z.string().min(1).max(64),
-      cron_expression: z.string().min(1).max(64),
-      sql_query: z.string().min(1),
+      cron_expression: z.string().min(1).max(64).optional(),
+      cron_minute: z.string().max(32).optional(),
+      cron_hour: z.string().max(32).optional(),
+      cron_day_month: z.string().max(32).optional(),
+      cron_month: z.string().max(32).optional(),
+      cron_day_week: z.string().max(32).optional(),
+      only_when_online: z.boolean().optional(),
+      enabled: z.boolean().optional(),
+      sql_query: z.string().optional(),
+      tasks: z.array(TaskSchema).optional(),
     });
 
     const parsed = Schema.safeParse(req.body);
@@ -2631,7 +2664,20 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message } });
     }
 
-    const job = jobSchedulerService.createJob(id, parsed.data.name, parsed.data.cron_expression, parsed.data.sql_query);
+    const job = jobSchedulerService.createJob(id, {
+      name: parsed.data.name,
+      cron_expression: parsed.data.cron_expression,
+      cron_minute: parsed.data.cron_minute,
+      cron_hour: parsed.data.cron_hour,
+      cron_day_month: parsed.data.cron_day_month,
+      cron_month: parsed.data.cron_month,
+      cron_day_week: parsed.data.cron_day_week,
+      only_when_online: parsed.data.only_when_online,
+      enabled: parsed.data.enabled,
+      sql_query: parsed.data.sql_query,
+      tasks: parsed.data.tasks as any,
+    });
+
     activityService.recordAudit({
       user: req.adminUser!.username,
       action: 'job.create',
@@ -2654,10 +2700,25 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const db = requireDatabaseAccess(req, reply, jobRow.database_id, 'admin');
     if (!db) return;
 
+    const TaskSchema = z.object({
+      id: z.string(),
+      action: z.enum(['send_command', 'run_maintenance', 'create_backup', 'trigger_webhook', 'export_data', 'send_power_action']),
+      payload: z.string().default(''),
+      time_offset: z.number().min(0).default(0),
+      continue_on_failure: z.boolean().default(false),
+    });
+
     const Schema = z.object({
       name: z.string().min(1).max(64).optional(),
       cron_expression: z.string().min(1).max(64).optional(),
-      sql_query: z.string().min(1).optional(),
+      cron_minute: z.string().max(32).optional(),
+      cron_hour: z.string().max(32).optional(),
+      cron_day_month: z.string().max(32).optional(),
+      cron_month: z.string().max(32).optional(),
+      cron_day_week: z.string().max(32).optional(),
+      only_when_online: z.boolean().optional(),
+      sql_query: z.string().optional(),
+      tasks: z.array(TaskSchema).optional(),
       enabled: z.boolean().optional(),
     });
 
@@ -2666,17 +2727,129 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message } });
     }
 
-    const updated = jobSchedulerService.updateJob(jobId, parsed.data);
+    const updated = jobSchedulerService.updateJob(jobId, parsed.data as any);
     if (!updated) {
       return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
     }
+
+    activityService.recordAudit({
+      user: req.adminUser!.username,
+      action: 'job.update',
+      resource: jobId,
+      result: 'success',
+      requestId: req.id,
+      details: JSON.stringify({ databaseId: jobRow.database_id, name: updated.name }),
+    });
+
     return reply.send({ success: true, data: updated });
+  });
+
+  fastify.post('/jobs/:jobId/tasks', async (req, reply) => {
+    const { jobId } = req.params as { jobId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const jobRow = metaDb.prepare('SELECT database_id, name FROM scheduled_jobs WHERE id = ?').get(jobId) as { database_id: string; name: string } | undefined;
+    if (!jobRow) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    const db = requireDatabaseAccess(req, reply, jobRow.database_id, 'admin');
+    if (!db) return;
+
+    const TaskSchema = z.object({
+      action: z.enum(['send_command', 'run_maintenance', 'create_backup', 'trigger_webhook', 'export_data', 'send_power_action']),
+      payload: z.string().default(''),
+      time_offset: z.number().min(0).default(0),
+      continue_on_failure: z.boolean().default(false),
+    });
+
+    const parsed = TaskSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message } });
+    }
+
+    const task = jobSchedulerService.addTask(jobId, parsed.data as any);
+    if (!task) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+
+    activityService.recordAudit({
+      user: req.adminUser!.username,
+      action: 'task.create',
+      resource: task.id,
+      result: 'success',
+      requestId: req.id,
+      details: JSON.stringify({ databaseId: jobRow.database_id, jobId, jobName: jobRow.name, action: task.action }),
+    });
+
+    return reply.status(201).send({ success: true, data: task });
+  });
+
+  fastify.patch('/jobs/:jobId/tasks/:taskId', async (req, reply) => {
+    const { jobId, taskId } = req.params as { jobId: string; taskId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const jobRow = metaDb.prepare('SELECT database_id, name FROM scheduled_jobs WHERE id = ?').get(jobId) as { database_id: string; name: string } | undefined;
+    if (!jobRow) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    const db = requireDatabaseAccess(req, reply, jobRow.database_id, 'admin');
+    if (!db) return;
+
+    const TaskUpdateSchema = z.object({
+      action: z.enum(['send_command', 'run_maintenance', 'create_backup', 'trigger_webhook', 'export_data', 'send_power_action']).optional(),
+      payload: z.string().optional(),
+      time_offset: z.number().min(0).optional(),
+      continue_on_failure: z.boolean().optional(),
+    });
+
+    const parsed = TaskUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message } });
+    }
+
+    const task = jobSchedulerService.updateTask(jobId, taskId, parsed.data as any);
+    if (!task) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } });
+    }
+
+    activityService.recordAudit({
+      user: req.adminUser!.username,
+      action: 'task.update',
+      resource: taskId,
+      result: 'success',
+      requestId: req.id,
+      details: JSON.stringify({ databaseId: jobRow.database_id, jobId, jobName: jobRow.name }),
+    });
+
+    return reply.send({ success: true, data: task });
+  });
+
+  fastify.delete('/jobs/:jobId/tasks/:taskId', async (req, reply) => {
+    const { jobId, taskId } = req.params as { jobId: string; taskId: string };
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const jobRow = metaDb.prepare('SELECT database_id, name FROM scheduled_jobs WHERE id = ?').get(jobId) as { database_id: string; name: string } | undefined;
+    if (!jobRow) {
+      return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    const db = requireDatabaseAccess(req, reply, jobRow.database_id, 'admin');
+    if (!db) return;
+
+    const ok = jobSchedulerService.deleteTask(jobId, taskId);
+
+    activityService.recordAudit({
+      user: req.adminUser!.username,
+      action: 'task.delete',
+      resource: taskId,
+      result: 'success',
+      requestId: req.id,
+      details: JSON.stringify({ databaseId: jobRow.database_id, jobId, jobName: jobRow.name }),
+    });
+
+    return reply.send({ success: ok });
   });
 
   fastify.delete('/jobs/:jobId', async (req, reply) => {
     const { jobId } = req.params as { jobId: string };
     const metaDb = (await import('../db/metadata.js')).getMetadataDb();
-    const jobRow = metaDb.prepare('SELECT database_id FROM scheduled_jobs WHERE id = ?').get(jobId) as { database_id: string } | undefined;
+    const jobRow = metaDb.prepare('SELECT database_id, name FROM scheduled_jobs WHERE id = ?').get(jobId) as { database_id: string; name: string } | undefined;
     if (!jobRow) {
       return reply.status(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
     }
@@ -2684,6 +2857,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!db) return;
 
     const ok = jobSchedulerService.deleteJob(jobId);
+
+    activityService.recordAudit({
+      user: req.adminUser!.username,
+      action: 'job.delete',
+      resource: jobId,
+      result: 'success',
+      requestId: req.id,
+      details: JSON.stringify({ databaseId: jobRow.database_id, name: jobRow.name }),
+    });
+
     return reply.send({ success: ok });
   });
 
@@ -2698,7 +2881,182 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!db) return;
 
     const result = await jobSchedulerService.runJob(job);
+
+    activityService.recordAudit({
+      user: req.adminUser!.username,
+      action: 'job.run',
+      resource: jobId,
+      result: result.success ? 'success' : 'failure',
+      requestId: req.id,
+      details: JSON.stringify({ databaseId: job.database_id, name: job.name }),
+    });
+
     return reply.send({ success: result.success, error: result.error });
+  });
+
+  // Database-scoped Activity Stream
+  fastify.get('/databases/:id/activity', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const dbRecord = requireDatabaseAccess(req, reply, id, 'viewer');
+    if (!dbRecord) return;
+
+    activityService.flush();
+    const metaDb = (await import('../db/metadata.js')).getMetadataDb();
+    const query = req.query as any;
+    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 50));
+    const offset = Math.max(0, parseInt(query.offset, 10) || 0);
+    const filterText = (query.search || query.user || '').trim().toLowerCase();
+
+    // 1. Audit logs for this database
+    const auditRows = metaDb.prepare(`
+      SELECT id, user, action, resource, result, request_id, details, timestamp
+      FROM audit_logs
+      WHERE resource = ?
+         OR details LIKE ?
+         OR details LIKE ?
+      ORDER BY timestamp DESC
+      LIMIT ?
+    `).all(id, `%"databaseId":"${id}"%`, `%"database_id":"${id}"%`, limit * 2) as any[];
+
+    // 2. Activity logs for this database
+    const activityRows = metaDb.prepare(`
+      SELECT id, database_id, token_id, operation, duration_ms, status, error_message, row_count, timestamp
+      FROM activity_logs
+      WHERE database_id = ?
+      ORDER BY timestamp DESC
+      LIMIT ?
+    `).all(id, limit * 2) as any[];
+
+    // Map audit rows
+    const auditItems = auditRows.map(r => {
+      let detailsObj: any = null;
+      let ip: string | undefined = undefined;
+      try {
+        if (r.details) {
+          detailsObj = JSON.parse(r.details);
+          if (detailsObj.ip) ip = detailsObj.ip;
+        }
+      } catch {}
+
+      let actionTag = r.action.replace(/\./g, ' ');
+      let description = '';
+
+      if (r.action === 'job.create') {
+        actionTag = 'schedule create';
+        description = `Created the ${detailsObj?.name || 'schedule'} schedule`;
+      } else if (r.action === 'job.delete') {
+        actionTag = 'schedule delete';
+        description = `Deleted the ${detailsObj?.name || 'schedule'} schedule`;
+      } else if (r.action === 'job.update') {
+        actionTag = 'schedule update';
+        description = `Updated the ${detailsObj?.name || 'schedule'} schedule`;
+      } else if (r.action === 'job.run') {
+        actionTag = 'schedule run';
+        description = `Executed schedule ${detailsObj?.name || ''}`;
+      } else if (r.action === 'task.create') {
+        actionTag = 'schedule task-create';
+        description = `Added step (${detailsObj?.action || 'task'}) to schedule`;
+      } else if (r.action === 'task.delete') {
+        actionTag = 'schedule task-delete';
+        description = `Removed step from schedule`;
+      } else if (r.action === 'task.update') {
+        actionTag = 'schedule task-update';
+        description = `Updated step in schedule`;
+      } else if (r.action === 'backup.create') {
+        actionTag = 'backup create';
+        description = `Created snapshot backup`;
+      } else if (r.action === 'database.restore') {
+        actionTag = 'database restore';
+        description = `Restored database from snapshot`;
+      } else if (r.action === 'file.upload') {
+        actionTag = 'file uploaded';
+        description = `Uploaded file ${detailsObj?.name || ''}`;
+      } else if (r.action === 'file.delete') {
+        actionTag = 'file delete';
+        description = `Deleted file`;
+      } else if (r.action === 'table.drop') {
+        actionTag = 'table drop';
+        description = `Dropped table`;
+      } else if (r.action === 'table.truncate') {
+        actionTag = 'table truncate';
+        description = `Truncated table`;
+      } else if (r.action === 'table.rename') {
+        actionTag = 'table rename';
+        description = `Renamed table`;
+      } else if (r.action === 'sql.exec') {
+        actionTag = 'console query';
+        description = `Executed SQL statements via Console`;
+      } else if (r.action.startsWith('database.maintenance')) {
+        const maintType = r.action.split('.')[2] || 'maintenance';
+        actionTag = `maintenance ${maintType}`;
+        description = `Ran ${maintType.toUpperCase()} maintenance`;
+      } else {
+        description = `${r.action} on ${r.resource}`;
+      }
+
+      return {
+        id: r.id,
+        user: r.user || 'system',
+        action: actionTag,
+        description,
+        timestamp: r.timestamp,
+        status: r.result === 'success' ? 'success' : 'failure',
+        ip: ip || '127.0.0.1',
+        details: detailsObj,
+      };
+    });
+
+    // Map activity rows
+    const activityItems = activityRows.map(r => {
+      let actionTag = 'query';
+      let description = r.operation;
+
+      if (r.operation.startsWith('CRON_JOB:')) {
+        actionTag = 'schedule exec';
+        description = `Ran scheduled job: ${r.operation.replace('CRON_JOB:', '')}`;
+      } else if (r.operation === 'ADMIN_SQL_EXEC') {
+        actionTag = 'console query';
+        description = `Executed SQL script (${r.row_count ?? 0} rows affected, ${r.duration_ms}ms)`;
+      } else if (r.operation === 'BATCH') {
+        actionTag = 'batch write';
+        description = `Batch mutation (${r.row_count ?? 0} statements)`;
+      } else {
+        actionTag = 'sql ' + (r.operation.toLowerCase());
+        description = `${r.operation} (${r.duration_ms}ms)`;
+      }
+
+      return {
+        id: r.id,
+        user: r.token_id || req.adminUser?.username || 'system',
+        action: actionTag,
+        description,
+        timestamp: r.timestamp,
+        status: r.status === 'success' ? 'success' : 'failure',
+        ip: '127.0.0.1',
+        details: { duration_ms: r.duration_ms, row_count: r.row_count, error: r.error_message },
+      };
+    });
+
+    let combined = [...auditItems, ...activityItems].sort((a, b) => b.timestamp - a.timestamp);
+
+    if (filterText) {
+      combined = combined.filter(item =>
+        item.user.toLowerCase().includes(filterText) ||
+        item.action.toLowerCase().includes(filterText) ||
+        item.description.toLowerCase().includes(filterText)
+      );
+    }
+
+    const total = combined.length;
+    const paginated = combined.slice(offset, offset + limit);
+
+    return reply.send({
+      success: true,
+      data: {
+        items: paginated,
+        total,
+      },
+    });
   });
 
   // Database Membership & Collaboration Endpoints

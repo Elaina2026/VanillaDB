@@ -58,9 +58,11 @@ export class BackupScheduler {
 
       for (const db of databases) {
         try {
+          // Scheduled backups are now driven by user-created Schedules (jobScheduler).
+          // Server-wide auto backup is disabled so users control their own schedules.
           const effectiveSchedule = (db.backup_schedule && db.backup_schedule !== 'inherit')
             ? db.backup_schedule
-            : settings.backup_schedule;
+            : 'disabled';
 
           if (!effectiveSchedule || effectiveSchedule === 'disabled') {
             continue;

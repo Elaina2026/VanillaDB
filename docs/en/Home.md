@@ -6,6 +6,7 @@ Welcome to the technical documentation wiki for **VanillaDatabase (VanillaDB)**.
 
 ## Navigation & Language Options
 
+- **Comprehensive Architecture Specification**: [ARCHITECTURE.md](../../ARCHITECTURE.md)
 - **Documentation Hub**: [Central Hub](../README.md)
 - **Vietnamese Version**: [Tài liệu Tiếng Việt](../vi/Home.md)
 - **Source Repository**: [GitHub Repository](https://github.com/Elaina2026/VanillaDB)

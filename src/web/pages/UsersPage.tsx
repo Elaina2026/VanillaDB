@@ -1162,7 +1162,15 @@ export const UsersPage: React.FC = () => {
                     type="number"
                     min={0}
                     value={formData.maxDatabases}
-                    onChange={(e) => setFormData({ ...formData, maxDatabases: parseInt(e.target.value, 10) || 0 })}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData({ ...formData, maxDatabases: v === '' ? ('' as any) : Math.max(0, parseInt(v, 10) || 0) });
+                    }}
+                    onBlur={() => {
+                      if (formData.maxDatabases === ('' as any)) {
+                        setFormData({ ...formData, maxDatabases: 0 });
+                      }
+                    }}
                     className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                   <div className="flex gap-1.5 mt-1.5 flex-wrap">
@@ -1202,7 +1210,15 @@ export const UsersPage: React.FC = () => {
                     type="number"
                     min={0}
                     value={formData.rateLimitPerMinute}
-                    onChange={(e) => setFormData({ ...formData, rateLimitPerMinute: parseInt(e.target.value, 10) || 0 })}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData({ ...formData, rateLimitPerMinute: v === '' ? ('' as any) : Math.max(0, parseInt(v, 10) || 0) });
+                    }}
+                    onBlur={() => {
+                      if (formData.rateLimitPerMinute === ('' as any)) {
+                        setFormData({ ...formData, rateLimitPerMinute: 0 });
+                      }
+                    }}
                     className="w-full bg-muted/40 border border-border rounded px-3 py-2 text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                   <div className="flex gap-1.5 mt-1.5 flex-wrap">
@@ -1545,7 +1561,15 @@ export const UsersPage: React.FC = () => {
                           type="number"
                           min={0}
                           value={roleForm.max_storage_mb}
-                          onChange={(e) => setRoleForm({ ...roleForm, max_storage_mb: parseInt(e.target.value, 10) || 0 })}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setRoleForm({ ...roleForm, max_storage_mb: v === '' ? ('' as any) : Math.max(0, parseInt(v, 10) || 0) });
+                          }}
+                          onBlur={() => {
+                            if (roleForm.max_storage_mb === ('' as any)) {
+                              setRoleForm({ ...roleForm, max_storage_mb: 0 });
+                            }
+                          }}
                           className="w-full bg-muted/40 border border-border rounded px-2.5 py-1.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                         />
                         <div className="flex gap-1 mt-1.5 flex-wrap">
@@ -1584,7 +1608,15 @@ export const UsersPage: React.FC = () => {
                           type="number"
                           min={0}
                           value={roleForm.max_databases}
-                          onChange={(e) => setRoleForm({ ...roleForm, max_databases: parseInt(e.target.value, 10) || 0 })}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setRoleForm({ ...roleForm, max_databases: v === '' ? ('' as any) : Math.max(0, parseInt(v, 10) || 0) });
+                          }}
+                          onBlur={() => {
+                            if (roleForm.max_databases === ('' as any)) {
+                              setRoleForm({ ...roleForm, max_databases: 0 });
+                            }
+                          }}
                           className="w-full bg-muted/40 border border-border rounded px-2.5 py-1.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                         />
                         <div className="flex gap-1 mt-1.5 flex-wrap">
@@ -1623,7 +1655,15 @@ export const UsersPage: React.FC = () => {
                           type="number"
                           min={0}
                           value={roleForm.rate_limit_per_minute}
-                          onChange={(e) => setRoleForm({ ...roleForm, rate_limit_per_minute: parseInt(e.target.value, 10) || 0 })}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setRoleForm({ ...roleForm, rate_limit_per_minute: v === '' ? ('' as any) : Math.max(0, parseInt(v, 10) || 0) });
+                          }}
+                          onBlur={() => {
+                            if (roleForm.rate_limit_per_minute === ('' as any)) {
+                              setRoleForm({ ...roleForm, rate_limit_per_minute: 0 });
+                            }
+                          }}
                           className="w-full bg-muted/40 border border-border rounded px-2.5 py-1.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                         />
                         <div className="flex gap-1 mt-1.5 flex-wrap">

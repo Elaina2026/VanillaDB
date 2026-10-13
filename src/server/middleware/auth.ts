@@ -222,6 +222,12 @@ export function requireTokenPermission(permission: TokenPermission) {
       const file = storageService.getFile((request.params as any).fileId);
       if (file) {
         databaseId = file.database_id;
+      } else {
+        reply.status(404).send({
+          success: false,
+          error: { code: 'FILE_NOT_FOUND', message: 'File not found' },
+        });
+        return;
       }
     }
 

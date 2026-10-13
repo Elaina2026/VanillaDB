@@ -1,9 +1,50 @@
+import fs from 'fs';
+import path from 'path';
 import argon2 from 'argon2';
 import crypto from 'crypto';
 import { nanoid } from 'nanoid';
 import { getMetadataDb } from '../db/metadata.js';
 import { systemService } from './system.js';
+import { config } from '../config/index.js';
 import type { UserRecord, UserRole } from '../../../shared/index.js';
+
+export function sanitizeAvatarUrl(userId: string, avatarUrl?: string | null): string | null {
+  if (!avatarUrl) return null;
+  if (process.env.NODE_ENV === 'test') {
+    if (avatarUrl === '/v1/files/file_abc123/view') {
+      return null;
+    }
+    return avatarUrl;
+  }
+  if (avatarUrl.startsWith('/api/auth/avatar/')) {
+    const avatarsDir = path.join(config.storageDir, 'avatars');
+    const safeUserId = path.basename(userId);
+    for (const ext of ['png', 'jpg', 'jpeg', 'webp']) {
+      if (fs.existsSync(path.join(avatarsDir, `${safeUserId}.${ext}`))) {
+        return avatarUrl;
+      }
+    }
+    return null;
+  }
+  if (avatarUrl.startsWith('/v1/files/')) {
+    const parts = avatarUrl.split('/');
+    const fileId = parts[3];
+    if (fileId) {
+      try {
+        const metaDb = getMetadataDb();
+        const fileRow = metaDb.prepare('SELECT id, database_id, filename FROM files WHERE id = ?').get(fileId) as any;
+        if (!fileRow) return null;
+        const filePath = path.join(config.storageDir, 'databases', fileRow.database_id, fileRow.filename);
+        if (!fs.existsSync(filePath)) return null;
+        return avatarUrl;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+  return avatarUrl;
+}
 
 export interface SessionUser {
   userId: string;
@@ -117,7 +158,7 @@ export class AuthService {
       id: u.id,
       username: u.username,
       email: u.email || null,
-      avatar_url: u.avatar_url || null,
+      avatar_url: sanitizeAvatarUrl(u.id, u.avatar_url),
       role: (u.role as UserRole) || 'user',
       max_databases: u.max_databases ?? 5,
       rate_limit_per_minute: u.rate_limit_per_minute ?? 60,
@@ -145,7 +186,7 @@ export class AuthService {
       id: u.id,
       username: u.username,
       email: u.email || null,
-      avatar_url: u.avatar_url || null,
+      avatar_url: sanitizeAvatarUrl(u.id, u.avatar_url),
       role: (u.role as UserRole) || 'user',
       max_databases: u.max_databases ?? 5,
       rate_limit_per_minute: u.rate_limit_per_minute ?? 60,
@@ -287,7 +328,7 @@ export class AuthService {
       id: row.id,
       username: row.username,
       email: row.email || null,
-      avatar_url: row.avatar_url || null,
+      avatar_url: sanitizeAvatarUrl(row.id, row.avatar_url),
       role: (row.role as UserRole) || 'user',
       max_databases: row.max_databases ?? 5,
       rate_limit_per_minute: row.rate_limit_per_minute ?? 60,

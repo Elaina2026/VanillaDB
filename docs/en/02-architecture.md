@@ -143,3 +143,45 @@ Administrators can rebalance storage across the cluster at any time via `POST /a
 4. **Atomic Metadata Switch**: The primary gateway updates the metadata registry: `UPDATE databases SET node_id = ? WHERE id = ?`.
 5. **Source File Cleanup**: The source node unlinks its local files to immediately reclaim storage.
 
+---
+
+## 6. Schedules Execution Pipeline & Task Chaining
+
+VanillaDatabase includes a multi-task scheduling engine modeled after industrial control panels:
+- **5-Part Cron Syntax**: Parses standard cron expressions (`minute hour day_of_month month day_of_week`) with wildcards, step intervals, lists, and ranges.
+- **Ordered Task Pipeline**: Each schedule can execute an array of sequential tasks:
+  1. `send_command`: Executes parameterized or multi-statement SQL.
+  2. `run_maintenance`: Executes engine maintenance routines (`wal_checkpoint`, `vacuum`, `optimize`, `reindex`).
+  3. `create_backup`: Generates automated point-in-time encrypted snapshot backups.
+  4. `trigger_webhook`: Dispatches real-time webhook payloads for external observability.
+  5. `export_data`: Dumps full schema and rows for disaster recovery.
+- **Execution Options**: Configurable `time_offset` sequencing delay per task, `continue_on_failure` fault tolerance, and `only_when_online` state checks.
+
+---
+
+## 7. Realtime Activity Timeline & Audit Stream
+
+Every operation performed on tenant databases is recorded in both operational activity logs and structured audit logs:
+- **Endpoint**: `GET /api/admin/databases/:id/activity?search=...&limit=80`
+- **Aggregation**: Queries and normalizes both metadata audit records and database events into unified `DatabaseActivityItem` models with timestamps, actor usernames, colored action badge categories (`schedule create`, `backup restore`, `query execute`), failure indicators, and client IP addresses.
+- **Live Stream Controls**: Supports frontend polling with play/pause toggles and manual refresh capabilities.
+
+---
+
+## 8. RFC 6750 Ephemeral Ticket System
+
+To prevent token leakage across browser histories, HTTP proxy logs, and `Referer` headers:
+- Query string bearer tokens (`?token=...`) are completely prohibited across write and query routes (`VDB-SEC-03`).
+- Single-use ephemeral tickets (`vdb_ticket_*`) are issued via `POST /v1/databases/:databaseId/tickets` for media streaming (`/v1/files/:id/view`) and realtime Server-Sent Events (`/v1/databases/:id/realtime`).
+- Tickets auto-expire in 60 seconds and are deleted from memory upon first consumption.
+
+---
+
+## 9. Internal Binary Avatar Pipeline
+
+User profile avatars are managed via an isolated binary media pipeline:
+- **Storage**: Saved to `data/storage/avatars/:userId.<ext>` as system-level assets, strictly excluded from tenant database disk quotas.
+- **Validation**: Uploads (`POST /api/auth/profile/avatar`) enforce binary magic-byte signatures (PNG, JPEG, WebP) up to 10MB.
+- **Serving**: Delivered via `GET /api/auth/avatar/:userId` with `nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, and `Cross-Origin-Resource-Policy: cross-origin`.
+
+

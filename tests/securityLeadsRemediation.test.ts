@@ -45,6 +45,10 @@ describe('Security Leads Remediation Suite (Leads 1 - 6)', () => {
 
   afterAll(async () => {
     try { databaseService.deleteDatabase(testDbId); } catch {}
+    try {
+      const metaDb = getMetadataDb();
+      metaDb.prepare("UPDATE users SET avatar_url = NULL WHERE avatar_url LIKE '/v1/files/%'").run();
+    } catch {}
     await app.close();
   });
 

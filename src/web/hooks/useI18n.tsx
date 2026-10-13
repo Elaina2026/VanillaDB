@@ -252,7 +252,7 @@ const translations: Record<Language, Record<string, string>> = {
     'members.sendInvite': 'Send Invitation',
 
     // SQL Editor & Visual Builder & Schema Inspector
-    'editor.title': 'SQL Query Console',
+    'editor.title': 'SQL Editor',
     'editor.placeholder': '-- Write SQLite queries here (e.g. SELECT * FROM users;)\n-- Press Ctrl+Enter to execute',
     'editor.modeCode': 'Code',
     'editor.modeVisual': 'Visual Builder',
@@ -1690,7 +1690,7 @@ const translations: Record<Language, Record<string, string>> = {
     'members.sendInvite': 'Gửi lời mời',
 
     // SQL Editor & Visual Builder & Schema Inspector
-    'editor.title': 'Bảng điều khiển truy vấn SQL',
+    'editor.title': 'Trình soạn thảo SQL',
     'editor.placeholder': '-- Viết câu lệnh SQLite tại đây (ví dụ: SELECT * FROM users;)\n-- Nhấn Ctrl+Enter để thực thi',
     'editor.modeCode': 'Viết mã (Code)',
     'editor.modeVisual': 'Trực quan (Visual Builder)',

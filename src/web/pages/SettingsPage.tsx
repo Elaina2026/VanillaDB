@@ -465,7 +465,19 @@ export const SettingsPage: React.FC = () => {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setSaveError(null);
-    updateMutation.mutate(current);
+    const sanitizedPayload: any = { ...current };
+    if (sanitizedPayload.default_busy_timeout === '' || isNaN(sanitizedPayload.default_busy_timeout)) sanitizedPayload.default_busy_timeout = 5000;
+    if (sanitizedPayload.default_cache_size === '' || isNaN(sanitizedPayload.default_cache_size)) sanitizedPayload.default_cache_size = -2000;
+    if (sanitizedPayload.backup_retention === '' || isNaN(sanitizedPayload.backup_retention)) sanitizedPayload.backup_retention = 10;
+    if (sanitizedPayload.max_upload_size_mb === '' || isNaN(sanitizedPayload.max_upload_size_mb)) sanitizedPayload.max_upload_size_mb = 50;
+    if (sanitizedPayload.host_disk_total_gb === '' || isNaN(sanitizedPayload.host_disk_total_gb)) sanitizedPayload.host_disk_total_gb = 0;
+    if (sanitizedPayload.default_user_max_databases === '' || isNaN(sanitizedPayload.default_user_max_databases)) sanitizedPayload.default_user_max_databases = 2;
+    if (sanitizedPayload.default_user_max_disk_mb === '' || isNaN(sanitizedPayload.default_user_max_disk_mb)) sanitizedPayload.default_user_max_disk_mb = 200;
+    if (sanitizedPayload.web_rate_limit_per_minute === '' || isNaN(sanitizedPayload.web_rate_limit_per_minute)) sanitizedPayload.web_rate_limit_per_minute = 1200;
+    if (sanitizedPayload.default_user_rate_limit === '' || isNaN(sanitizedPayload.default_user_rate_limit)) sanitizedPayload.default_user_rate_limit = 180;
+    if (sanitizedPayload.alert_cpu_threshold === '' || isNaN(sanitizedPayload.alert_cpu_threshold)) sanitizedPayload.alert_cpu_threshold = 85;
+    if (sanitizedPayload.alert_ram_threshold === '' || isNaN(sanitizedPayload.alert_ram_threshold)) sanitizedPayload.alert_ram_threshold = 85;
+    updateMutation.mutate(sanitizedPayload);
   };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
@@ -948,8 +960,11 @@ export const SettingsPage: React.FC = () => {
                 min={100}
                 max={60000}
                 disabled={!isSuperAdminOrAdmin}
-                value={current.default_busy_timeout || 5000}
-                onChange={(e) => setForm({ ...form, default_busy_timeout: parseInt(e.target.value, 10) || 5000 })}
+                value={current.default_busy_timeout ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, default_busy_timeout: v === '' ? ('' as any) : parseInt(v, 10) });
+                }}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
               />
               <span className="text-[10px] text-muted-foreground mt-1 block">
@@ -962,8 +977,11 @@ export const SettingsPage: React.FC = () => {
               <input
                 type="number"
                 disabled={!isSuperAdminOrAdmin}
-                value={current.default_cache_size || -2000}
-                onChange={(e) => setForm({ ...form, default_cache_size: parseInt(e.target.value, 10) || -2000 })}
+                value={current.default_cache_size ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, default_cache_size: v === '' ? ('' as any) : parseInt(v, 10) });
+                }}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
               />
               <span className="text-[10px] text-muted-foreground mt-1 block">
@@ -1042,8 +1060,11 @@ export const SettingsPage: React.FC = () => {
                 min={1}
                 max={100}
                 disabled={!isSuperAdminOrAdmin}
-                value={current.backup_retention || 10}
-                onChange={(e) => setForm({ ...form, backup_retention: parseInt(e.target.value, 10) || 10 })}
+                value={current.backup_retention ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, backup_retention: v === '' ? ('' as any) : parseInt(v, 10) });
+                }}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
               />
               <span className="text-[10px] text-muted-foreground mt-1 block">
@@ -1078,8 +1099,11 @@ export const SettingsPage: React.FC = () => {
                 min={1}
                 max={500}
                 disabled={!isSuperAdminOrAdmin}
-                value={current.max_upload_size_mb || 50}
-                onChange={(e) => setForm({ ...form, max_upload_size_mb: parseInt(e.target.value, 10) || 50 })}
+                value={current.max_upload_size_mb ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, max_upload_size_mb: v === '' ? ('' as any) : parseInt(v, 10) });
+                }}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
               />
               <span className="text-[10px] text-muted-foreground mt-1 block">
@@ -1094,8 +1118,11 @@ export const SettingsPage: React.FC = () => {
                 min={0}
                 max={100000}
                 disabled={!isSuperAdminOrAdmin}
-                value={current.host_disk_total_gb ?? 0}
-                onChange={(e) => setForm({ ...form, host_disk_total_gb: parseInt(e.target.value, 10) || 0 })}
+                value={current.host_disk_total_gb ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, host_disk_total_gb: v === '' ? ('' as any) : parseInt(v, 10) });
+                }}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
               />
               <span className="text-[10px] text-muted-foreground mt-1 block">
@@ -1127,8 +1154,11 @@ export const SettingsPage: React.FC = () => {
                 min={1}
                 max={1000}
                 disabled={!isSuperAdminOrAdmin}
-                value={current.default_user_max_databases ?? 2}
-                onChange={(e) => setForm({ ...form, default_user_max_databases: parseInt(e.target.value, 10) || 2 })}
+                value={current.default_user_max_databases ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, default_user_max_databases: v === '' ? ('' as any) : parseInt(v, 10) });
+                }}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
               />
               <span className="text-[10px] text-muted-foreground mt-1 block">
@@ -1143,8 +1173,11 @@ export const SettingsPage: React.FC = () => {
                 min={1}
                 max={10000}
                 disabled={!isSuperAdminOrAdmin}
-                value={current.default_user_max_disk_mb ?? 200}
-                onChange={(e) => setForm({ ...form, default_user_max_disk_mb: parseInt(e.target.value, 10) || 200 })}
+                value={current.default_user_max_disk_mb ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, default_user_max_disk_mb: v === '' ? ('' as any) : parseInt(v, 10) });
+                }}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
               />
               <span className="text-[10px] text-muted-foreground mt-1 block">
@@ -1171,8 +1204,11 @@ export const SettingsPage: React.FC = () => {
                 min={0}
                 max={50000}
                 disabled={!isSuperAdminOrAdmin}
-                value={current.web_rate_limit_per_minute ?? 1200}
-                onChange={(e) => setForm({ ...form, web_rate_limit_per_minute: parseInt(e.target.value, 10) || 0 })}
+                value={current.web_rate_limit_per_minute ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, web_rate_limit_per_minute: v === '' ? ('' as any) : parseInt(v, 10) });
+                }}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary text-foreground font-mono disabled:opacity-50"
               />
               <div className="flex gap-1.5 mt-1.5 flex-wrap">
@@ -1215,8 +1251,11 @@ export const SettingsPage: React.FC = () => {
                 min={0}
                 max={10000}
                 disabled={!isSuperAdminOrAdmin}
-                value={current.default_user_rate_limit ?? 180}
-                onChange={(e) => setForm({ ...form, default_user_rate_limit: parseInt(e.target.value, 10) || 0 })}
+                value={current.default_user_rate_limit ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, default_user_rate_limit: v === '' ? ('' as any) : parseInt(v, 10) });
+                }}
                 className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary text-foreground font-mono disabled:opacity-50"
               />
               <div className="flex gap-1.5 mt-1.5 flex-wrap">
@@ -1282,8 +1321,11 @@ export const SettingsPage: React.FC = () => {
                   min={10}
                   max={100}
                   disabled={!isSuperAdminOrAdmin}
-                  value={current.alert_cpu_threshold ?? 85}
-                  onChange={(e) => setForm({ ...form, alert_cpu_threshold: parseInt(e.target.value, 10) || 85 })}
+                  value={current.alert_cpu_threshold ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setForm({ ...form, alert_cpu_threshold: v === '' ? ('' as any) : parseInt(v, 10) });
+                  }}
                   className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
                 />
                 <span className="text-[10px] text-muted-foreground mt-1 block">
@@ -1298,8 +1340,11 @@ export const SettingsPage: React.FC = () => {
                   min={10}
                   max={100}
                   disabled={!isSuperAdminOrAdmin}
-                  value={current.alert_ram_threshold ?? 85}
-                  onChange={(e) => setForm({ ...form, alert_ram_threshold: parseInt(e.target.value, 10) || 85 })}
+                  value={current.alert_ram_threshold ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setForm({ ...form, alert_ram_threshold: v === '' ? ('' as any) : parseInt(v, 10) });
+                  }}
                   className="w-full px-3 py-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-mono disabled:opacity-50"
                 />
                 <span className="text-[10px] text-muted-foreground mt-1 block">

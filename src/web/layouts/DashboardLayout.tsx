@@ -28,6 +28,7 @@ import {
   ArrowUpDown,
   TrendingUp,
   Clock,
+  History,
   Users,
   Menu,
   X,
@@ -119,69 +120,20 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     <div
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className="flex h-screen w-full overflow-hidden bg-background text-foreground flex-col md:flex-row"
+      className="flex h-screen w-full overflow-hidden bg-background text-foreground flex-col md:flex-row relative"
     >
-      {/* Mobile Top Navigation Bar */}
-      <header className="md:hidden h-14 border-b border-border bg-card px-4 flex items-center justify-between shrink-0 z-30">
-        <div
-          className="flex items-center gap-2.5 cursor-pointer"
-          onClick={() => {
-            setSelectedDatabaseId(null);
-            setCurrentTab('databases');
-            closeMobileMenu();
-          }}
-        >
-          <div className="w-7 h-7 flex items-center justify-center shrink-0">
-            <LogoIcon className="w-7 h-7" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1">
-              <span className="font-semibold text-xs tracking-tight block">VanillaDatabase</span>
-              <span className="text-[8px] px-1 py-0.2 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded font-mono font-bold">v1.3.2</span>
-            </div>
-            <span className="text-[9px] text-muted-foreground block -mt-0.5">SQLite Cloud</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => {
-              setSelectedDatabaseId(null);
-              setCurrentTab('inbox');
-            }}
-            className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground relative"
-            title={t('nav.inbox', 'Inbox')}
-          >
-            <Mail className="w-4 h-4" />
-            {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 ring-2 ring-background" />
-            )}
-          </button>
-          {onOpenSearch && (
-            <button
-              onClick={onOpenSearch}
-              className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
-              title="Search (Ctrl+K)"
-            >
-              <Search className="w-4 h-4" />
-            </button>
-          )}
-          <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
-            title="Toggle theme"
-          >
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
-            aria-label="Toggle menu"
-          >
-            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-        </div>
-      </header>
+      {/* Floating Menu Button for Mobile (Replaces fixed mobile top navigation bar) */}
+      <button
+        onClick={() => setIsMobileMenuOpen(true)}
+        className="fixed bottom-4 left-4 z-40 md:hidden p-3 bg-card/90 backdrop-blur-md border border-border rounded-full shadow-xl text-foreground hover:bg-accent transition-all flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-primary/40"
+        aria-label="Open navigation menu"
+        title="Open menu"
+      >
+        <Menu className="w-5 h-5 text-foreground" />
+        {unreadCount > 0 && (
+          <span className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-background" />
+        )}
+      </button>
 
       {/* Mobile Backdrop */}
       {isMobileMenuOpen && (
@@ -303,53 +255,74 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </div>
               </div>
 
-              {/* Database Context Navigation Tabs */}
-              <div className="space-y-1">
-                {!isSidebarCollapsed && (
-                  <span className="px-2.5 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase block mb-1">
-                    {t('nav.menu', 'Database Menu')}
-                  </span>
-                )}
+              {/* Database Categorized Navigation Groups (matching Image 1) */}
+              <div className="space-y-4 pt-1">
                 {[
-                  { id: 'overview', label: t('db.overview', 'Overview & Stats'), icon: BarChart3 },
-                  { id: 'analytics', label: t('db.analytics', 'Requests & Disk B-Tree'), icon: TrendingUp },
-                  { id: 'tables', label: t('db.tables', 'Tables Browser'), icon: TableIcon },
-                  { id: 'editor', label: t('db.editor', 'SQL Editor'), icon: Terminal },
-                  { id: 'schema', label: t('db.schema', 'Schema Viewer'), icon: FileCode },
-                  { id: 'storage', label: t('db.storage', 'Media Storage'), icon: Folder },
-                  { id: 'import-export', label: t('db.importExport', 'Import & Export'), icon: ArrowUpDown },
-                  { id: 'realtime', label: t('db.realtime', 'Realtime Stream'), icon: Radio },
-                  { id: 'webhooks', label: t('db.webhooks', 'Webhooks'), icon: WebhookIcon },
-                  { id: 'api', label: t('db.api', 'API & Quickstart'), icon: Key },
-                  { id: 'tokens', label: t('db.tokens', 'API Tokens'), icon: Shield },
-                  { id: 'jobs', label: t('db.jobs', 'Scheduled Jobs'), icon: Clock },
-                  { id: 'backups', label: t('db.backups', 'Backups'), icon: Archive },
-                  { id: 'members', label: t('db.members', 'Members & Collaboration'), icon: Users },
-                  { id: 'settings', label: t('db.settings', 'Danger Settings'), icon: Sliders },
-                ].map((item) => {
-                  const Icon = item.icon;
-                  const active = selectedDatabaseTab === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        setSelectedDatabaseId(selectedDatabaseId, item.id);
-                        closeMobileMenu();
-                      }}
-                      className={cn(
-                        'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-md font-medium transition-colors',
-                        active
-                          ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                        isSidebarCollapsed ? 'justify-center px-0' : ''
-                      )}
-                      title={item.label}
-                    >
-                      <Icon className="w-4 h-4 shrink-0" />
-                      {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
-                    </button>
-                  );
-                })}
+                  {
+                    group: language === 'vi' ? 'TỔNG QUAN' : 'OVERVIEW',
+                    items: [
+                      { id: 'overview', label: language === 'vi' ? 'Tổng quan' : 'Dashboard', icon: LayoutDashboard },
+                      { id: 'editor', label: language === 'vi' ? 'Truy vấn SQL' : 'SQL Editor', icon: Terminal },
+                      { id: 'activity', label: language === 'vi' ? 'Hoạt động' : 'Activity', icon: History },
+                      { id: 'settings', label: language === 'vi' ? 'Cài đặt' : 'Settings', icon: Sliders },
+                      { id: 'api', label: language === 'vi' ? 'Hỗ trợ & API' : 'Support & API', icon: Key },
+                    ],
+                  },
+                  {
+                    group: language === 'vi' ? 'QUẢN LÝ' : 'MANAGEMENT',
+                    items: [
+                      { id: 'tables', label: language === 'vi' ? 'Bảng dữ liệu' : 'Tables', icon: TableIcon },
+                      { id: 'storage', label: language === 'vi' ? 'Lưu trữ tệp' : 'File Storage', icon: Folder },
+                      { id: 'jobs', label: language === 'vi' ? 'Lịch trình' : 'Schedules', icon: Clock },
+                      { id: 'webhooks', label: language === 'vi' ? 'Webhooks' : 'Webhooks', icon: WebhookIcon },
+                      { id: 'backups', label: language === 'vi' ? 'Sao lưu' : 'Backups', icon: Archive },
+                      { id: 'members', label: language === 'vi' ? 'Thành viên' : 'Members', icon: Users },
+                    ],
+                  },
+                  {
+                    group: language === 'vi' ? 'CÔNG CỤ' : 'TOOLS',
+                    items: [
+                      { id: 'schema', label: language === 'vi' ? 'Cấu trúc & ERD' : 'Schema & ERD', icon: FileCode },
+                      { id: 'import-export', label: language === 'vi' ? 'Nhập & Xuất' : 'Import & Export', icon: ArrowUpDown },
+                      { id: 'tokens', label: language === 'vi' ? 'Khóa API' : 'API Tokens', icon: Shield },
+                    ],
+                  },
+                ].map((section, secIdx) => (
+                  <div key={secIdx} className="space-y-1">
+                    {!isSidebarCollapsed ? (
+                      <span className="px-2.5 text-[10px] font-bold tracking-wider text-muted-foreground/80 uppercase block mb-1">
+                        {section.group}
+                      </span>
+                    ) : secIdx > 0 ? (
+                      <div className="my-2 border-t border-border/40" />
+                    ) : null}
+
+                    {section.items.map((item) => {
+                      const Icon = item.icon;
+                      const active = selectedDatabaseTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setSelectedDatabaseId(selectedDatabaseId, item.id);
+                            closeMobileMenu();
+                          }}
+                          className={cn(
+                            'w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-xl font-medium transition-all cursor-pointer',
+                            active
+                              ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                            isSidebarCollapsed ? 'justify-center px-0' : ''
+                          )}
+                          title={item.label}
+                        >
+                          <Icon className="w-4 h-4 shrink-0" />
+                          {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             </div>
           ) : (

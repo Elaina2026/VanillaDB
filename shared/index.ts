@@ -425,12 +425,36 @@ export interface SystemStatus {
   };
 }
 
+export type ScheduleTaskAction =
+  | 'send_command'
+  | 'run_maintenance'
+  | 'create_backup'
+  | 'trigger_webhook'
+  | 'export_data'
+  | 'send_power_action';
+
+export interface ScheduleTaskRecord {
+  id: string;
+  action: ScheduleTaskAction;
+  payload: string;
+  time_offset: number;
+  continue_on_failure: boolean;
+  order_index?: number;
+}
+
 export interface ScheduledJobRecord {
   id: string;
   database_id: string;
   name: string;
   cron_expression: string;
+  cron_minute?: string;
+  cron_hour?: string;
+  cron_day_month?: string;
+  cron_month?: string;
+  cron_day_week?: string;
+  only_when_online?: boolean;
   sql_query: string;
+  tasks?: ScheduleTaskRecord[];
   enabled: boolean;
   last_run_at: number | null;
   next_run_at: number | null;
@@ -643,5 +667,17 @@ export interface ClusterStatus {
   spilloverActive: boolean;
   nodes: StorageNodeRecord[];
 }
+
+export interface DatabaseActivityItem {
+  id: string;
+  user: string;
+  action: string;
+  description: string;
+  timestamp: number;
+  status: 'success' | 'failure';
+  ip?: string;
+  details?: any;
+}
+
 
 

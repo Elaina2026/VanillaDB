@@ -472,6 +472,27 @@ function runMigrations(db: DatabaseSync): void {
             )
           );
       `
+    },
+    {
+      version: 22,
+      name: 'upgrade_scheduled_jobs_pterodactyl_schema',
+      sql: `
+        ALTER TABLE scheduled_jobs ADD COLUMN tasks_json TEXT;
+        ALTER TABLE scheduled_jobs ADD COLUMN only_when_online INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE scheduled_jobs ADD COLUMN cron_minute TEXT DEFAULT '*';
+        ALTER TABLE scheduled_jobs ADD COLUMN cron_hour TEXT DEFAULT '*';
+        ALTER TABLE scheduled_jobs ADD COLUMN cron_day_month TEXT DEFAULT '*';
+        ALTER TABLE scheduled_jobs ADD COLUMN cron_month TEXT DEFAULT '*';
+        ALTER TABLE scheduled_jobs ADD COLUMN cron_day_week TEXT DEFAULT '*';
+      `
+    },
+    {
+      version: 23,
+      name: 'cleanup_ephemeral_worker_test_databases',
+      sql: `
+        DELETE FROM scheduled_jobs WHERE database_id LIKE 'worker_direct_%';
+        DELETE FROM databases WHERE id LIKE 'worker_direct_%';
+      `
     }
   ];
 
@@ -512,6 +533,16 @@ function runMigrations(db: DatabaseSync): void {
 
 export function syncDiskDatabasesToMetadata(db: DatabaseSync): void {
   try {
+    // Clean up lingering ephemeral worker direct test databases
+    try {
+      db.prepare("DELETE FROM databases WHERE id LIKE 'worker_direct_%'").run();
+      db.prepare("DELETE FROM scheduled_jobs WHERE database_id LIKE 'worker_direct_%'").run();
+      // Clean up phantom non-existent file avatars left by test runs
+      db.prepare("UPDATE users SET avatar_url = NULL WHERE avatar_url LIKE '/v1/files/%' AND NOT EXISTS (SELECT 1 FROM files WHERE users.avatar_url LIKE '%/files/' || files.id || '/view')").run();
+    } catch {
+      // ignore
+    }
+
     if (!fs.existsSync(config.databasesDir)) return;
     const entries = fs.readdirSync(config.databasesDir);
     const now = Date.now();

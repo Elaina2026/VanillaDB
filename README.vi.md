@@ -14,14 +14,14 @@
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.8-3178c6.svg?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.2-000000.svg?style=flat-square&logo=fastify&logoColor=white" alt="Fastify" /></a>
   <a href="https://github.com/WiseLibs/better-sqlite3"><img src="https://img.shields.io/badge/SQLite-better--sqlite3%20(WAL)-003b57.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/Phi%C3%AAn%20b%E1%BA%A3n-1.3.3-ea580c.svg?style=flat-square" alt="Phiên bản 1.3.3" /></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-245%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="245 bài kiểm thử vượt qua" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Phi%C3%AAn%20b%E1%BA%A3n-1.3.4-ea580c.svg?style=flat-square" alt="Phiên bản 1.3.4" /></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/Ki%E1%BB%83m%20th%E1%BB%AD-248%20v%C6%B0%E1%BB%A3t%20qua-22c55e.svg?style=flat-square" alt="248 bài kiểm thử vượt qua" /></a>
 </p>
 
 <p align="center">
   <strong>[ <a href="#tổng-quan">Tổng quan</a> ]</strong> &bull;
   <strong>[ <a href="README.md">English Version</a> ]</strong> &bull;
-  <strong>[ <a href="#kiến-trúc-hệ-thống">Kiến trúc</a> ]</strong> &bull;
+  <strong>[ <a href="ARCHITECTURE.vi.md">Kiến trúc Toàn diện</a> ]</strong> &bull;
   <strong>[ <a href="#tính-năng-cốt-lõi">Tính năng cốt lõi</a> ]</strong> &bull;
   <strong>[ <a href="#khởi-động-nhanh">Khởi động nhanh</a> ]</strong> &bull;
   <strong>[ <a href="SECURITY.vi.md">Chính sách Bảo mật</a> ]</strong> &bull;
@@ -113,6 +113,20 @@ Thay vì phải duy trì các cụm cơ sở dữ liệu cồng kềnh cho từn
 ### <img src="https://api.iconify.design/lucide:hard-drive.svg?color=%238b5cf6" width="20" height="20" align="absmiddle" /> Kho Lưu trữ Media & Phát luồng HTTP 206
 - Lưu trữ tệp tin theo phạm vi cơ sở dữ liệu với cơ chế mã hóa khối trong suốt.
 - Hỗ trợ tiêu đề `Range` của HTTP 206 Partial Content cho phép nghe nhạc, xem video mượt mà, hỗ trợ tua đến từng vị trí bất kỳ.
+
+### <img src="https://api.iconify.design/lucide:clock.svg?color=%23f59e0b" width="20" height="20" align="absmiddle" /> Động cơ Lập lịch & Chuỗi Tác vụ Tuần tự (Schedules)
+- **Bộ Lập lịch Cron 5 Thành phần:** Hỗ trợ biểu thức cron chuẩn (`* * * * *`) với bước nhảy, khoảng giá trị và danh sách.
+- **Đường ống Tác vụ Tuần tự:** Thực thi chuỗi tác vụ: `send_command` (SQL), `run_maintenance` (`wal_checkpoint`, `vacuum`, `optimize`, `reindex`), `create_backup`, `trigger_webhook`, và `export_data`.
+- **Cơ chế Chống Lỗi:** Cấu hình độ trễ kích hoạt (`time_offset`), bỏ qua khi lỗi (`continue_on_failure`), và điều kiện chỉ chạy khi database online (`only_when_online`).
+
+### <img src="https://api.iconify.design/lucide:history.svg?color=%2306b6d4" width="20" height="20" align="absmiddle" /> Dòng Thời gian Hoạt động & Kiểm toán Thời gian thực
+- Hợp nhất nhật ký kiểm toán hệ thống và sự kiện cơ sở dữ liệu trên từng tenant (`/api/admin/databases/:id/activity`).
+- Truy vấn và lọc sự kiện theo phân loại, trạng thái, tài khoản thực hiện, địa chỉ IP với nút tạm dừng/tiếp tục trực tiếp.
+
+### <img src="https://api.iconify.design/lucide:ticket.svg?color=%23ec4899" width="20" height="20" align="absmiddle" /> Vé Truy cập Ngắn hạn Một lần RFC 6750 (VDB-SEC-03)
+- Cấm hoàn toàn việc để lộ token xác thực trên chuỗi truy vấn URL (?token=...) ở mọi route ghi và đọc dữ liệu.
+- Cấp vé truy cập ngắn hạn 60 giây (`POST /v1/databases/:id/tickets`) phục vụ phát luồng media và bắt tay kết nối SSE.
+- Tự động thu hồi và xóa khỏi bộ nhớ ngay sau lần sử dụng đầu tiên.
 
 ### <img src="https://api.iconify.design/lucide:layout.svg?color=%233178c6" width="20" height="20" align="absmiddle" /> Landing Page Chuẩn Turso & Giao diện Đa thiết bị
 - **Trang Giới thiệu Landing Page Hiện đại:** Lấy cảm hứng từ Turso với 6 trụ cột kiến trúc, bộ chuyển đổi code mẫu (per-tenant, per-agent, per-user), công cụ tô màu cú pháp thời gian thực (syntax highlighter), lưới 9 tính năng và hiệu ứng chuyển trang mượt mà.
@@ -342,10 +356,10 @@ VanillaDatabase trang bị bảng phím tắt tiện lợi hỗ trợ thao tác 
 Toàn bộ hệ thống kiểm thử vận hành tự động qua Vitest với kiểm chứng đầu-cuối:
 
 ```bash
-# Chạy toàn bộ 134 bài kiểm thử tích hợp & đơn vị trên 8 bộ test suite
+# Chạy toàn bộ 248 bài kiểm thử tích hợp & đơn vị trên 16 bộ test suite
 npm test
 
-# Chạy riêng các bộ pentest bảo mật (rò rỉ dữ liệu, zero-day & xác thực)
+# Chạy riêng các bộ pentest bảo mật (rò rỉ dữ liệu, zero-day, xác thực & token ticket)
 npm run test:security
 
 # Kiểm tra kiểu dữ liệu TypeScript
@@ -355,7 +369,7 @@ npm run typecheck
 npm run benchmark
 ```
 
-Toàn bộ 134 bài kiểm thử xác minh:
+Toàn bộ 248 bài kiểm thử xác minh:
 - Phân cụm đa máy chủ, tự động tràn đĩa và di chuyển database nguyên tử không downtime.
 - Chặn rò rỉ dữ liệu và che giấu thông tin nhạy cảm (OWASP Top 10 API Security).
 - Kháng tấn công zero-day (DNS rebinding, bypass IP số nguyên/hex, thoát tiền tố schema SQL).
@@ -363,6 +377,9 @@ Toàn bộ 134 bài kiểm thử xác minh:
 - Kích hoạt 2FA TOTP, vòng đời 6 mã dự phòng và thách thức đăng nhập.
 - Thu hồi phiên làm việc tức thì khi thay đổi mật khẩu (VDB-SEC-01).
 - Chống phát lại mã TOTP đơn điệu tuân thủ RFC 6238 (VDB-SEC-02).
+- Cấm để lộ token trên chuỗi truy vấn và cơ chế vé truy cập ngắn hạn dùng một lần (VDB-SEC-03).
+- Đường ống tải lên ảnh đại diện nhị phân cô lập, kiểm tra magic bytes và chống duyệt thư mục trái phép.
+- Động cơ lập lịch đa tác vụ tuần tự và biểu thức cron chuẩn Pterodactyl.
 - Mã hóa phong bì AES-256-GCM và dẫn xuất khóa an toàn PBKDF2.
 - Trình dịch phương ngữ SQL từ MySQL, PostgreSQL, CSV và NDJSON sang SQLite.
 - Giao dịch hàng loạt đảm bảo an toàn rollback khi xảy ra lỗi.
@@ -372,7 +389,10 @@ Toàn bộ 134 bài kiểm thử xác minh:
 
 ## <img src="https://api.iconify.design/lucide:book-open.svg?color=%230969da" width="22" height="22" align="absmiddle" /> Bộ tài liệu chuyên sâu
 
-Truy cập các tài liệu học phần chuyên sâu tại:
+Để tra cứu toàn bộ đặc tả kiến trúc và thiết kế hệ thống chi tiết:
+- **Đặc tả Kiến trúc Hệ thống Toàn diện (VI)**: [`ARCHITECTURE.vi.md`](ARCHITECTURE.vi.md)
+- **Comprehensive System Architecture (EN)**: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- **Trung tâm tài liệu**: [docs/README.md](docs/README.md)
 
 - **Trung tâm tài liệu**: [docs/README.md](docs/README.md)
 - **Tài liệu Tiếng Việt**:
