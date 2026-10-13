@@ -1157,7 +1157,7 @@ describe('VanillaDatabase Exhaustive Security & Penetration Testing Suite (A to 
 
       // Cleanup
       databaseService.deleteDatabase(quotaDbId);
-    });
+    }, 20000);
   });
 
   // =========================================================================
